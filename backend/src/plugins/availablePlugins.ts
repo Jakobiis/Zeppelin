@@ -1,4 +1,6 @@
 import { ZeppelinGlobalPluginInfo, ZeppelinGuildPluginInfo } from "../types.js";
+import { AFKPlugin } from "./AFK/AFKPlugin.js";
+import { afkPluginDocs } from "./AFK/docs.js";
 import { AutoDeletePlugin } from "./AutoDelete/AutoDeletePlugin.js";
 import { autoDeletePluginDocs } from "./AutoDelete/docs.js";
 import { AutoReactionsPlugin } from "./AutoReactions/AutoReactionsPlugin.js";
@@ -81,6 +83,10 @@ import { CommandAliasesPlugin } from "./CommandAliases/CommandAliasesPlugin.js";
 import { commandAliasesPluginDocs } from "./CommandAliases/docs.js";
 
 export const availableGuildPlugins: ZeppelinGuildPluginInfo[] = [
+  {
+    plugin: AFKPlugin,
+    docs: afkPluginDocs,
+  },
   {
     plugin: AutoDeletePlugin,
     docs: autoDeletePluginDocs,
