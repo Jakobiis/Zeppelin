@@ -512,6 +512,16 @@ export class GuildCounters extends BaseGuildRepository {
     return value?.value;
   }
 
+  async getTopValues(counterId: number, limit: number = 10): Promise<CounterValue[]> {
+    return this.counterValues
+      .createQueryBuilder("cv")
+      .where("cv.counter_id = :counterId", { counterId })
+      .andWhere("cv.user_id != :zero", { zero: "0" }) // exclude the "no user" aggregate row
+      .orderBy("cv.value", "DESC")
+      .limit(limit)
+      .getMany();
+  }
+
   async resetAllCounterValues(counterId: number): Promise<void> {
     // Foreign keys will remove any related triggers and counter values
     await this.counters.delete({
