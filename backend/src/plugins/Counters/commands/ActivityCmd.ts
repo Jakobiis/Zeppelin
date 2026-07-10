@@ -48,7 +48,6 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
                 : ` (role requirement of **${requiredPoints}** met)`;
         }
 
-
         const embed = new EmbedBuilder()
             .setColor(0x0159b2)
             .setThumbnail(targetUser.displayAvatarURL({ size: 128 }))
