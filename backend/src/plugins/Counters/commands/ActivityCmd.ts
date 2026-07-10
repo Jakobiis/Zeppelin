@@ -50,7 +50,7 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
 
         const embed = new EmbedBuilder()
             .setColor(0x0159b2)
-            .setThumbnail(targetUser.displayAvatarURL({ size: 128, dynamic: true }))
+            .setThumbnail(targetUser.displayAvatarURL({ size: 128 }))
             .setDescription(text);
 
         await message.channel.send({ embeds: [embed] });
