@@ -17,7 +17,9 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
+          debug: true
           script: |
+            echo "connected successfully"
             set -e
             cd zeppelin/zeppelin
             git pull
