@@ -23,6 +23,6 @@ jobs:
             set -e
             cd Zeppelin/Zeppelin
             git pull
-            docker compose down
-            docker compose build
-            docker compose up -d
+            docker compose -f docker-compose.lightweight.yml down
+            docker compose -f docker-compose.lightweight.yml build
+            docker compose -f docker-compose.lightweight.yml up -d
