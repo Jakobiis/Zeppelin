@@ -7,6 +7,7 @@ import { CommonPlugin } from "../Common/CommonPlugin.js";
 export const zAfkConfig = z.strictObject({
   can_use: z.boolean().default(false),
   ignored_channel_ids: z.array(zSnowflake).default([]),
+  afk_rename: z.boolean().default(false),
 });
 
 export interface AFKPluginType extends BasePluginType {

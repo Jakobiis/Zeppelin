@@ -11,5 +11,8 @@ export class AfkStatus {
 
   @Column() message: string;
 
+  @Column({ type: "text", nullable: true })
+  previous_nickname: string | null;
+
   @Column() created_at: string;
 }

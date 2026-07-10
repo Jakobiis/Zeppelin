@@ -1,3 +1,5 @@
+import moment from "moment-timezone";
+import { humanizeDuration } from "../../../humanizeDuration.js";
 import { guildPluginEventListener } from "vety";
 
 export const CheckAfkMentionsEvt = guildPluginEventListener({
@@ -11,8 +13,17 @@ export const CheckAfkMentionsEvt = guildPluginEventListener({
 
     const ownAfk = await pluginData.state.afk.getByUserId(msg.author.id);
     if (ownAfk) {
+      const afkSince = moment.utc().diff(moment.utc(ownAfk.created_at, "YYYY-MM-DD HH:mm:ss"));
       await pluginData.state.afk.delete(msg.author.id);
-      void pluginData.state.common.sendSuccessMessage(msg, "Welcome back! I've removed your AFK status.");
+
+      if (config.afk_rename && msg.member && msg.member.nickname !== ownAfk.previous_nickname) {
+        await msg.member.setNickname(ownAfk.previous_nickname).catch(() => null);
+      }
+
+      void pluginData.state.common.sendSuccessMessage(
+        msg,
+        "Welcome back! I've removed your AFK status.\n-# You were AFK for " + humanizeDuration(afkSince),
+      );
     }
 
     if (msg.mentions.users.size === 0) return;

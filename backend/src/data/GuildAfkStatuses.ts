@@ -21,12 +21,13 @@ export class GuildAfkStatuses extends BaseGuildRepository {
     });
   }
 
-  async set(userId: string, message: string): Promise<void> {
+  async set(userId: string, message: string, previousNickname: string | null): Promise<void> {
     await this.delete(userId);
     await this.afkStatuses.insert({
       guild_id: this.guildId,
       user_id: userId,
       message,
+      previous_nickname: previousNickname,
       created_at: moment.utc().format("YYYY-MM-DD HH:mm:ss"),
     });
   }
