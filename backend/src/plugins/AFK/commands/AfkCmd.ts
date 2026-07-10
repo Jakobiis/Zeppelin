@@ -30,7 +30,7 @@ export const AfkCmd = afkCmd({
     const previousNickname = existingAfk ? existingAfk.previous_nickname : (msg.member?.nickname ?? null);
 
     if (config.afk_rename && msg.member) {
-      const newNickname = buildAfkNickname(previousNickname ?? msg.member.user.username);
+      const newNickname = buildAfkNickname(previousNickname ?? msg.member.user.displayName);
       if (msg.member.nickname !== newNickname) {
         await msg.member.setNickname(newNickname).catch(() => null);
       }
