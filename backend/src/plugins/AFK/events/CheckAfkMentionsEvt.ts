@@ -22,7 +22,8 @@ export const CheckAfkMentionsEvt = guildPluginEventListener({
 
       void pluginData.state.common.sendSuccessMessage(
         msg,
-        "Welcome back! I've removed your AFK status.\n-# You were AFK for " + humanizeDuration(afkSince),
+        "Welcome back! I've removed your AFK status.\n-# You were AFK for " +
+          humanizeDuration(afkSince, { round: true }),
       );
     }
 
