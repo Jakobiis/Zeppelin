@@ -3,6 +3,7 @@
 import "./threadsSignalFix.js";
 
 import {
+  ActivityType,
   Client,
   Events,
   GatewayIntentBits,
@@ -405,6 +406,16 @@ connect().then(async () => {
 
   client.once("clientReady", () => {
     startUptimeCounter();
+
+    client.user?.setPresence({
+      activities: [
+        {
+          name: "Custom Status",
+          state: "jailbreakchangelogs.com",
+          type: ActivityType.Custom,
+        },
+      ],
+    });
   });
 
   client.rest.on(RESTEvents.RateLimited, (data) => {
