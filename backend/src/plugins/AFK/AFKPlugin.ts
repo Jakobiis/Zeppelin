@@ -12,7 +12,7 @@ export const AFKPlugin = guildPlugin<AFKPluginType>()({
   configSchema: zAfkConfig,
   defaultOverrides: [
     {
-      level: ">=0",
+      level: ">=50",
       config: {
         can_use: true,
       },
