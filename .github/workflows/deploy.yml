@@ -3,7 +3,7 @@ name: Deploy Zeppelin
 on:
   push:
     branches:
-      - master  # change to your default branch if different
+      - master
 
 jobs:
   deploy:
