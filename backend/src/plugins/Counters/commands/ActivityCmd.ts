@@ -44,8 +44,8 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
         if (requiredPoints !== null) {
             const remaining = requiredPoints - finalValue;
             text += remaining > 0
-                ? ` (**${requiredPoints}** needed for the role — **${remaining}** to go)`
-                : ` (role requirement of **${requiredPoints}** met)`;
+                ? `\n-# **${requiredPoints}** needed for the role — **${remaining}** to go`
+                : `\n-# role requirement of **${requiredPoints}** met`;
         }
 
 
