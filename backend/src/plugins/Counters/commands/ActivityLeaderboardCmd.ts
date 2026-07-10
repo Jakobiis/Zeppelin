@@ -8,7 +8,7 @@ const LEADERBOARD_SIZE = 10;
 const medals = ["🥇", "🥈", "🥉"];
 
 export const ActivityLeaderboardCmd = guildPluginMessageCommand<CountersPluginType>()({
-    trigger: ["activity leaderboard", "activitytop"],
+    trigger: ["activity leaderboard", "activitytop", "activity top"],
     permission: "can_view",
     async run({ pluginData, message }) {
         const config = await pluginData.config.getForMessage(message);
