@@ -38,6 +38,7 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
         const grantTrigger = counter.triggers?.[GRANT_TRIGGER_NAME];
         const requiredPoints = parseThreshold(grantTrigger?.condition);
 
+
         const who = targetUser.id === message.author.id ? "You currently have" : `<@!${targetUser.id}> currently has`;
 
         let text = `${who} **${finalValue}** activity points.`;
