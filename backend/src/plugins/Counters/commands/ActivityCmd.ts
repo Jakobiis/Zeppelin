@@ -88,10 +88,12 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
         const value = await pluginData.state.counters.getCurrentValue(counterId, null, targetUser.id);
         const finalValue = value ?? counter.initial_value ?? 0;
 
-        const who = targetUser.id === message.author.id ? "-# Requested by you" : `-# Requested for <@!${targetUser.id}>`;
-
-        let text = `### Activity\n${who}\n\nPoints: **${finalValue}**`;
         const member = await pluginData.guild.members.fetch(targetUser.id).catch(() => null);
+
+        const displayName = member?.displayName ?? targetUser.displayName;
+        const who = targetUser.id === message.author.id ? "Requested by you" : `Requested for ${displayName}`;
+
+        let text = `### Activity\n\nPoints: **${finalValue}**`;
 
         for (const grant of GRANTS) {
             const grantTrigger = counter.triggers?.[grant.triggerName];
@@ -156,7 +158,8 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
         const embed = new EmbedBuilder()
             .setColor(0x0159b2)
             .setThumbnail(targetUser.displayAvatarURL({ size: 128 }))
-            .setDescription(text);
+            .setDescription(text)
+            .setFooter({ text: who, iconURL: member?.displayAvatarURL() ?? targetUser.displayAvatarURL() });
 
         await message.channel.send({ embeds: [embed] });
     },
