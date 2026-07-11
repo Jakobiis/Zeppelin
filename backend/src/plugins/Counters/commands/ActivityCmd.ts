@@ -15,6 +15,9 @@ const ACTIVITY_COUNTER_NAME = "activity";
 const GRANT_TRIGGER_NAME = "grant_role";
 const BAR_LENGTH = 15;
 
+// Must match automod.rules.grant_activity_role.actions.add_roles in the config
+const GRANT_ROLE_ID = "1522779288523509901";
+
 function evaluateCondition(op: TriggerComparisonOp, threshold: number, value: number): boolean {
     switch (op) {
         case "=":
@@ -32,8 +35,6 @@ function evaluateCondition(op: TriggerComparisonOp, threshold: number, value: nu
     }
 }
 
-// How many points still need to decay off before `value` satisfies the reverse condition,
-// i.e. before the role gets taken away. Only meaningful for "less than" style conditions.
 function pointsUntilReverseTrigger(op: TriggerComparisonOp, threshold: number, value: number): number | null {
     if (op === "<") return value - threshold + 1;
     if (op === "<=") return value - threshold;
@@ -89,6 +90,19 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
             } else {
                 text += `\n-# role requirement of **${requiredPoints}** met`;
 
+                const member = await pluginData.guild.members.fetch(targetUser.id).catch(() => null);
+                if (member && !member.roles.cache.has(GRANT_ROLE_ID)) {
+                    try {
+                        await member.roles.add(
+                            GRANT_ROLE_ID,
+                            "Activity threshold met but role was missing — granted via ;activity command",
+                        );
+                        text += `\nYou met the requirement but didn't have the role — it's been added now!`;
+                    } catch {
+                        text += `\nYou've met the requirement, but I couldn't grant the role automatically. A staff member may need to check my role permissions.`;
+                    }
+                }
+
                 const rawReverseCondition =
                     grantTrigger!.reverse_condition ||
                     buildCounterConditionString(getReverseCounterComparisonOp(grantOp), requiredPoints);
@@ -99,13 +113,13 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
                     const pointsToLose = pointsUntilReverseTrigger(reverseOp, reverseThreshold, finalValue);
 
                     if (pointsToLose !== null && pointsToLose > 0) {
-                        text += `\n-# You'll lose the role once you drop below **${reverseThreshold}** points (**${pointsToLose}** to go)`;
+                        text += `\n-#You'll lose the role at **${reverseThreshold}** points (**${pointsToLose}** to go)`;
 
                         if (counter.decay && counter.decay.amount > 0) {
                             const decayPeriodMs = convertDelayStringToMS(counter.decay.every);
                             if (decayPeriodMs) {
                                 const msUntilLost = (pointsToLose * decayPeriodMs) / counter.decay.amount;
-                                text += `\n-# At the current decay rate, that's about **${humanizeDuration(msUntilLost, {
+                                text += `\n-# That's about **${humanizeDuration(msUntilLost, {
                                     round: true,
                                 })}** away if you stay inactive`;
                             }
