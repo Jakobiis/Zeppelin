@@ -91,9 +91,9 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
         const member = await pluginData.guild.members.fetch(targetUser.id).catch(() => null);
 
         const displayName = member?.displayName ?? targetUser.displayName;
-        const who = targetUser.id === message.author.id ? "Requested by you" : `Requested for ${displayName}`;
+        const isSelf = targetUser.id === message.author.id;
 
-        let text = `### ${displayName}'s Activity\n\nPoints: **${finalValue}**`;
+        let text = isSelf ? `### Your Activity` : `### ${displayName}'s Activity`;
 
         for (const grant of GRANTS) {
             const grantTrigger = counter.triggers?.[grant.triggerName];
@@ -158,7 +158,8 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
         const embed = new EmbedBuilder()
             .setColor(0x0159b2)
             .setDescription(text)
-            .setFooter({ text: who, iconURL: member?.displayAvatarURL() ?? targetUser.displayAvatarURL() });
+            .setThumbnail(member?.displayAvatarURL() ?? targetUser.displayAvatarURL())
+            .setFooter({ text: `Points: ${finalValue}` });
 
         await message.channel.send({ embeds: [embed] });
     },
