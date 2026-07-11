@@ -12,11 +12,29 @@ import { convertDelayStringToMS } from "../../../utils.js";
 import { CountersPluginType } from "../types.js";
 
 const ACTIVITY_COUNTER_NAME = "activity";
-const GRANT_TRIGGER_NAME = "grant_role";
 const BAR_LENGTH = 15;
 
-// Must match automod.rules.grant_activity_role.actions.add_roles in the config
-const GRANT_ROLE_ID = "1522779288523509901";
+interface GrantDefinition {
+    triggerName: string;
+    roleId: string;
+    label: string;
+    unlockMessage: string;
+}
+
+const GRANTS: GrantDefinition[] = [
+    {
+        triggerName: "grant_role",
+        roleId: "1522779288523509901",
+        label: "regular role",
+        unlockMessage: "You met the requirement but didn't have the role — it's been added now!",
+    },
+    {
+        triggerName: "grant_embed_perms",
+        roleId: "1392677476911681647",
+        label: "embed permissions",
+        unlockMessage: "You met the requirement but didn't have embed permissions — they've been added now!",
+    },
+];
 
 function evaluateCondition(op: TriggerComparisonOp, threshold: number, value: number): boolean {
     switch (op) {
@@ -74,33 +92,43 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
 
         let text = `${who} **${finalValue}** activity points.`;
 
-        const grantTrigger = counter.triggers?.[GRANT_TRIGGER_NAME];
-        const parsedGrant = grantTrigger ? parseCounterConditionString(grantTrigger.condition) : null;
+        const member = await pluginData.guild.members.fetch(targetUser.id).catch(() => null);
 
-        if (parsedGrant && (parsedGrant[0] === ">" || parsedGrant[0] === ">=")) {
+        for (const grant of GRANTS) {
+            const grantTrigger = counter.triggers?.[grant.triggerName];
+            const parsedGrant = grantTrigger ? parseCounterConditionString(grantTrigger.condition) : null;
+
+            if (!parsedGrant || (parsedGrant[0] !== ">" && parsedGrant[0] !== ">=")) {
+                continue;
+            }
+
             const [grantOp, requiredPoints] = parsedGrant;
             const hasReachedGoal = evaluateCondition(grantOp, requiredPoints, finalValue);
             const percent = requiredPoints > 0 ? finalValue / requiredPoints : 1;
+            const hasRole = member?.roles.cache.has(grant.roleId) ?? false;
 
+            text += `\n\n**${grant.label}** — ${requiredPoints} points`;
             text += `\n\`${renderProgressBar(percent)}\` **${Math.floor(Math.min(percent, 1) * 100)}%**`;
 
             if (!hasReachedGoal) {
                 const remaining = requiredPoints - finalValue;
-                text += `\n-# **${requiredPoints}** needed for the role — **${remaining}** to go`;
+                text += `\n-# **${remaining}** points to go`;
+                text += hasRole ? `\n-# status: have it` : `\n-# status: don't have it yet`;
             } else {
-                text += `\n-# role requirement of **${requiredPoints}** met`;
+                text += `\n-# requirement met`;
 
-                const member = await pluginData.guild.members.fetch(targetUser.id).catch(() => null);
-                if (member && !member.roles.cache.has(GRANT_ROLE_ID)) {
+                if (!hasRole && member) {
                     try {
                         await member.roles.add(
-                            GRANT_ROLE_ID,
-                            "Activity threshold met but role was missing — granted via ;activity command",
+                            grant.roleId,
+                            `Activity threshold met but role was missing — granted via activity command`,
                         );
-                        text += `\nYou met the requirement but didn't have the role — it's been added now!`;
+                        text += `\n-# status: ${grant.unlockMessage}`;
                     } catch {
-                        text += `\nYou've met the requirement, but I couldn't grant the role automatically. A staff member may need to check my role permissions.`;
+                        text += `\n-# status: requirement met, but I couldn't grant this automatically — a staff member may need to check my role permissions/hierarchy`;
                     }
+                } else {
+                    text += `\n-# status: have it`;
                 }
 
                 const rawReverseCondition =
@@ -113,13 +141,13 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
                     const pointsToLose = pointsUntilReverseTrigger(reverseOp, reverseThreshold, finalValue);
 
                     if (pointsToLose !== null && pointsToLose > 0) {
-                        text += `\n-# You'll lose the role at **${reverseThreshold}** points (**${pointsToLose}** to go)`;
+                        text += `\n-# lost at **${reverseThreshold}** points (**${pointsToLose}** to go)`;
 
                         if (counter.decay && counter.decay.amount > 0) {
                             const decayPeriodMs = convertDelayStringToMS(counter.decay.every);
                             if (decayPeriodMs) {
                                 const msUntilLost = (pointsToLose * decayPeriodMs) / counter.decay.amount;
-                                text += `\n-# That's about **${humanizeDuration(msUntilLost, {
+                                text += `\n-# that's about **${humanizeDuration(msUntilLost, {
                                     round: true,
                                 })}** away if you stay inactive`;
                             }
