@@ -113,7 +113,7 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
                     const pointsToLose = pointsUntilReverseTrigger(reverseOp, reverseThreshold, finalValue);
 
                     if (pointsToLose !== null && pointsToLose > 0) {
-                        text += `\n-#You'll lose the role at **${reverseThreshold}** points (**${pointsToLose}** to go)`;
+                        text += `\n-# You'll lose the role at **${reverseThreshold}** points (**${pointsToLose}** to go)`;
 
                         if (counter.decay && counter.decay.amount > 0) {
                             const decayPeriodMs = convertDelayStringToMS(counter.decay.every);
