@@ -90,7 +90,7 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
 
         const who = targetUser.id === message.author.id ? "-# Requested by you" : `-# Requested for <@!${targetUser.id}>`;
 
-        let text = `### Activity\n${who}\n\nPoints: **{finalValue}**`;
+        let text = `### Activity\n${who}\n\nPoints: **${finalValue}**`;
         const member = await pluginData.guild.members.fetch(targetUser.id).catch(() => null);
 
         for (const grant of GRANTS) {
