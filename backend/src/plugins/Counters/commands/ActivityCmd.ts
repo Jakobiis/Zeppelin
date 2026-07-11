@@ -93,7 +93,7 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
         const displayName = member?.displayName ?? targetUser.displayName;
         const who = targetUser.id === message.author.id ? "Requested by you" : `Requested for ${displayName}`;
 
-        let text = `### Activity\n\nPoints: **${finalValue}**`;
+        let text = `### ${displayName}'s Activity\n\nPoints: **${finalValue}**`;
 
         for (const grant of GRANTS) {
             const grantTrigger = counter.triggers?.[grant.triggerName];
@@ -157,7 +157,6 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
 
         const embed = new EmbedBuilder()
             .setColor(0x0159b2)
-            .setThumbnail(targetUser.displayAvatarURL({ size: 128 }))
             .setDescription(text)
             .setFooter({ text: who, iconURL: member?.displayAvatarURL() ?? targetUser.displayAvatarURL() });
 
