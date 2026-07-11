@@ -25,13 +25,13 @@ const GRANTS: GrantDefinition[] = [
     {
         triggerName: "grant_role",
         roleId: "1522779288523509901",
-        label: "regular role",
+        label: "Regular Role",
         unlockMessage: "You met the requirement but didn't have the role — it's been added now!",
     },
     {
         triggerName: "grant_embed_perms",
         roleId: "1392677476911681647",
-        label: "embed permissions",
+        label: "Embed Permissions",
         unlockMessage: "You met the requirement but didn't have embed permissions — they've been added now!",
     },
 ];
@@ -88,10 +88,9 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
         const value = await pluginData.state.counters.getCurrentValue(counterId, null, targetUser.id);
         const finalValue = value ?? counter.initial_value ?? 0;
 
-        const who = targetUser.id === message.author.id ? "You currently have" : `<@!${targetUser.id}> currently has`;
+        const who = targetUser.id === message.author.id ? "-# Requested by you" : `-# Requested for <@!${targetUser.id}>`;
 
-        let text = `${who} **${finalValue}** activity points.`;
-
+        let text = `### Activity\n${who}\n\nPoints: **{finalValue}**`;
         const member = await pluginData.guild.members.fetch(targetUser.id).catch(() => null);
 
         for (const grant of GRANTS) {
@@ -107,15 +106,14 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
             const percent = requiredPoints > 0 ? finalValue / requiredPoints : 1;
             const hasRole = member?.roles.cache.has(grant.roleId) ?? false;
 
-            text += `\n\n**${grant.label}** — ${requiredPoints} points`;
+            text += `\n\n**${grant.label}** — ${requiredPoints} Points`;
             text += `\n\`${renderProgressBar(percent)}\` **${Math.floor(Math.min(percent, 1) * 100)}%**`;
 
             if (!hasReachedGoal) {
                 const remaining = requiredPoints - finalValue;
-                text += `\n-# **${remaining}** points to go`;
-                text += hasRole ? `\n-# status: have it` : `\n-# status: don't have it yet`;
+                text += `\n-# **${remaining}** Points To Go`;
             } else {
-                text += `\n-# requirement met`;
+                text += `\n-# Requirement Met`;
 
                 if (!hasRole && member) {
                     try {
@@ -123,12 +121,10 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
                             grant.roleId,
                             `Activity threshold met but role was missing — granted via activity command`,
                         );
-                        text += `\n-# status: ${grant.unlockMessage}`;
+                        text += ` — ${grant.unlockMessage}`;
                     } catch {
-                        text += `\n-# status: requirement met, but I couldn't grant this automatically — a staff member may need to check my role permissions/hierarchy`;
+                        text += ` — I couldn't grant this automatically, a staff member may need to check my role permissions/hierarchy`;
                     }
-                } else {
-                    text += `\n-# status: have it`;
                 }
 
                 const rawReverseCondition =
@@ -141,15 +137,15 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
                     const pointsToLose = pointsUntilReverseTrigger(reverseOp, reverseThreshold, finalValue);
 
                     if (pointsToLose !== null && pointsToLose > 0) {
-                        text += `\n-# lost at **${reverseThreshold}** points (**${pointsToLose}** to go)`;
+                        text += `\n-# Lost At **${reverseThreshold}** Points (**${pointsToLose}** To Go)`;
 
                         if (counter.decay && counter.decay.amount > 0) {
                             const decayPeriodMs = convertDelayStringToMS(counter.decay.every);
                             if (decayPeriodMs) {
                                 const msUntilLost = (pointsToLose * decayPeriodMs) / counter.decay.amount;
-                                text += `\n-# that's about **${humanizeDuration(msUntilLost, {
+                                text += `\n-# That's About **${humanizeDuration(msUntilLost, {
                                     round: true,
-                                })}** away if you stay inactive`;
+                                })}** Away If You Stay Inactive`;
                             }
                         }
                     }
