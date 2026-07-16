@@ -11,8 +11,8 @@ const TICK_INTERVAL = 30 * SECONDS;
 
 /**
  * The Schedule plugin defines named, time-based multipliers (e.g. "2x points on weekends", or a randomly rolled
- * hourly boost) that other plugins/actions can look up by name. Active/inactive state is recomputed on a tick and
- * cached in state.runtimeStates — this lets random_hourly rolls persist across lookups within their active window,
+ * randomly rolled boost) that other plugins/actions can look up by name. Active/inactive state is recomputed on a tick and
+ * cached in state.runtimeStates — this lets random rolls persist across lookups within their active window,
  * and lets fire/reverse transitions be detected in order to send the configured announcement messages.
  */
 export const SchedulePlugin = guildPlugin<SchedulePluginType>()({

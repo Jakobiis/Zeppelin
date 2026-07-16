@@ -38,9 +38,8 @@ function computeDayOfWeekEnd(pattern: string, now: moment.Moment): number | null
   return null; // matched every day checked (e.g. an always-on regex) — no defined end
 }
 
-function evaluateRandomHourly(
-  cfg: NonNullable<ScheduledMultiplier["random_hourly"]>,
-  now: moment.Moment,
+function evaluateRandom(
+  cfg: NonNullable<ScheduledMultiplier["random"]>,
   nowMs: number,
   runtime: ScheduleRuntimeState,
 ): boolean {
@@ -52,11 +51,12 @@ function evaluateRandomHourly(
     runtime.lastDurationMs = null;
   }
 
-  const hourKey = now.format("YYYY-MM-DD-HH");
-  if (runtime.lastRolledHourKey === hourKey) {
-    return false; // already rolled (and missed, or already expired) for this hour
+  const everyMs = convertDelayStringToMS(cfg.every)!;
+  const bucket = Math.floor(nowMs / everyMs);
+  if (runtime.lastRolledBucket === bucket) {
+    return false; // already rolled (and missed, or already expired) for this `every` window
   }
-  runtime.lastRolledHourKey = hourKey;
+  runtime.lastRolledBucket = bucket;
 
   if (Math.random() >= cfg.chance) {
     return false;
@@ -84,7 +84,7 @@ export async function tickSchedules(pluginData: GuildPluginData<SchedulePluginTy
         active: false,
         activeUntil: null,
         lastDurationMs: null,
-        lastRolledHourKey: null,
+        lastRolledBucket: null,
       };
       pluginData.state.runtimeStates.set(name, runtime);
     }
@@ -96,7 +96,7 @@ export async function tickSchedules(pluginData: GuildPluginData<SchedulePluginTy
         runtime.activeUntil = computeDayOfWeekEnd(entry.day_of_week, now);
       }
     } else {
-      active = evaluateRandomHourly(entry.random_hourly!, now, nowMs, runtime);
+      active = evaluateRandom(entry.random!, nowMs, runtime);
     }
 
     if (!runtime.initialized) {
