@@ -29,7 +29,7 @@ export async function announceScheduleChange(
     // Unix seconds — admin wraps it themselves as e.g. <t:{ends}:f> to get per-viewer local-time rendering
     ends: runtime.activeUntil != null ? Math.floor(runtime.activeUntil / 1000) : null,
     // random only — the humanized duration actually rolled for this window (e.g. "10m")
-    duration: runtime.lastDurationMs != null ? humanizeDuration(runtime.lastDurationMs) : null,
+    duration: runtime.lastDurationMs != null ? humanizeDuration(runtime.lastDurationMs, { round: true }) : null,
   });
   const renderMessageText = (str: string) => renderTemplate(str, templateValues);
 
