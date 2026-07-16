@@ -16,6 +16,7 @@ import { ModActionsPlugin } from "../ModActions/ModActionsPlugin.js";
 import { MutesPlugin } from "../Mutes/MutesPlugin.js";
 import { PhishermanPlugin } from "../Phisherman/PhishermanPlugin.js";
 import { RoleManagerPlugin } from "../RoleManager/RoleManagerPlugin.js";
+import { SchedulePlugin } from "../Schedule/SchedulePlugin.js";
 import { AntiraidClearCmd } from "./commands/AntiraidClearCmd.js";
 import { SetAntiraidCmd } from "./commands/SetAntiraidCmd.js";
 import { ViewAntiraidCmd } from "./commands/ViewAntiraidCmd.js";
@@ -47,6 +48,7 @@ export const AutomodPlugin = guildPlugin<AutomodPluginType>()({
     PhishermanPlugin,
     InternalPosterPlugin,
     RoleManagerPlugin,
+    SchedulePlugin,
   ],
 
   configSchema: zAutomodConfig,

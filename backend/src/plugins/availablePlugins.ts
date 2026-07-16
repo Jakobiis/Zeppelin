@@ -61,6 +61,8 @@ import { RoleManagerPlugin } from "./RoleManager/RoleManagerPlugin.js";
 import { roleManagerPluginDocs } from "./RoleManager/docs.js";
 import { RolesPlugin } from "./Roles/RolesPlugin.js";
 import { rolesPluginDocs } from "./Roles/docs.js";
+import { SchedulePlugin } from "./Schedule/SchedulePlugin.js";
+import { schedulePluginDocs } from "./Schedule/docs.js";
 import { SelfGrantableRolesPlugin } from "./SelfGrantableRoles/SelfGrantableRolesPlugin.js";
 import { selfGrantableRolesPluginDocs } from "./SelfGrantableRoles/docs.js";
 import { SlowmodePlugin } from "./Slowmode/SlowmodePlugin.js";
@@ -205,6 +207,10 @@ export const availableGuildPlugins: ZeppelinGuildPluginInfo[] = [
   {
     plugin: RolesPlugin,
     docs: rolesPluginDocs,
+  },
+  {
+    plugin: SchedulePlugin,
+    docs: schedulePluginDocs,
   },
   {
     plugin: SelfGrantableRolesPlugin,
