@@ -15,6 +15,7 @@ const zScheduleAnnounce = z.strictObject({
 
 export const zScheduledMultiplier = z
   .strictObject({
+    pretty_name: zBoundedCharacters(0, 100).nullable().default(null),
     multiplier: z.number().min(0).max(1000),
     // Regex matched against the current day-of-week number (0=Sunday..6=Saturday) in the guild's configured timezone
     day_of_week: zBoundedCharacters(1, 100).optional(),

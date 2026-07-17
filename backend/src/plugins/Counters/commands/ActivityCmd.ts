@@ -170,6 +170,10 @@ async function buildEarningInfoLines(
         lines.push(`+**${addToCounter.amount}** ${pointWord} per qualifying message${cooldownText}`);
 
         if (addToCounter.schedules?.length) {
+            // Mirrors addToCounter.ts's `amount *= schedulePlugin.getMultiplier(scheduleName)` — active multipliers
+            // stack multiplicatively, not additively, so this has to be a running product, not a sum.
+            let totalMultiplier = 1;
+            let anyActive = false;
             const { SchedulePlugin } = await import("../../Schedule/SchedulePlugin.js");
             if (pluginData.hasPlugin(SchedulePlugin)) {
                 const schedulePlugin = pluginData.getPlugin(SchedulePlugin);
@@ -177,15 +181,22 @@ async function buildEarningInfoLines(
                     const info = schedulePlugin.getScheduleInfo(scheduleName);
                     if (!info) continue;
 
+                    const label = info.prettyName ?? scheduleName;
+
                     if (info.active) {
                         const untilText = info.activeUntil
                             ? ` (ends <t:${Math.floor(info.activeUntil / 1000)}:R>)`
                             : "";
-                        lines.push(`**${info.multiplier}x** boost is currently **active**${untilText}!`);
+                        lines.push(`**${label}** (${info.multiplier}x) is currently **active**${untilText}!`);
+                        totalMultiplier *= info.multiplier;
+                        anyActive = true;
                     } else {
-                        lines.push(`**${info.multiplier}x** boost (\`${scheduleName}\`) isn't currently active.`);
+                        lines.push(`**${label}** (${info.multiplier}x) isn't currently active.`);
                     }
                 }
+            }
+            if (anyActive) {
+                lines.push(`**Total points per message right now:** ${addToCounter.amount * totalMultiplier}`);
             }
         }
     } catch {
