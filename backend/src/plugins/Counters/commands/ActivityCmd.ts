@@ -227,7 +227,7 @@ async function buildScheduleMultiplierLines(
     const lines: string[] = [];
     let totalMultiplier = 1;
     let anyActive = false;
-
+    lines.push(buildBaseEarningLine(baseAmount));
     for (const scheduleName of scheduleNames) {
         const info = schedulePlugin.getScheduleInfo(scheduleName);
         if (!info) continue;
@@ -244,7 +244,6 @@ async function buildScheduleMultiplierLines(
         }
     }
 
-    lines.push(buildBaseEarningLine(baseAmount));
     if (anyActive) {
         lines.push(`**Total points per message right now:** ${baseAmount * totalMultiplier}`);
     }
