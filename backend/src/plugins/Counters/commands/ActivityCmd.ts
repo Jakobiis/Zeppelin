@@ -4,7 +4,6 @@ import {
     ButtonBuilder,
     ButtonStyle,
     EmbedBuilder,
-    Guild,
     GuildMember,
     Message,
     MessageComponentInteraction,
@@ -89,20 +88,17 @@ function toArray<T>(value: T | T[] | null | undefined): T[] {
 /**
  * Describes which channels/roles/levels a plugin override's criteria applies to, so cooldown overrides on the
  * activity automod rule can be listed out individually in the help embed instead of only showing the value that
- * applies to whoever ran the command.
+ * applies to whoever ran the command. Channels/roles are rendered as real mentions rather than looked-up names so
+ * they stay accurate (and clickable) even if the name changes later.
  */
-function describeOverrideScope(guild: Guild, criteria: PluginOverrideCriteria): string {
+function describeOverrideScope(criteria: PluginOverrideCriteria): string {
     const parts: string[] = [];
 
-    const channelNames = toArray(criteria.channel).map(
-        (id) => `#${guild.channels.cache.get(id as Snowflake)?.name ?? "unknown-channel"}`,
-    );
-    if (channelNames.length) parts.push(channelNames.join(", "));
+    const channelMentions = toArray(criteria.channel).map((id) => `<#${id}>`);
+    if (channelMentions.length) parts.push(channelMentions.join(", "));
 
-    const roleNames = toArray(criteria.role).map(
-        (id) => `@${guild.roles.cache.get(id as Snowflake)?.name ?? "Unknown role"}`,
-    );
-    if (roleNames.length) parts.push(roleNames.join(", "));
+    const roleMentions = toArray(criteria.role).map((id) => `<@&${id}>`);
+    if (roleMentions.length) parts.push(roleMentions.join(", "));
 
     const levels = toArray(criteria.level);
     if (levels.length) parts.push(`level ${levels.join(", ")}`);
@@ -173,79 +169,128 @@ function buildRewardInfoLines(counter: z.infer<typeof zCounter>): string[] {
     return lines;
 }
 
-async function buildEarningInfoLines(
+function buildBaseEarningLine(amount: number): string {
+    const pointWord = amount === 1 ? "point" : "points";
+    return `+**${amount}** ${pointWord} per qualifying message`;
+}
+
+interface CooldownOverrideSource {
+    getRuleCooldownOverrides(ruleName: string): Array<{ criteria: PluginOverrideCriteria; cooldown: string }>;
+}
+
+/**
+ * Lists every cooldown that applies to the rule — the base (everyone) cooldown plus any channel/role/level
+ * overrides — sorted longest to shortest, so all the ways the cooldown can differ are visible in one place.
+ */
+function buildCooldownLines(
+    automod: CooldownOverrideSource,
+    ruleName: string,
+    baseCooldown: string | null,
+): string[] {
+    const entries: Array<{ label: string; cooldownMs: number }> = [];
+
+    const baseCooldownMs = baseCooldown ? convertDelayStringToMS(baseCooldown) : null;
+    if (baseCooldownMs) {
+        entries.push({ label: "Everyone", cooldownMs: baseCooldownMs });
+    }
+
+    for (const override of automod.getRuleCooldownOverrides(ruleName)) {
+        const cooldownMs = convertDelayStringToMS(override.cooldown);
+        if (cooldownMs) {
+            entries.push({ label: describeOverrideScope(override.criteria), cooldownMs });
+        }
+    }
+
+    if (!entries.length) return [];
+
+    entries.sort((a, b) => b.cooldownMs - a.cooldownMs);
+
+    return ["**Cooldowns:**", ...entries.map((entry) => `- ${entry.label}: ${humanizeDuration(entry.cooldownMs)}`)];
+}
+
+/**
+ * The base earning line is placed at the end, right next to the total points line it feeds into, so a reader can
+ * see "this is what you get" and "this is what you get right now" side by side instead of the base amount being
+ * separated from the number it turns into.
+ */
+async function buildScheduleMultiplierLines(
     pluginData: GuildPluginData<CountersPluginType>,
-    message: OmitPartialGroupDMChannel<Message>,
+    scheduleNames: string[],
+    baseAmount: number,
 ): Promise<string[]> {
+    const { SchedulePlugin } = await import("../../Schedule/SchedulePlugin.js");
+    if (!pluginData.hasPlugin(SchedulePlugin)) {
+        return [buildBaseEarningLine(baseAmount)];
+    }
+
+    const schedulePlugin = pluginData.getPlugin(SchedulePlugin);
     const lines: string[] = [];
+    let totalMultiplier = 1;
+    let anyActive = false;
 
-    try {
-        const { AutomodPlugin } = await import("../../Automod/AutomodPlugin.js");
-        if (!pluginData.hasPlugin(AutomodPlugin)) {
-            return lines;
+    for (const scheduleName of scheduleNames) {
+        const info = schedulePlugin.getScheduleInfo(scheduleName);
+        if (!info) continue;
+
+        const label = info.prettyName ?? scheduleName;
+
+        if (info.active) {
+            const untilText = info.activeUntil ? ` (ends <t:${Math.floor(info.activeUntil / 1000)}:R>)` : "";
+            lines.push(`**${label}** (${info.multiplier}x) is currently **active**${untilText}!`);
+            totalMultiplier *= info.multiplier;
+            anyActive = true;
+        } else {
+            lines.push(`**${label}** (${info.multiplier}x) isn't currently active.`);
         }
+    }
 
-        const rule = await pluginData
-            .getPlugin(AutomodPlugin)
-            .getRuleConfigForMessage(ACTIVITY_AUTOMOD_RULE_NAME, message);
-        const addToCounter = rule?.actions?.add_to_counter;
-
-        if (!rule || !rule.enabled || !addToCounter || addToCounter.counter !== ACTIVITY_COUNTER_NAME) {
-            return lines;
-        }
-
-        const cooldownMs = rule.cooldown ? convertDelayStringToMS(rule.cooldown) : null;
-        const cooldownText = cooldownMs ? ` (${humanizeDuration(cooldownMs)} cooldown)` : "";
-        const pointWord = addToCounter.amount === 1 ? "point" : "points";
-        lines.push(`+**${addToCounter.amount}** ${pointWord} per qualifying message${cooldownText}`);
-
-        const cooldownOverrides = pluginData
-            .getPlugin(AutomodPlugin)
-            .getRuleCooldownOverrides(ACTIVITY_AUTOMOD_RULE_NAME);
-        if (cooldownOverrides.length) {
-            lines.push("**Cooldown overrides:**");
-            for (const override of cooldownOverrides) {
-                const overrideCooldownMs = convertDelayStringToMS(override.cooldown);
-                const scope = describeOverrideScope(pluginData.guild, override.criteria);
-                lines.push(`- ${scope}: ${humanizeDuration(overrideCooldownMs ?? 0)}`);
-            }
-        }
-
-        if (addToCounter.schedules?.length) {
-            let totalMultiplier = 1;
-            let anyActive = false;
-            const { SchedulePlugin } = await import("../../Schedule/SchedulePlugin.js");
-            if (pluginData.hasPlugin(SchedulePlugin)) {
-                const schedulePlugin = pluginData.getPlugin(SchedulePlugin);
-                for (const scheduleName of addToCounter.schedules) {
-                    const info = schedulePlugin.getScheduleInfo(scheduleName);
-                    if (!info) continue;
-
-                    const label = info.prettyName ?? scheduleName;
-
-                    if (info.active) {
-                        const untilText = info.activeUntil
-                            ? ` (ends <t:${Math.floor(info.activeUntil / 1000)}:R>)`
-                            : "";
-                        lines.push(`**${label}** (${info.multiplier}x) is currently **active**${untilText}!`);
-                        totalMultiplier *= info.multiplier;
-                        anyActive = true;
-                    } else {
-                        lines.push(`**${label}** (${info.multiplier}x) isn't currently active.`);
-                    }
-                }
-            }
-            if (anyActive) {
-                lines.push(`**Total points per message right now:** ${addToCounter.amount * totalMultiplier}`);
-            }
-        }
-    } catch {
+    lines.push(buildBaseEarningLine(baseAmount));
+    if (anyActive) {
+        lines.push(`**Total points per message right now:** ${baseAmount * totalMultiplier}`);
     }
 
     return lines;
 }
 
-async function buildActivityInfoEmbed(
+interface EarningInfoLines {
+    /** Own section, no "Earning Points" title — the base rate + overrides that change when the cooldown resets. */
+    cooldownLines: string[];
+    /** Goes under the "Earning Points" title — the actual rate, and how multipliers affect it right now. */
+    earningLines: string[];
+}
+
+async function buildEarningInfoLines(
+    pluginData: GuildPluginData<CountersPluginType>,
+    message: OmitPartialGroupDMChannel<Message>,
+): Promise<EarningInfoLines> {
+    const empty: EarningInfoLines = { cooldownLines: [], earningLines: [] };
+
+    try {
+        const { AutomodPlugin } = await import("../../Automod/AutomodPlugin.js");
+        if (!pluginData.hasPlugin(AutomodPlugin)) {
+            return empty;
+        }
+
+        const automod = pluginData.getPlugin(AutomodPlugin);
+        const rule = await automod.getRuleConfigForMessage(ACTIVITY_AUTOMOD_RULE_NAME, message);
+        const addToCounter = rule?.actions?.add_to_counter;
+
+        if (!rule || !rule.enabled || !addToCounter || addToCounter.counter !== ACTIVITY_COUNTER_NAME) {
+            return empty;
+        }
+
+        const cooldownLines = buildCooldownLines(automod, ACTIVITY_AUTOMOD_RULE_NAME, rule.cooldown);
+        const earningLines = addToCounter.schedules?.length
+            ? await buildScheduleMultiplierLines(pluginData, addToCounter.schedules, addToCounter.amount)
+            : [buildBaseEarningLine(addToCounter.amount)];
+
+        return { cooldownLines, earningLines };
+    } catch {
+        return empty;
+    }
+}
+
+export async function buildActivityInfoEmbed(
     pluginData: GuildPluginData<CountersPluginType>,
     message: OmitPartialGroupDMChannel<Message>,
     counter: z.infer<typeof zCounter>,
@@ -254,7 +299,10 @@ async function buildActivityInfoEmbed(
         "Activity points measure how active you are in the server. Send qualifying messages to earn points, but they'll decay over time if you go inactive — build up enough and you'll unlock roles/perks, but let them drop too low and those get taken away again.",
     ];
 
-    const earningLines = await buildEarningInfoLines(pluginData, message);
+    const { cooldownLines, earningLines } = await buildEarningInfoLines(pluginData, message);
+    if (cooldownLines.length) {
+        sections.push(cooldownLines.join("\n"));
+    }
     if (earningLines.length) {
         sections.push(`**Earning Points**\n${earningLines.join("\n")}`);
     }

@@ -17,6 +17,7 @@ import { ResetCounterCmd } from "./commands/ResetCounterCmd.js";
 import { SetCounterCmd } from "./commands/SetCounterCmd.js";
 import { ViewCounterCmd } from "./commands/ViewCounterCmd.js";
 import { ActivityCmd } from "./commands/ActivityCmd.js";
+import { ActivityHelpCmd } from "./commands/ActivityHelpCmd.js";
 import { ActivityLeaderboardCmd } from "./commands/ActivityLeaderboardCmd.js";
 import { changeCounterValue } from "./functions/changeCounterValue.js";
 import { counterExists } from "./functions/counterExists.js";
@@ -82,6 +83,7 @@ export const CountersPlugin = guildPlugin<CountersPluginType>()({
     ResetCounterCmd,
     ResetAllCounterValuesCmd,
     ActivityCmd,
+    ActivityHelpCmd,
     ActivityLeaderboardCmd,
   ],
 
