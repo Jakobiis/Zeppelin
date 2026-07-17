@@ -13,7 +13,7 @@ export const CheckAfkMentionsEvt = guildPluginEventListener({
 
     const ownAfk = await pluginData.state.afk.getByUserId(msg.author.id);
     if (ownAfk) {
-      const afkSince = moment.utc().diff(moment.utc(ownAfk.created_at, "YYYY-MM-DD HH:mm:ss"));
+      const afkSince = moment.utc(ownAfk.created_at, "YYYY-MM-DD HH:mm:ss").toDate();
       await pluginData.state.afk.delete(msg.author.id);
 
       if (config.afk_rename && msg.member && msg.member.nickname !== ownAfk.previous_nickname) {
