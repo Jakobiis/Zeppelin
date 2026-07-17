@@ -32,3 +32,19 @@ export const humanizeDurationShort = humanizeduration.humanizer({
 export const humanizeDuration = humanizeduration.humanizer({
   unitMeasures: delayStringMultipliers,
 });
+
+export type DiscordTimestampStyle = "t" | "T" | "d" | "D" | "f" | "F" | "R";
+export function discordTimestamp(
+  when: Date | number,
+  style: DiscordTimestampStyle = "f"
+): string {
+  let seconds: number;
+
+  if (when instanceof Date) {
+    seconds = Math.floor(when.getTime() / 1000);
+  } else {
+    seconds = Math.floor(when >= 1e12 ? when / 1000 : when);
+  }
+
+  return `<t:${seconds}:${style}>`;
+}

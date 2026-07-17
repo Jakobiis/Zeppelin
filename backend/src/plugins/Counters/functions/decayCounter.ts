@@ -1,4 +1,6 @@
+import { Snowflake } from "discord.js";
 import { GuildPluginData } from "vety";
+import { convertDelayStringToMS } from "../../../utils.js";
 import { counterIdLock } from "../../../utils/lockNameHelpers.js";
 import { CountersPluginType } from "../types.js";
 import { checkAllValuesForReverseTrigger } from "./checkAllValuesForReverseTrigger.js";
@@ -19,7 +21,38 @@ export async function decayCounter(
   const counterId = pluginData.state.counterIds[counterName];
   const lock = await pluginData.locks.acquire(counterIdLock(counterId));
 
-  await pluginData.state.counters.decay(counterId, decayPeriodMS, decayAmount);
+  const roleOverrides = counter.decay?.role_overrides ?? [];
+  const userIdsClaimedByOverrides: string[] = [];
+
+  for (const override of roleOverrides) {
+    const role = pluginData.guild.roles.cache.get(override.role as Snowflake);
+    if (!role) {
+      continue;
+    }
+
+    // First matching override in the list wins, so members already claimed by an earlier override are skipped here
+    const overrideUserIds = [...role.members.keys()].filter((id) => !userIdsClaimedByOverrides.includes(id));
+    if (overrideUserIds.length === 0) {
+      continue;
+    }
+
+    userIdsClaimedByOverrides.push(...overrideUserIds);
+
+    const overridePeriodMs = convertDelayStringToMS(override.every);
+    if (!overridePeriodMs) {
+      continue;
+    }
+
+    await pluginData.state.counters.decayForRole(
+      counterId,
+      override.role,
+      overridePeriodMs,
+      override.amount,
+      overrideUserIds,
+    );
+  }
+
+  await pluginData.state.counters.decay(counterId, decayPeriodMS, decayAmount, userIdsClaimedByOverrides);
 
   // Check for trigger matches, if any, when the counter value changes
   const triggers = pluginData.state.counterTriggersByCounterId.get(counterId);

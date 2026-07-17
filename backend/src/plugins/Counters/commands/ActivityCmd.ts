@@ -1,5 +1,16 @@
-import { guildPluginMessageCommand } from "vety";
-import { EmbedBuilder } from "discord.js";
+import { GuildPluginData, guildPluginMessageCommand } from "vety";
+import {
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    EmbedBuilder,
+    GuildMember,
+    Message,
+    MessageComponentInteraction,
+    OmitPartialGroupDMChannel,
+    Snowflake,
+} from "discord.js";
+import { z } from "zod";
 import { commandTypeHelpers as ct } from "../../../commandTypes.js";
 import {
     TriggerComparisonOp,
@@ -8,11 +19,15 @@ import {
     parseCounterConditionString,
 } from "../../../data/entities/CounterTrigger.js";
 import { humanizeDuration } from "../../../humanizeDuration.js";
-import { convertDelayStringToMS } from "../../../utils.js";
-import { CountersPluginType } from "../types.js";
+import { MINUTES, convertDelayStringToMS, noop } from "../../../utils.js";
+import { CountersPluginType, zCounter } from "../types.js";
 
 const ACTIVITY_COUNTER_NAME = "activity";
+// The Automod rule that feeds the activity counter — there's no formal link between the two, this is just
+// this server's naming convention (see zeppelin config: automod.rules.accumulate_activity).
+const ACTIVITY_AUTOMOD_RULE_NAME = "accumulate_activity";
 const BAR_LENGTH = 15;
+const INFO_BUTTON_TIMEOUT = 5 * MINUTES;
 
 interface GrantDefinition {
     triggerName: string;
@@ -63,6 +78,150 @@ function renderProgressBar(percent: number): string {
     const clamped = Math.max(0, Math.min(1, percent));
     const filled = Math.round(clamped * BAR_LENGTH);
     return "█".repeat(filled) + "░".repeat(BAR_LENGTH - filled);
+}
+
+/**
+ * Mirrors the "first matching role override wins" logic that decayCounter.ts uses for the actual decay job,
+ * so the estimate shown here matches the rate that will actually be applied to this member.
+ */
+function getEffectiveDecayRate(
+    decay: NonNullable<z.infer<typeof zCounter>["decay"]>,
+    member: GuildMember | null,
+): { amount: number; every: string } {
+    if (member) {
+        const override = decay.role_overrides.find((o) => member.roles.cache.has(o.role as Snowflake));
+        if (override) {
+            return override;
+        }
+    }
+
+    return decay;
+}
+
+function buildDecayInfoLines(
+    pluginData: GuildPluginData<CountersPluginType>,
+    decay: NonNullable<z.infer<typeof zCounter>["decay"]>,
+): string[] {
+    const lines: string[] = [];
+
+    const basePeriodMs = convertDelayStringToMS(decay.every);
+    lines.push(`- Base rate: **${decay.amount}** points every ${humanizeDuration(basePeriodMs ?? 0)}`);
+
+    for (const override of decay.role_overrides) {
+        const roleName = pluginData.guild.roles.cache.get(override.role as Snowflake)?.name ?? "Unknown role";
+        const overridePeriodMs = convertDelayStringToMS(override.every);
+        lines.push(`- **${roleName}**: **${override.amount}** points every ${humanizeDuration(overridePeriodMs ?? 0)}`);
+    }
+
+    return lines;
+}
+
+function buildRewardInfoLines(counter: z.infer<typeof zCounter>): string[] {
+    const lines: string[] = [];
+
+    for (const grant of GRANTS) {
+        const grantTrigger = counter.triggers?.[grant.triggerName];
+        const parsedGrant = grantTrigger ? parseCounterConditionString(grantTrigger.condition) : null;
+        if (!parsedGrant || (parsedGrant[0] !== ">" && parsedGrant[0] !== ">=")) {
+            continue;
+        }
+
+        const [grantOp, requiredPoints] = parsedGrant;
+        let line = `**${grant.label}** — ${requiredPoints} points`;
+
+        const rawReverseCondition =
+            grantTrigger!.reverse_condition ||
+            buildCounterConditionString(getReverseCounterComparisonOp(grantOp), requiredPoints);
+        const parsedReverse = parseCounterConditionString(rawReverseCondition);
+        if (parsedReverse) {
+            line += ` (removed below ${parsedReverse[1]})`;
+        }
+
+        lines.push(line);
+    }
+
+    return lines;
+}
+
+async function buildEarningInfoLines(
+    pluginData: GuildPluginData<CountersPluginType>,
+    message: OmitPartialGroupDMChannel<Message>,
+): Promise<string[]> {
+    const lines: string[] = [];
+
+    try {
+        const { AutomodPlugin } = await import("../../Automod/AutomodPlugin.js");
+        if (!pluginData.hasPlugin(AutomodPlugin)) {
+            return lines;
+        }
+
+        const rule = await pluginData
+            .getPlugin(AutomodPlugin)
+            .getRuleConfigForMessage(ACTIVITY_AUTOMOD_RULE_NAME, message);
+        const addToCounter = rule?.actions?.add_to_counter;
+
+        if (!rule || !rule.enabled || !addToCounter || addToCounter.counter !== ACTIVITY_COUNTER_NAME) {
+            return lines;
+        }
+
+        const cooldownMs = rule.cooldown ? convertDelayStringToMS(rule.cooldown) : null;
+        const cooldownText = cooldownMs ? ` (${humanizeDuration(cooldownMs)} cooldown)` : "";
+        const pointWord = addToCounter.amount === 1 ? "point" : "points";
+        lines.push(`+**${addToCounter.amount}** ${pointWord} per qualifying message${cooldownText}`);
+
+        if (addToCounter.schedules?.length) {
+            const { SchedulePlugin } = await import("../../Schedule/SchedulePlugin.js");
+            if (pluginData.hasPlugin(SchedulePlugin)) {
+                const schedulePlugin = pluginData.getPlugin(SchedulePlugin);
+                for (const scheduleName of addToCounter.schedules) {
+                    const info = schedulePlugin.getScheduleInfo(scheduleName);
+                    if (!info) continue;
+
+                    if (info.active) {
+                        const untilText = info.activeUntil
+                            ? ` (ends <t:${Math.floor(info.activeUntil / 1000)}:R>)`
+                            : "";
+                        lines.push(`**${info.multiplier}x** boost is currently **active**${untilText}!`);
+                    } else {
+                        lines.push(`**${info.multiplier}x** boost (\`${scheduleName}\`) isn't currently active.`);
+                    }
+                }
+            }
+        }
+    } catch {
+    }
+
+    return lines;
+}
+
+async function buildActivityInfoEmbed(
+    pluginData: GuildPluginData<CountersPluginType>,
+    message: OmitPartialGroupDMChannel<Message>,
+    counter: z.infer<typeof zCounter>,
+): Promise<EmbedBuilder> {
+    const sections: string[] = [
+        "Activity points measure how active you are in the server. Send qualifying messages to earn points, but they'll decay over time if you go inactive — build up enough and you'll unlock roles/perks, but let them drop too low and those get taken away again.",
+    ];
+
+    const earningLines = await buildEarningInfoLines(pluginData, message);
+    if (earningLines.length) {
+        sections.push(`**Earning Points**\n${earningLines.join("\n")}`);
+    }
+
+    if (counter.decay) {
+        const decayLines = buildDecayInfoLines(pluginData, counter.decay);
+        sections.push(`**Losing Points**\n${decayLines.join("\n")}`);
+    }
+
+    const rewardLines = buildRewardInfoLines(counter);
+    if (rewardLines.length) {
+        sections.push(`**Rewards**\n${rewardLines.join("\n")}`);
+    }
+
+    return new EmbedBuilder()
+        .setColor(0x0159b2)
+        .setTitle("How Activity Works")
+        .setDescription(sections.join("\n\n"));
 }
 
 export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
@@ -141,12 +300,14 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
                     if (pointsToLose !== null && pointsToLose > 0) {
                         text += `\n-# Lost At **${reverseThreshold}** Points (**${pointsToLose}** To Go)`;
 
-                        if (counter.decay && counter.decay.amount > 0) {
-                            const decayPeriodMs = convertDelayStringToMS(counter.decay.every);
-                            if (decayPeriodMs) {
-                                const msUntilLost = (pointsToLose * decayPeriodMs) / counter.decay.amount;
+                        if (counter.decay) {
+                            const effectiveDecay = getEffectiveDecayRate(counter.decay, member);
+                            const decayPeriodMs = convertDelayStringToMS(effectiveDecay.every);
+                            if (effectiveDecay.amount > 0 && decayPeriodMs) {
+                                const msUntilLost = (pointsToLose * decayPeriodMs) / effectiveDecay.amount;
                                 text += `\n-# That's About **${humanizeDuration(msUntilLost, {
                                     round: true,
+                                    largest: 2,
                                 })}** Away If You Stay Inactive`;
                             }
                         }
@@ -161,6 +322,36 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
             .setThumbnail(member?.displayAvatarURL() ?? targetUser.displayAvatarURL())
             .setFooter({ text: `Points: ${finalValue}` });
 
-        await message.channel.send({ embeds: [embed] });
+        const infoCustomId = `activityInfo:${message.id}`;
+        const infoRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji("❔")
+                .setLabel("How It Works")
+                .setCustomId(infoCustomId),
+        );
+
+        const sentMessage = await message.channel.send({ embeds: [embed], components: [infoRow] });
+
+        const collector = sentMessage.createMessageComponentCollector({
+            time: INFO_BUTTON_TIMEOUT,
+            filter: (interaction) => interaction.customId === infoCustomId,
+        });
+
+        collector.on("collect", async (interaction: MessageComponentInteraction) => {
+            if (interaction.user.id !== message.author.id) {
+                await interaction
+                    .reply({ content: "You are not permitted to use this button.", ephemeral: true })
+                    .catch(noop);
+                return;
+            }
+
+            const infoEmbed = await buildActivityInfoEmbed(pluginData, message, counter);
+            await interaction.reply({ embeds: [infoEmbed], ephemeral: true }).catch(noop);
+        });
+
+        collector.on("end", () => {
+            sentMessage.edit({ components: [] }).catch(noop);
+        });
     },
 });

@@ -5,6 +5,7 @@ import { DAYS, DBDateFormat, HOURS, MINUTES } from "../utils.js";
 import { BaseGuildRepository } from "./BaseGuildRepository.js";
 import { dataSource } from "./dataSource.js";
 import { Counter } from "./entities/Counter.js";
+import { CounterDecayRoleState } from "./entities/CounterDecayRoleState.js";
 import { CounterTrigger, TriggerComparisonOp, isValidCounterComparisonOp } from "./entities/CounterTrigger.js";
 import { CounterTriggerState } from "./entities/CounterTriggerState.js";
 import { CounterValue } from "./entities/CounterValue.js";
@@ -36,6 +37,7 @@ export class GuildCounters extends BaseGuildRepository {
   private counterValues: Repository<CounterValue>;
   private counterTriggers: Repository<CounterTrigger>;
   private counterTriggerStates: Repository<CounterTriggerState>;
+  private counterDecayRoleStates: Repository<CounterDecayRoleState>;
 
   constructor(guildId) {
     super(guildId);
@@ -43,6 +45,7 @@ export class GuildCounters extends BaseGuildRepository {
     this.counterValues = dataSource.getRepository(CounterValue);
     this.counterTriggers = dataSource.getRepository(CounterTrigger);
     this.counterTriggerStates = dataSource.getRepository(CounterTriggerState);
+    this.counterDecayRoleStates = dataSource.getRepository(CounterDecayRoleState);
   }
 
   async findOrCreateCounter(name: string, perChannel: boolean, perUser: boolean): Promise<Counter> {
@@ -150,7 +153,62 @@ export class GuildCounters extends BaseGuildRepository {
     );
   }
 
-  decay(id: number, decayPeriodMs: number, decayAmount: number) {
+  /**
+   * Applies decay to counter_values rows for the given counter, optionally restricted to (or excluding) a set of
+   * user IDs. `lastDecayAt`/`persistNewLastDecayAt` are abstracted out so this same logic can drive both the
+   * counter-wide decay rate (stored on the `counters` row) and per-role decay rate overrides (stored in
+   * `counter_decay_role_states`), each with their own independently-compensated last-decay timestamp.
+   */
+  private async applyDecay(
+    id: number,
+    decayPeriodMs: number,
+    decayAmount: number,
+    lastDecayAt: string,
+    persistNewLastDecayAt: (newLastDecayAt: string) => Promise<any>,
+    userIdFilter: { include: string[] } | { exclude: string[] } | null,
+  ): Promise<void> {
+    const diffFromLastDecayMs = moment.utc().diff(moment.utc(lastDecayAt), "ms");
+    if (diffFromLastDecayMs < decayPeriodMs) {
+      return;
+    }
+
+    const decayAmountToApply = Math.round((diffFromLastDecayMs / decayPeriodMs) * decayAmount);
+    if (decayAmountToApply === 0 || Number.isNaN(decayAmountToApply)) {
+      return;
+    }
+
+    // Calculate new last_decay_at based on the rounded decay amount we applied. This makes it so that over time, the decayed amount will stay accurate, even if we round some here.
+    const newLastDecayDate = moment
+      .utc(lastDecayAt)
+      .add((decayAmountToApply / decayAmount) * decayPeriodMs, "ms")
+      .format(DBDateFormat);
+
+    const rawUpdate =
+      decayAmountToApply >= 0
+        ? `GREATEST(value - ${decayAmountToApply}, ${MIN_COUNTER_VALUE})`
+        : `LEAST(value + ${Math.abs(decayAmountToApply)}, ${MAX_COUNTER_VALUE})`;
+
+    // Using an UPDATE with ORDER BY in an attempt to avoid deadlocks from simultaneous decays
+    // Also see https://dev.mysql.com/doc/refman/8.0/en/innodb-deadlocks-handling.html
+    let query = this.counterValues.createQueryBuilder("CounterValue").where("counter_id = :id", { id });
+
+    if (userIdFilter && "include" in userIdFilter) {
+      query = query.andWhere("user_id IN (:...userIds)", { userIds: userIdFilter.include });
+    } else if (userIdFilter && "exclude" in userIdFilter) {
+      query = query.andWhere("user_id NOT IN (:...userIds)", { userIds: userIdFilter.exclude });
+    }
+
+    await query
+      .orderBy("id")
+      .update({
+        value: () => rawUpdate,
+      })
+      .execute();
+
+    await persistNewLastDecayAt(newLastDecayDate);
+  }
+
+  decay(id: number, decayPeriodMs: number, decayAmount: number, excludeUserIds: string[] = []) {
     return decayQueue.add(async () => {
       const counter = (await this.counters.findOne({
         where: {
@@ -158,45 +216,51 @@ export class GuildCounters extends BaseGuildRepository {
         },
       }))!;
 
-      const diffFromLastDecayMs = moment.utc().diff(moment.utc(counter.last_decay_at!), "ms");
-      if (diffFromLastDecayMs < decayPeriodMs) {
-        return;
+      await this.applyDecay(
+        id,
+        decayPeriodMs,
+        decayAmount,
+        counter.last_decay_at!,
+        (newLastDecayAt) => this.counters.update({ id }, { last_decay_at: newLastDecayAt }),
+        excludeUserIds.length ? { exclude: excludeUserIds } : null,
+      );
+    });
+  }
+
+  /**
+   * Like `decay()`, but applies a decay rate override that only affects the given user IDs (e.g. members with a
+   * specific role), tracked with its own independent last-decay timestamp so it doesn't interfere with the base
+   * decay rate's timing.
+   */
+  async decayForRole(id: number, roleId: string, decayPeriodMs: number, decayAmount: number, userIds: string[]) {
+    if (userIds.length === 0) {
+      return;
+    }
+
+    return decayQueue.add(async () => {
+      let state = await this.counterDecayRoleStates.findOne({
+        where: { counter_id: id, role_id: roleId },
+      });
+
+      if (!state) {
+        const insertResult = await this.counterDecayRoleStates.insert({
+          counter_id: id,
+          role_id: roleId,
+          last_decay_at: moment.utc().format(DBDateFormat),
+        });
+        state = (await this.counterDecayRoleStates.findOne({
+          where: { id: insertResult.identifiers[0].id },
+        }))!;
       }
 
-      const decayAmountToApply = Math.round((diffFromLastDecayMs / decayPeriodMs) * decayAmount);
-      if (decayAmountToApply === 0 || Number.isNaN(decayAmountToApply)) {
-        return;
-      }
-
-      // Calculate new last_decay_at based on the rounded decay amount we applied. This makes it so that over time, the decayed amount will stay accurate, even if we round some here.
-      const newLastDecayDate = moment
-        .utc(counter.last_decay_at)
-        .add((decayAmountToApply / decayAmount) * decayPeriodMs, "ms")
-        .format(DBDateFormat);
-
-      const rawUpdate =
-        decayAmountToApply >= 0
-          ? `GREATEST(value - ${decayAmountToApply}, ${MIN_COUNTER_VALUE})`
-          : `LEAST(value + ${Math.abs(decayAmountToApply)}, ${MAX_COUNTER_VALUE})`;
-
-      // Using an UPDATE with ORDER BY in an attempt to avoid deadlocks from simultaneous decays
-      // Also see https://dev.mysql.com/doc/refman/8.0/en/innodb-deadlocks-handling.html
-      await this.counterValues
-        .createQueryBuilder("CounterValue")
-        .where("counter_id = :id", { id })
-        .orderBy("id")
-        .update({
-          value: () => rawUpdate,
-        })
-        .execute();
-
-      await this.counters.update(
-        {
-          id,
-        },
-        {
-          last_decay_at: newLastDecayDate,
-        },
+      await this.applyDecay(
+        id,
+        decayPeriodMs,
+        decayAmount,
+        state.last_decay_at!,
+        (newLastDecayAt) =>
+          this.counterDecayRoleStates.update({ counter_id: id, role_id: roleId }, { last_decay_at: newLastDecayAt }),
+        { include: userIds },
       );
     });
   }
@@ -512,14 +576,24 @@ export class GuildCounters extends BaseGuildRepository {
     return value?.value;
   }
 
-  async getTopValues(counterId: number, limit: number = 10): Promise<CounterValue[]> {
+  async getTopValues(counterId: number, limit: number = 10, offset: number = 0): Promise<CounterValue[]> {
     return this.counterValues
       .createQueryBuilder("cv")
       .where("cv.counter_id = :counterId", { counterId })
       .andWhere("cv.user_id != :zero", { zero: "0" }) // exclude the "no user" aggregate row
       .orderBy("cv.value", "DESC")
+      .addOrderBy("cv.id", "ASC")
       .limit(limit)
+      .offset(offset)
       .getMany();
+  }
+
+  async getValueCount(counterId: number): Promise<number> {
+    return this.counterValues
+      .createQueryBuilder("cv")
+      .where("cv.counter_id = :counterId", { counterId })
+      .andWhere("cv.user_id != :zero", { zero: "0" }) // exclude the "no user" aggregate row
+      .getCount();
   }
 
   async resetAllCounterValues(counterId: number): Promise<void> {

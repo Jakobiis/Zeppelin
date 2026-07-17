@@ -8,12 +8,13 @@ import {
   getReverseCounterComparisonOp,
   parseCounterConditionString,
 } from "../../data/entities/CounterTrigger.js";
-import { zBoundedCharacters, zBoundedRecord, zDelayString } from "../../utils.js";
+import { zBoundedCharacters, zBoundedRecord, zDelayString, zSnowflake } from "../../utils.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import Timeout = NodeJS.Timeout;
 
 const MAX_COUNTERS = 5;
 const MAX_TRIGGERS_PER_COUNTER = 5;
+const MAX_DECAY_ROLE_OVERRIDES = 10;
 
 export const zTrigger = z.strictObject({
   // Dummy type because name gets replaced by the property key in transform()
@@ -49,23 +50,37 @@ const zTriggerFromString = zBoundedCharacters(0, 100).transform((val, ctx) => {
 
 const zTriggerInput = z.union([zTrigger, zTriggerFromString]);
 
-export const zCounter = z.strictObject({
-  pretty_name: zBoundedCharacters(0, 100).nullable().default(null),
-  per_channel: z.boolean().default(false),
-  per_user: z.boolean().default(false),
-  initial_value: z.number().min(MIN_COUNTER_VALUE).max(MAX_COUNTER_VALUE).default(0),
-  triggers: zBoundedRecord(z.record(zBoundedCharacters(0, 100), zTriggerInput), 1, MAX_TRIGGERS_PER_COUNTER),
-  decay: z
-    .strictObject({
-      amount: z.number(),
-      every: zDelayString,
-    })
-    .nullable()
-    .default(null),
-  can_view: z.boolean().nullable().default(null),
-  can_edit: z.boolean().nullable().default(null),
-  can_reset_all: z.boolean().nullable().default(null),
+export const zDecayRoleOverride = z.strictObject({
+  role: zSnowflake,
+  amount: z.number(),
+  every: zDelayString,
 });
+
+export const zCounter = z
+  .strictObject({
+    pretty_name: zBoundedCharacters(0, 100).nullable().default(null),
+    per_channel: z.boolean().default(false),
+    per_user: z.boolean().default(false),
+    initial_value: z.number().min(MIN_COUNTER_VALUE).max(MAX_COUNTER_VALUE).default(0),
+    triggers: zBoundedRecord(z.record(zBoundedCharacters(0, 100), zTriggerInput), 1, MAX_TRIGGERS_PER_COUNTER),
+    decay: z
+      .strictObject({
+        amount: z.number(),
+        every: zDelayString,
+        // Applies a different decay rate to members with the given role, instead of the base amount/every above.
+        // Only usable on per-user counters, since role membership is a per-user property.
+        // The first matching role in this list wins if a member has more than one.
+        role_overrides: z.array(zDecayRoleOverride).max(MAX_DECAY_ROLE_OVERRIDES).default([]),
+      })
+      .nullable()
+      .default(null),
+    can_view: z.boolean().nullable().default(null),
+    can_edit: z.boolean().nullable().default(null),
+    can_reset_all: z.boolean().nullable().default(null),
+  })
+  .refine((counter) => !counter.decay?.role_overrides.length || counter.per_user, {
+    message: "decay.role_overrides can only be used on counters with per_user: true",
+  });
 
 export const zCountersConfig = z.strictObject({
   counters: zBoundedRecord(z.record(zBoundedCharacters(0, 100), zCounter), 0, MAX_COUNTERS).default({}),

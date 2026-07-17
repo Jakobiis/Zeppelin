@@ -1,4 +1,5 @@
 import { CooldownManager, guildPlugin } from "vety";
+import { Message } from "discord.js";
 import { Queue } from "../../Queue.js";
 import { GuildAntiraidLevels } from "../../data/GuildAntiraidLevels.js";
 import { GuildArchives } from "../../data/GuildArchives.js";
@@ -57,6 +58,19 @@ export const AutomodPlugin = guildPlugin<AutomodPluginType>()({
     antiraid_level: (pluginData, matchParams, value) => {
       return value ? value === pluginData.state.cachedAntiraidLevel : false;
     },
+  },
+
+  public(pluginData) {
+    return {
+      /**
+       * Resolves a rule's config (including any matching overrides, e.g. channel/role-specific cooldowns) as it
+       * would apply to the given message. Returns null if the rule doesn't exist.
+       */
+      getRuleConfigForMessage: async (ruleName: string, msg: Message) => {
+        const config = await pluginData.config.getForMessage(msg);
+        return config.rules[ruleName] ?? null;
+      },
+    };
   },
 
   // prettier-ignore
