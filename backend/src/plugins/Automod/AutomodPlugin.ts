@@ -1,4 +1,4 @@
-import { CooldownManager, guildPlugin } from "vety";
+import { CooldownManager, guildPlugin, PluginOverride, PluginOverrideCriteria } from "vety";
 import { Message } from "discord.js";
 import { Queue } from "../../Queue.js";
 import { GuildAntiraidLevels } from "../../data/GuildAntiraidLevels.js";
@@ -34,7 +34,7 @@ import {
 import { clearOldRecentNicknameChanges } from "./functions/clearOldNicknameChanges.js";
 import { clearOldRecentActions } from "./functions/clearOldRecentActions.js";
 import { clearOldRecentSpam } from "./functions/clearOldRecentSpam.js";
-import { AutomodPluginType, zAutomodConfig } from "./types.js";
+import { AutomodPluginType, zAutomodConfig, TRule } from "./types.js";
 import { DebugAutomodCmd } from "./commands/DebugAutomodCmd.js";
 
 export const AutomodPlugin = guildPlugin<AutomodPluginType>()({
@@ -69,6 +69,27 @@ export const AutomodPlugin = guildPlugin<AutomodPluginType>()({
       getRuleConfigForMessage: async (ruleName: string, msg: Message) => {
         const config = await pluginData.config.getForMessage(msg);
         return config.rules[ruleName] ?? null;
+      },
+
+      /**
+       * Returns the channel/role/level-scoped overrides that change a rule's cooldown, straight from the raw guild
+       * config (rather than resolved for a single message), so callers can display all of them at once (e.g. in a
+       * help command) instead of just the one that applies to the current context.
+       */
+      getRuleCooldownOverrides: (ruleName: string): Array<{ criteria: PluginOverrideCriteria; cooldown: string }> => {
+        const rawOverrides = (pluginData.fullConfig?.plugins?.automod?.overrides ?? []) as Array<
+          PluginOverride<AutomodPluginType>
+        >;
+
+        const result: Array<{ criteria: PluginOverrideCriteria; cooldown: string }> = [];
+        for (const override of rawOverrides) {
+          const cooldown = (override.config?.rules?.[ruleName] as TRule | undefined)?.cooldown;
+          if (cooldown) {
+            result.push({ criteria: override, cooldown });
+          }
+        }
+
+        return result;
       },
     };
   },

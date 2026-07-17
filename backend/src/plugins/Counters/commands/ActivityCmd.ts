@@ -1,9 +1,10 @@
-import { GuildPluginData, guildPluginMessageCommand } from "vety";
+import { GuildPluginData, guildPluginMessageCommand, PluginOverrideCriteria } from "vety";
 import {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
     EmbedBuilder,
+    Guild,
     GuildMember,
     Message,
     MessageComponentInteraction,
@@ -78,6 +79,35 @@ function renderProgressBar(percent: number): string {
     const clamped = Math.max(0, Math.min(1, percent));
     const filled = Math.round(clamped * BAR_LENGTH);
     return "█".repeat(filled) + "░".repeat(BAR_LENGTH - filled);
+}
+
+function toArray<T>(value: T | T[] | null | undefined): T[] {
+    if (value == null) return [];
+    return Array.isArray(value) ? value : [value];
+}
+
+/**
+ * Describes which channels/roles/levels a plugin override's criteria applies to, so cooldown overrides on the
+ * activity automod rule can be listed out individually in the help embed instead of only showing the value that
+ * applies to whoever ran the command.
+ */
+function describeOverrideScope(guild: Guild, criteria: PluginOverrideCriteria): string {
+    const parts: string[] = [];
+
+    const channelNames = toArray(criteria.channel).map(
+        (id) => `#${guild.channels.cache.get(id as Snowflake)?.name ?? "unknown-channel"}`,
+    );
+    if (channelNames.length) parts.push(channelNames.join(", "));
+
+    const roleNames = toArray(criteria.role).map(
+        (id) => `@${guild.roles.cache.get(id as Snowflake)?.name ?? "Unknown role"}`,
+    );
+    if (roleNames.length) parts.push(roleNames.join(", "));
+
+    const levels = toArray(criteria.level);
+    if (levels.length) parts.push(`level ${levels.join(", ")}`);
+
+    return parts.length ? parts.join(" + ") : "Everyone";
 }
 
 /**
@@ -169,9 +199,19 @@ async function buildEarningInfoLines(
         const pointWord = addToCounter.amount === 1 ? "point" : "points";
         lines.push(`+**${addToCounter.amount}** ${pointWord} per qualifying message${cooldownText}`);
 
+        const cooldownOverrides = pluginData
+            .getPlugin(AutomodPlugin)
+            .getRuleCooldownOverrides(ACTIVITY_AUTOMOD_RULE_NAME);
+        if (cooldownOverrides.length) {
+            lines.push("**Cooldown overrides:**");
+            for (const override of cooldownOverrides) {
+                const overrideCooldownMs = convertDelayStringToMS(override.cooldown);
+                const scope = describeOverrideScope(pluginData.guild, override.criteria);
+                lines.push(`- ${scope}: ${humanizeDuration(overrideCooldownMs ?? 0)}`);
+            }
+        }
+
         if (addToCounter.schedules?.length) {
-            // Mirrors addToCounter.ts's `amount *= schedulePlugin.getMultiplier(scheduleName)` — active multipliers
-            // stack multiplicatively, not additively, so this has to be a running product, not a sum.
             let totalMultiplier = 1;
             let anyActive = false;
             const { SchedulePlugin } = await import("../../Schedule/SchedulePlugin.js");
