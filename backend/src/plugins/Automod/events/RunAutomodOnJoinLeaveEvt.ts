@@ -31,8 +31,9 @@ export const RunAutomodOnLeaveEvt = guildPluginEventListener<AutomodPluginType>(
   listener({ pluginData, args: { member } }) {
     const context: AutomodContext = {
       timestamp: Date.now(),
+      user: member.user,
       partialMember: member,
-      joined: true,
+      joined: false,
     };
 
     pluginData.state.queue.add(() => {

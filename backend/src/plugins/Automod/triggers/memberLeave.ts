@@ -7,7 +7,7 @@ export const MemberLeaveTrigger = automodTrigger<unknown>()({
   configSchema,
 
   async match({ context }) {
-    if (!context.joined || !context.member) {
+    if (!context.partialMember) {
       return;
     }
 
