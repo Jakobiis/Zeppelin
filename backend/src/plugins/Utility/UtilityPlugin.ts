@@ -16,6 +16,7 @@ import { AvatarCmd } from "./commands/AvatarCmd.js";
 import { BanSearchCmd } from "./commands/BanSearchCmd.js";
 import { ChannelInfoCmd } from "./commands/ChannelInfoCmd.js";
 import { CleanCmd } from "./commands/CleanCmd.js";
+import { ColorCmd } from "./commands/ColorCmd.js";
 import { ContextCmd } from "./commands/ContextCmd.js";
 import { EmojiInfoCmd } from "./commands/EmojiInfoCmd.js";
 import { HelpCmd } from "./commands/HelpCmd.js";
@@ -68,6 +69,7 @@ export const UtilityPlugin = guildPlugin<UtilityPluginType>()({
         can_userinfo: true,
         can_roleinfo: true,
         can_emojiinfo: true,
+        can_color: true,
         can_snowflake: true,
         can_nickname: true,
         can_vcmove: true,
@@ -118,6 +120,7 @@ export const UtilityPlugin = guildPlugin<UtilityPluginType>()({
     SnowflakeInfoCmd,
     RoleInfoCmd,
     EmojiInfoCmd,
+    ColorCmd,
   ],
 
   // prettier-ignore

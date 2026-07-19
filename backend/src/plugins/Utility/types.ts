@@ -21,6 +21,7 @@ export const zUtilityConfig = z.strictObject({
   can_userinfo: z.boolean().default(false),
   can_roleinfo: z.boolean().default(false),
   can_emojiinfo: z.boolean().default(false),
+  can_color: z.boolean().default(false),
   can_snowflake: z.boolean().default(false),
   can_reload_guild: z.boolean().default(false),
   can_nickname: z.boolean().default(false),
