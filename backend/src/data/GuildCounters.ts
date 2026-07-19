@@ -158,6 +158,13 @@ export class GuildCounters extends BaseGuildRepository {
    * user IDs. `lastDecayAt`/`persistNewLastDecayAt` are abstracted out so this same logic can drive both the
    * counter-wide decay rate (stored on the `counters` row) and per-role decay rate overrides (stored in
    * `counter_decay_role_states`), each with their own independently-compensated last-decay timestamp.
+   *
+   * `amountOverrides` (decay.amount_overrides in config) apply a different amount, still on this same
+   * last-decay timestamp, to rows whose *current* value crosses a threshold — e.g. taxing high-value rows
+   * harder. Unlike role_overrides, these don't get their own last-decay timestamp since the bracket a row falls
+   * into can change from tick to tick; the base amount's rounding remains the only thing compensated for over
+   * time, so bracket amounts may drift slightly under heavy rounding — negligible in practice for hour/day-scale
+   * decay periods.
    */
   private async applyDecay(
     id: number,
@@ -166,27 +173,46 @@ export class GuildCounters extends BaseGuildRepository {
     lastDecayAt: string,
     persistNewLastDecayAt: (newLastDecayAt: string) => Promise<any>,
     userIdFilter: { include: string[] } | { exclude: string[] } | null,
+    amountOverrides: Array<{ threshold: number; amount: number }> = [],
   ): Promise<void> {
     const diffFromLastDecayMs = moment.utc().diff(moment.utc(lastDecayAt), "ms");
     if (diffFromLastDecayMs < decayPeriodMs) {
       return;
     }
 
-    const decayAmountToApply = Math.round((diffFromLastDecayMs / decayPeriodMs) * decayAmount);
-    if (decayAmountToApply === 0 || Number.isNaN(decayAmountToApply)) {
+    const periodRatio = diffFromLastDecayMs / decayPeriodMs;
+    const decayAmountToApply = Math.round(periodRatio * decayAmount);
+    const overridesToApply = amountOverrides.map((override) => ({
+      threshold: override.threshold,
+      amountToApply: Math.round(periodRatio * override.amount),
+    }));
+
+    const allZeroOrNaN =
+      (decayAmountToApply === 0 || Number.isNaN(decayAmountToApply)) &&
+      overridesToApply.every((override) => override.amountToApply === 0 || Number.isNaN(override.amountToApply));
+    if (allZeroOrNaN) {
       return;
     }
 
-    // Calculate new last_decay_at based on the rounded decay amount we applied. This makes it so that over time, the decayed amount will stay accurate, even if we round some here.
-    const newLastDecayDate = moment
-      .utc(lastDecayAt)
-      .add((decayAmountToApply / decayAmount) * decayPeriodMs, "ms")
-      .format(DBDateFormat);
+    // Calculate new last_decay_at based on the rounded base decay amount we applied, regardless of which
+    // amount_overrides bracket (if any) a given row actually fell into. This makes it so that over time, the
+    // decayed amount will stay accurate, even if we round some here. If the base amount is 0 (e.g. decay only
+    // happens through amount_overrides brackets), there's no base rounding to compensate for, so just advance to now.
+    const timeConsumedMs =
+      decayAmount !== 0 ? (decayAmountToApply / decayAmount) * decayPeriodMs : diffFromLastDecayMs;
+    const newLastDecayDate = moment.utc(lastDecayAt).add(timeConsumedMs, "ms").format(DBDateFormat);
 
-    const rawUpdate =
-      decayAmountToApply >= 0
-        ? `GREATEST(value - ${decayAmountToApply}, ${MIN_COUNTER_VALUE})`
-        : `LEAST(value + ${Math.abs(decayAmountToApply)}, ${MAX_COUNTER_VALUE})`;
+    const buildValueExpr = (amountToApply: number): string =>
+      amountToApply >= 0
+        ? `GREATEST(value - ${amountToApply}, ${MIN_COUNTER_VALUE})`
+        : `LEAST(value + ${Math.abs(amountToApply)}, ${MAX_COUNTER_VALUE})`;
+
+    // First matching threshold (in config order) wins, same convention as decay.role_overrides
+    const rawUpdate = overridesToApply.length
+      ? `CASE ${overridesToApply
+          .map((override) => `WHEN value >= ${override.threshold} THEN ${buildValueExpr(override.amountToApply)}`)
+          .join(" ")} ELSE ${buildValueExpr(decayAmountToApply)} END`
+      : buildValueExpr(decayAmountToApply);
 
     // Using an UPDATE with ORDER BY in an attempt to avoid deadlocks from simultaneous decays
     // Also see https://dev.mysql.com/doc/refman/8.0/en/innodb-deadlocks-handling.html
@@ -208,7 +234,13 @@ export class GuildCounters extends BaseGuildRepository {
     await persistNewLastDecayAt(newLastDecayDate);
   }
 
-  decay(id: number, decayPeriodMs: number, decayAmount: number, excludeUserIds: string[] = []) {
+  decay(
+    id: number,
+    decayPeriodMs: number,
+    decayAmount: number,
+    excludeUserIds: string[] = [],
+    amountOverrides: Array<{ threshold: number; amount: number }> = [],
+  ) {
     return decayQueue.add(async () => {
       const counter = (await this.counters.findOne({
         where: {
@@ -223,6 +255,7 @@ export class GuildCounters extends BaseGuildRepository {
         counter.last_decay_at!,
         (newLastDecayAt) => this.counters.update({ id }, { last_decay_at: newLastDecayAt }),
         excludeUserIds.length ? { exclude: excludeUserIds } : null,
+        amountOverrides,
       );
     });
   }

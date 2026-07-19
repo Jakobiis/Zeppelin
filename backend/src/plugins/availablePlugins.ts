@@ -71,6 +71,8 @@ import { SpamPlugin } from "./Spam/SpamPlugin.js";
 import { spamPluginDocs } from "./Spam/docs.js";
 import { StarboardPlugin } from "./Starboard/StarboardPlugin.js";
 import { starboardPluginDocs } from "./Starboard/docs.js";
+import { StickyMessagesPlugin } from "./StickyMessages/StickyMessagesPlugin.js";
+import { stickyMessagesPluginDocs } from "./StickyMessages/docs.js";
 import { TagsPlugin } from "./Tags/TagsPlugin.js";
 import { tagsPluginDocs } from "./Tags/docs.js";
 import { TimeAndDatePlugin } from "./TimeAndDate/TimeAndDatePlugin.js";
@@ -227,6 +229,10 @@ export const availableGuildPlugins: ZeppelinGuildPluginInfo[] = [
   {
     plugin: StarboardPlugin,
     docs: starboardPluginDocs,
+  },
+  {
+    plugin: StickyMessagesPlugin,
+    docs: stickyMessagesPluginDocs,
   },
   {
     plugin: TagsPlugin,

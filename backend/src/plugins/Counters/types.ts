@@ -15,6 +15,7 @@ import Timeout = NodeJS.Timeout;
 const MAX_COUNTERS = 5;
 const MAX_TRIGGERS_PER_COUNTER = 5;
 const MAX_DECAY_ROLE_OVERRIDES = 10;
+const MAX_DECAY_AMOUNT_OVERRIDES = 10;
 
 export const zTrigger = z.strictObject({
   // Dummy type because name gets replaced by the property key in transform()
@@ -56,6 +57,11 @@ export const zDecayRoleOverride = z.strictObject({
   every: zDelayString,
 });
 
+export const zDecayAmountOverride = z.strictObject({
+  threshold: z.number(),
+  amount: z.number(),
+});
+
 export const zCounter = z
   .strictObject({
     pretty_name: zBoundedCharacters(0, 100).nullable().default(null),
@@ -71,6 +77,10 @@ export const zCounter = z
         // Only usable on per-user counters, since role membership is a per-user property.
         // The first matching role in this list wins if a member has more than one.
         role_overrides: z.array(zDecayRoleOverride).max(MAX_DECAY_ROLE_OVERRIDES).default([]),
+        // Applies a different decay amount (same "every" period as the base rate above) to rows whose current
+        // value meets the given threshold, instead of the base amount. Only applies to rows not already claimed
+        // by a role_overrides entry above. The first matching threshold in this list wins if several match.
+        amount_overrides: z.array(zDecayAmountOverride).max(MAX_DECAY_AMOUNT_OVERRIDES).default([]),
       })
       .nullable()
       .default(null),

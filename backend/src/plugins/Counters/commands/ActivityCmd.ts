@@ -107,18 +107,26 @@ function describeOverrideScope(criteria: PluginOverrideCriteria): string {
 }
 
 /**
- * Mirrors the "first matching role override wins" logic that decayCounter.ts uses for the actual decay job,
- * so the estimate shown here matches the rate that will actually be applied to this member.
+ * Mirrors the "role_overrides win over amount_overrides win over the base rate" logic that decayCounter.ts /
+ * GuildCounters.applyDecay use for the actual decay job, so the estimate shown here matches the rate that will
+ * actually be applied to this member. Role-override members never fall into an amount_overrides bracket, since
+ * they're decayed by decayForRole() entirely separately from the base decay pass amount_overrides apply to.
  */
 function getEffectiveDecayRate(
     decay: NonNullable<z.infer<typeof zCounter>["decay"]>,
     member: GuildMember | null,
+    currentValue: number,
 ): { amount: number; every: string } {
     if (member) {
-        const override = decay.role_overrides.find((o) => member.roles.cache.has(o.role as Snowflake));
-        if (override) {
-            return override;
+        const roleOverride = decay.role_overrides.find((o) => member.roles.cache.has(o.role as Snowflake));
+        if (roleOverride) {
+            return roleOverride;
         }
+    }
+
+    const amountOverride = decay.amount_overrides.find((o) => currentValue >= o.threshold);
+    if (amountOverride) {
+        return { amount: amountOverride.amount, every: decay.every };
     }
 
     return decay;
@@ -137,6 +145,12 @@ function buildDecayInfoLines(
         const roleName = pluginData.guild.roles.cache.get(override.role as Snowflake)?.name ?? "Unknown role";
         const overridePeriodMs = convertDelayStringToMS(override.every);
         lines.push(`- **${roleName}**: **${override.amount}** points every ${humanizeDuration(overridePeriodMs ?? 0)}`);
+    }
+
+    for (const override of decay.amount_overrides) {
+        lines.push(
+            `- **${override.threshold}+ points**: **${override.amount}** points every ${humanizeDuration(basePeriodMs ?? 0)}`,
+        );
     }
 
     return lines;
@@ -399,7 +413,7 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
                         text += `\n-# Lost At **${reverseThreshold}** Points (**${pointsToLose}** To Go)`;
 
                         if (counter.decay) {
-                            const effectiveDecay = getEffectiveDecayRate(counter.decay, member);
+                            const effectiveDecay = getEffectiveDecayRate(counter.decay, member, finalValue);
                             const decayPeriodMs = convertDelayStringToMS(effectiveDecay.every);
                             if (effectiveDecay.amount > 0 && decayPeriodMs) {
                                 const msUntilLost = (pointsToLose * decayPeriodMs) / effectiveDecay.amount;

@@ -52,7 +52,13 @@ export async function decayCounter(
     );
   }
 
-  await pluginData.state.counters.decay(counterId, decayPeriodMS, decayAmount, userIdsClaimedByOverrides);
+  await pluginData.state.counters.decay(
+    counterId,
+    decayPeriodMS,
+    decayAmount,
+    userIdsClaimedByOverrides,
+    counter.decay?.amount_overrides ?? [],
+  );
 
   // Check for trigger matches, if any, when the counter value changes
   const triggers = pluginData.state.counterTriggersByCounterId.get(counterId);
