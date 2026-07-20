@@ -4,14 +4,13 @@ import { humanizeDuration } from "../../../humanizeDuration.js";
 import { ScheduledMultiplier, ScheduleRuntimeState, SchedulePluginType } from "../types.js";
 import { sendScheduleAnnouncement } from "./sendScheduleAnnouncement.js";
 
-export async function announceScheduleChange(
+export async function announceScheduleReminder(
   pluginData: GuildPluginData<SchedulePluginType>,
   name: string,
   entry: ScheduledMultiplier,
-  active: boolean,
   runtime: ScheduleRuntimeState,
 ) {
-  const message = active ? entry.announce?.fire_message : entry.announce?.reverse_message;
+  const message = entry.announce?.remind_message ?? entry.announce?.fire_message;
   const channels = entry.announce?.channels;
   if (!message || !channels?.length) {
     return;
@@ -20,11 +19,9 @@ export async function announceScheduleChange(
   const templateValues = new TemplateSafeValueContainer({
     schedule: name,
     multiplier: entry.multiplier,
-    // Unix seconds — admin wraps it themselves as e.g. <t:{ends}:f> to get per-viewer local-time rendering
     ends: runtime.activeUntil != null ? Math.floor(runtime.activeUntil / 1000) : null,
-    // random/duration only — the humanized duration actually rolled/set for this window
     duration: runtime.lastDurationMs != null ? humanizeDuration(runtime.lastDurationMs, { round: true }) : null,
   });
 
-  await sendScheduleAnnouncement(pluginData, name, active ? "fire" : "reverse", channels, message, templateValues);
+  await sendScheduleAnnouncement(pluginData, name, "reminder", channels, message, templateValues);
 }

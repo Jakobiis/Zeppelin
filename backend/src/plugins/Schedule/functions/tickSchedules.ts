@@ -2,11 +2,9 @@ import { GuildPluginData } from "vety";
 import moment from "moment-timezone";
 import { convertDelayStringToMS } from "../../../utils.js";
 import { TimeAndDatePlugin } from "../../TimeAndDate/TimeAndDatePlugin.js";
-import { ScheduleRuntimeState, SchedulePluginType, zScheduledMultiplier } from "../types.js";
+import { ScheduledMultiplier, ScheduleRuntimeState, SchedulePluginType } from "../types.js";
 import { announceScheduleChange } from "./announceScheduleChange.js";
-import { z } from "zod";
-
-type ScheduledMultiplier = z.infer<typeof zScheduledMultiplier>;
+import { announceScheduleReminder } from "./announceScheduleReminder.js";
 
 function evaluateDayOfWeek(pattern: string, now: moment.Moment): boolean {
   let regex: RegExp;
@@ -70,6 +68,32 @@ function evaluateRandom(
   return true;
 }
 
+// duration mode never rolls itself active — it's only started externally via triggerScheduledMultiplier(). This just
+// detects when a previously started window has run out and needs to be turned back off.
+function evaluateDuration(nowMs: number, runtime: ScheduleRuntimeState): boolean {
+  if (runtime.activeUntil == null) {
+    return false;
+  }
+  if (nowMs < runtime.activeUntil) {
+    return true;
+  }
+  runtime.activeUntil = null;
+  runtime.lastDurationMs = null;
+  return false;
+}
+
+export function newRuntimeState(): ScheduleRuntimeState {
+  return {
+    initialized: false,
+    active: false,
+    activeUntil: null,
+    lastDurationMs: null,
+    lastRolledBucket: null,
+    lastRemindAt: null,
+    lastEntry: null,
+  };
+}
+
 export async function tickSchedules(pluginData: GuildPluginData<SchedulePluginType>) {
   const config = pluginData.config.get();
   const timeAndDate = pluginData.getPlugin(TimeAndDatePlugin);
@@ -79,15 +103,10 @@ export async function tickSchedules(pluginData: GuildPluginData<SchedulePluginTy
   for (const [name, entry] of Object.entries(config.multipliers)) {
     let runtime = pluginData.state.runtimeStates.get(name);
     if (!runtime) {
-      runtime = {
-        initialized: false,
-        active: false,
-        activeUntil: null,
-        lastDurationMs: null,
-        lastRolledBucket: null,
-      };
+      runtime = newRuntimeState();
       pluginData.state.runtimeStates.set(name, runtime);
     }
+    runtime.lastEntry = entry;
 
     let active: boolean;
     if (entry.day_of_week != null) {
@@ -95,25 +114,48 @@ export async function tickSchedules(pluginData: GuildPluginData<SchedulePluginTy
       if (active) {
         runtime.activeUntil = computeDayOfWeekEnd(entry.day_of_week, now);
       }
+    } else if (entry.random != null) {
+      active = evaluateRandom(entry.random, nowMs, runtime);
+    } else if (entry.enabled != null) {
+      active = entry.enabled;
     } else {
-      active = evaluateRandom(entry.random!, nowMs, runtime);
+      active = evaluateDuration(nowMs, runtime);
     }
 
     if (!runtime.initialized) {
       runtime.initialized = true;
       runtime.active = active;
+      if (active) {
+        runtime.lastRemindAt = nowMs;
+      }
       continue;
     }
 
     if (active !== runtime.active) {
       runtime.active = active;
+      if (active) {
+        runtime.lastRemindAt = nowMs;
+      }
       await announceScheduleChange(pluginData, name, entry, active, runtime);
+    } else if (active && entry.announce?.remind_every) {
+      const remindMs = convertDelayStringToMS(entry.announce.remind_every);
+      if (remindMs && runtime.lastRemindAt != null && nowMs - runtime.lastRemindAt >= remindMs) {
+        runtime.lastRemindAt = nowMs;
+        await announceScheduleReminder(pluginData, name, entry, runtime);
+      }
     }
   }
 
-  for (const name of pluginData.state.runtimeStates.keys()) {
-    if (!config.multipliers[name]) {
-      pluginData.state.runtimeStates.delete(name);
+  // Config no longer has these schedules (removed, or renamed) — if one was active, send the reverse announcement
+  // (using the last config we saw for it, since it's no longer in the live config) before dropping its state.
+  for (const [name, runtime] of pluginData.state.runtimeStates.entries()) {
+    if (config.multipliers[name]) {
+      continue;
     }
+    if (runtime.active && runtime.lastEntry) {
+      runtime.active = false;
+      await announceScheduleChange(pluginData, name, runtime.lastEntry, false, runtime);
+    }
+    pluginData.state.runtimeStates.delete(name);
   }
 }
