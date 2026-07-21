@@ -2,6 +2,7 @@ import { GuildPluginData } from "vety";
 import { convertDelayStringToMS } from "../../../utils.js";
 import { SchedulePluginType } from "../types.js";
 import { announceScheduleChange } from "./announceScheduleChange.js";
+import { persistScheduleState } from "./persistScheduleState.js";
 import { newRuntimeState } from "./tickSchedules.js";
 
 export type TriggerScheduledMultiplierResult =
@@ -45,6 +46,7 @@ export async function triggerScheduledMultiplier(
   runtime.active = true;
   runtime.lastRemindAt = nowMs;
 
+  await persistScheduleState(pluginData, name, runtime);
   await announceScheduleChange(pluginData, name, entry, true, runtime);
 
   return { ok: true };

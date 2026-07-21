@@ -1,12 +1,15 @@
 import { guildPlugin, PluginOverride } from "vety";
+import { GuildScheduleStates } from "../../data/GuildScheduleStates.js";
 import { makePublicFn } from "../../pluginUtils.js";
 import { SECONDS } from "../../utils.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { TimeAndDatePlugin } from "../TimeAndDate/TimeAndDatePlugin.js";
+import { ScheduleMultiplyCancelCmd } from "./commands/ScheduleMultiplyCancelCmd.js";
 import { ScheduleMultiplyCmd } from "./commands/ScheduleMultiplyCmd.js";
 import { getMultiplier } from "./functions/getMultiplier.js";
 import { getScheduleInfo } from "./functions/getScheduleInfo.js";
 import { listSchedules } from "./functions/listSchedules.js";
+import { restoreScheduleStates } from "./functions/restoreScheduleStates.js";
 import { scheduleExists } from "./functions/scheduleExists.js";
 import { tickSchedules } from "./functions/tickSchedules.js";
 import { SchedulePluginType, zScheduleConfig } from "./types.js";
@@ -27,6 +30,8 @@ const defaultOverrides: Array<PluginOverride<SchedulePluginType>> = [
  * randomly rolled boost) that other plugins/actions can look up by name. Active/inactive state is recomputed on a tick and
  * cached in state.runtimeStates — this lets random rolls persist across lookups within their active window,
  * and lets fire/reverse transitions be detected in order to send the configured announcement messages.
+ * The `duration`/`random` active windows are also persisted to the DB (see persistScheduleState()/
+ * restoreScheduleStates()) so a manually-triggered boost survives a bot restart instead of silently ending.
  */
 export const SchedulePlugin = guildPlugin<SchedulePluginType>()({
   name: "schedule",
@@ -38,6 +43,7 @@ export const SchedulePlugin = guildPlugin<SchedulePluginType>()({
 
   // prettier-ignore
   messageCommands: [
+    ScheduleMultiplyCancelCmd,
     ScheduleMultiplyCmd,
   ],
 
@@ -52,6 +58,7 @@ export const SchedulePlugin = guildPlugin<SchedulePluginType>()({
 
   beforeLoad(pluginData) {
     pluginData.state.runtimeStates = new Map();
+    pluginData.state.scheduleStates = GuildScheduleStates.getGuildInstance(pluginData.guild.id);
   },
 
   beforeStart(pluginData) {
@@ -59,6 +66,7 @@ export const SchedulePlugin = guildPlugin<SchedulePluginType>()({
   },
 
   async afterLoad(pluginData) {
+    await restoreScheduleStates(pluginData);
     await tickSchedules(pluginData);
     pluginData.state.tickInterval = setInterval(() => tickSchedules(pluginData), TICK_INTERVAL);
   },

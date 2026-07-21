@@ -1,5 +1,6 @@
 import { BasePluginType, guildPluginMessageCommand, pluginUtils } from "vety";
 import { z } from "zod";
+import { GuildScheduleStates } from "../../data/GuildScheduleStates.js";
 import { zBoundedCharacters, zBoundedRecord, zDelayString, zMessageContent, zSnowflake } from "../../utils.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 
@@ -80,6 +81,7 @@ export interface SchedulePluginType extends BasePluginType {
     runtimeStates: Map<string, ScheduleRuntimeState>;
     tickInterval: Timeout;
     common: pluginUtils.PluginPublicInterface<typeof CommonPlugin>;
+    scheduleStates: GuildScheduleStates;
   };
 }
 

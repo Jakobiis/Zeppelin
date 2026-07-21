@@ -5,6 +5,7 @@ import { TimeAndDatePlugin } from "../../TimeAndDate/TimeAndDatePlugin.js";
 import { ScheduledMultiplier, ScheduleRuntimeState, SchedulePluginType } from "../types.js";
 import { announceScheduleChange } from "./announceScheduleChange.js";
 import { announceScheduleReminder } from "./announceScheduleReminder.js";
+import { persistScheduleState } from "./persistScheduleState.js";
 
 function evaluateDayOfWeek(pattern: string, now: moment.Moment): boolean {
   let regex: RegExp;
@@ -107,6 +108,7 @@ export async function tickSchedules(pluginData: GuildPluginData<SchedulePluginTy
       pluginData.state.runtimeStates.set(name, runtime);
     }
     runtime.lastEntry = entry;
+    const bucketBeforeTick = runtime.lastRolledBucket;
 
     let active: boolean;
     if (entry.day_of_week != null) {
@@ -122,11 +124,18 @@ export async function tickSchedules(pluginData: GuildPluginData<SchedulePluginTy
       active = evaluateDuration(nowMs, runtime);
     }
 
+    // Only `duration`/`random` schedules carry state (an active window/dedup bucket) that isn't fully derivable
+    // from config + the current time, so those are the only ones worth persisting for restart recovery.
+    const persistable = entry.duration != null || entry.random != null;
+
     if (!runtime.initialized) {
       runtime.initialized = true;
       runtime.active = active;
       if (active) {
         runtime.lastRemindAt = nowMs;
+      }
+      if (persistable) {
+        await persistScheduleState(pluginData, name, runtime);
       }
       continue;
     }
@@ -136,13 +145,23 @@ export async function tickSchedules(pluginData: GuildPluginData<SchedulePluginTy
       if (active) {
         runtime.lastRemindAt = nowMs;
       }
+      if (persistable) {
+        await persistScheduleState(pluginData, name, runtime);
+      }
       await announceScheduleChange(pluginData, name, entry, active, runtime);
     } else if (active && entry.announce?.remind_every) {
       const remindMs = convertDelayStringToMS(entry.announce.remind_every);
       if (remindMs && runtime.lastRemindAt != null && nowMs - runtime.lastRemindAt >= remindMs) {
         runtime.lastRemindAt = nowMs;
+        if (persistable) {
+          await persistScheduleState(pluginData, name, runtime);
+        }
         await announceScheduleReminder(pluginData, name, entry, runtime);
       }
+    } else if (persistable && entry.random != null && runtime.lastRolledBucket !== bucketBeforeTick) {
+      // Random schedules can roll (and update lastRolledBucket) on a tick where `active` doesn't change — persist
+      // that too so a restart mid-window can't re-roll the same bucket for a second chance.
+      await persistScheduleState(pluginData, name, runtime);
     }
   }
 
@@ -157,5 +176,6 @@ export async function tickSchedules(pluginData: GuildPluginData<SchedulePluginTy
       await announceScheduleChange(pluginData, name, runtime.lastEntry, false, runtime);
     }
     pluginData.state.runtimeStates.delete(name);
+    await pluginData.state.scheduleStates.delete(name);
   }
 }
