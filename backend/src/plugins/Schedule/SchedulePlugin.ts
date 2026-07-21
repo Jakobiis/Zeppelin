@@ -6,6 +6,7 @@ import { TimeAndDatePlugin } from "../TimeAndDate/TimeAndDatePlugin.js";
 import { ScheduleMultiplyCmd } from "./commands/ScheduleMultiplyCmd.js";
 import { getMultiplier } from "./functions/getMultiplier.js";
 import { getScheduleInfo } from "./functions/getScheduleInfo.js";
+import { listSchedules } from "./functions/listSchedules.js";
 import { scheduleExists } from "./functions/scheduleExists.js";
 import { tickSchedules } from "./functions/tickSchedules.js";
 import { SchedulePluginType, zScheduleConfig } from "./types.js";
@@ -45,6 +46,7 @@ export const SchedulePlugin = guildPlugin<SchedulePluginType>()({
       getMultiplier: makePublicFn(pluginData, getMultiplier),
       scheduleExists: makePublicFn(pluginData, scheduleExists),
       getScheduleInfo: makePublicFn(pluginData, getScheduleInfo),
+      listSchedules: makePublicFn(pluginData, listSchedules),
     };
   },
 

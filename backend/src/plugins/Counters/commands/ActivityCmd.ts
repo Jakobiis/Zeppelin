@@ -272,7 +272,7 @@ interface EarningInfoLines {
     earningLines: string[];
 }
 
-async function buildEarningInfoLines(
+export async function buildEarningInfoLines(
     pluginData: GuildPluginData<CountersPluginType>,
     message: OmitPartialGroupDMChannel<Message>,
 ): Promise<EarningInfoLines> {

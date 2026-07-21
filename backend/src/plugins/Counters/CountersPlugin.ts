@@ -19,6 +19,7 @@ import { ViewCounterCmd } from "./commands/ViewCounterCmd.js";
 import { ActivityCmd } from "./commands/ActivityCmd.js";
 import { ActivityHelpCmd } from "./commands/ActivityHelpCmd.js";
 import { ActivityLeaderboardCmd } from "./commands/ActivityLeaderboardCmd.js";
+import { MultipliersCmd } from "./commands/MultipliersCmd.js";
 import { changeCounterValue } from "./functions/changeCounterValue.js";
 import { counterExists } from "./functions/counterExists.js";
 import { decayCounter } from "./functions/decayCounter.js";
@@ -85,6 +86,7 @@ export const CountersPlugin = guildPlugin<CountersPluginType>()({
     ActivityCmd,
     ActivityHelpCmd,
     ActivityLeaderboardCmd,
+    MultipliersCmd,
   ],
 
   async beforeLoad(pluginData) {
