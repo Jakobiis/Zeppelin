@@ -34,6 +34,8 @@ interface GrantDefinition {
     roleId: string;
     label: string;
     unlockMessage: string;
+    /** True if this grant is never taken away once earned — hides "Lost At"/removal info for it. */
+    permanent?: boolean;
 }
 
 const GRANTS: GrantDefinition[] = [
@@ -48,6 +50,14 @@ const GRANTS: GrantDefinition[] = [
         roleId: "1392677476911681647",
         label: "Embed Permissions",
         unlockMessage: "You met the requirement but didn't have embed permissions — they've been added now!",
+        permanent: true,
+    },
+    {
+        triggerName: "grant_minecraft_access_role",
+        roleId: "1526896146759290977",
+        label: "Minecraft Access",
+        unlockMessage: "You met the requirement but didn't have Minecraft access — it's been added now!",
+        permanent: true,
     },
 ];
 
@@ -169,12 +179,16 @@ function buildRewardInfoLines(counter: z.infer<typeof zCounter>): string[] {
         const [grantOp, requiredPoints] = parsedGrant;
         let line = `**${grant.label}** — ${requiredPoints} points`;
 
-        const rawReverseCondition =
-            grantTrigger!.reverse_condition ||
-            buildCounterConditionString(getReverseCounterComparisonOp(grantOp), requiredPoints);
-        const parsedReverse = parseCounterConditionString(rawReverseCondition);
-        if (parsedReverse) {
-            line += ` (removed below ${parsedReverse[1]})`;
+        if (!grant.permanent) {
+            const rawReverseCondition =
+                grantTrigger!.reverse_condition ||
+                buildCounterConditionString(getReverseCounterComparisonOp(grantOp), requiredPoints);
+            const parsedReverse = parseCounterConditionString(rawReverseCondition);
+            if (parsedReverse) {
+                line += ` (removed below ${parsedReverse[1]})`;
+            }
+        } else {
+            line += ` (permanent)`;
         }
 
         lines.push(line);
@@ -400,27 +414,31 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
                     }
                 }
 
-                const rawReverseCondition =
-                    grantTrigger!.reverse_condition ||
-                    buildCounterConditionString(getReverseCounterComparisonOp(grantOp), requiredPoints);
-                const parsedReverse = parseCounterConditionString(rawReverseCondition);
+                if (grant.permanent) {
+                    text += `\n-# Permanent — Never Lost`;
+                } else {
+                    const rawReverseCondition =
+                        grantTrigger!.reverse_condition ||
+                        buildCounterConditionString(getReverseCounterComparisonOp(grantOp), requiredPoints);
+                    const parsedReverse = parseCounterConditionString(rawReverseCondition);
 
-                if (parsedReverse) {
-                    const [reverseOp, reverseThreshold] = parsedReverse;
-                    const pointsToLose = pointsUntilReverseTrigger(reverseOp, reverseThreshold, finalValue);
+                    if (parsedReverse) {
+                        const [reverseOp, reverseThreshold] = parsedReverse;
+                        const pointsToLose = pointsUntilReverseTrigger(reverseOp, reverseThreshold, finalValue);
 
-                    if (pointsToLose !== null && pointsToLose > 0) {
-                        text += `\n-# Lost At **${reverseThreshold}** Points (**${pointsToLose}** To Go)`;
+                        if (pointsToLose !== null && pointsToLose > 0) {
+                            text += `\n-# Lost At **${reverseThreshold}** Points (**${pointsToLose}** To Go)`;
 
-                        if (counter.decay) {
-                            const effectiveDecay = getEffectiveDecayRate(counter.decay, member, finalValue);
-                            const decayPeriodMs = convertDelayStringToMS(effectiveDecay.every);
-                            if (effectiveDecay.amount > 0 && decayPeriodMs) {
-                                const msUntilLost = (pointsToLose * decayPeriodMs) / effectiveDecay.amount;
-                                text += `\n-# That's About **${humanizeDuration(msUntilLost, {
-                                    round: true,
-                                    largest: 2,
-                                })}** Away If You Stay Inactive`;
+                            if (counter.decay) {
+                                const effectiveDecay = getEffectiveDecayRate(counter.decay, member, finalValue);
+                                const decayPeriodMs = convertDelayStringToMS(effectiveDecay.every);
+                                if (effectiveDecay.amount > 0 && decayPeriodMs) {
+                                    const msUntilLost = (pointsToLose * decayPeriodMs) / effectiveDecay.amount;
+                                    text += `\n-# That's About **${humanizeDuration(msUntilLost, {
+                                        round: true,
+                                        largest: 2,
+                                    })}** Away If You Stay Inactive`;
+                                }
                             }
                         }
                     }
