@@ -310,7 +310,7 @@ export async function buildActivityInfoEmbed(
         sections.push(cooldownLines.join("\n"));
     }
     if (earningLines.length) {
-        sections.push(`**Earning Points**\n${earningLines.join("\n")}-# **To see active boosts, use \`/boosts\`**`);
+        sections.push(`**Earning Points**\n${earningLines.join("\n")}\n-# **To see active boosts, use \`/boosts\`**`);
     }
 
     if (counter.decay) {
