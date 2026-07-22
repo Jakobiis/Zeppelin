@@ -236,11 +236,6 @@ function buildCooldownLines(
     return ["**Cooldowns:**", ...entries.map((entry) => `- ${entry.label}: ${humanizeDuration(entry.cooldownMs)}`)];
 }
 
-/**
- * The base earning line is placed at the end, right next to the total points line it feeds into, so a reader can
- * see "this is what you get" and "this is what you get right now" side by side instead of the base amount being
- * separated from the number it turns into.
- */
 async function buildScheduleMultiplierLines(
     pluginData: GuildPluginData<CountersPluginType>,
     scheduleNames: string[],
@@ -252,31 +247,15 @@ async function buildScheduleMultiplierLines(
     }
 
     const schedulePlugin = pluginData.getPlugin(SchedulePlugin);
-    const lines: string[] = [];
     let totalMultiplier = 1;
-    let anyActive = false;
-    lines.push(buildBaseEarningLine(baseAmount));
     for (const scheduleName of scheduleNames) {
         const info = schedulePlugin.getScheduleInfo(scheduleName);
-        if (!info) continue;
-
-        const label = info.prettyName ?? scheduleName;
-
-        if (info.active) {
-            const untilText = info.activeUntil ? ` (ends <t:${Math.floor(info.activeUntil / 1000)}:R>)` : "";
-            lines.push(`**${label}** (${info.multiplier}x) is currently **active**${untilText}!`);
+        if (info?.active) {
             totalMultiplier *= info.multiplier;
-            anyActive = true;
-        } else {
-            lines.push(`**${label}** (${info.multiplier}x) isn't currently active.`);
         }
     }
 
-    if (anyActive) {
-        lines.push(`**Total points per message right now:** ${baseAmount * totalMultiplier}`);
-    }
-
-    return lines;
+    return [`**Total points per message right now:** ${baseAmount * totalMultiplier}`];
 }
 
 interface EarningInfoLines {
@@ -331,7 +310,7 @@ export async function buildActivityInfoEmbed(
         sections.push(cooldownLines.join("\n"));
     }
     if (earningLines.length) {
-        sections.push(`**Earning Points**\n${earningLines.join("\n")}`);
+        sections.push(`**Earning Points**\n${earningLines.join("\n")}-# **To see active boosts, use \`/boosts\`**`);
     }
 
     if (counter.decay) {
