@@ -49,6 +49,7 @@ export async function decayCounter(
       overridePeriodMs,
       override.amount,
       overrideUserIds,
+      counter.max_value,
     );
   }
 
@@ -58,6 +59,7 @@ export async function decayCounter(
     decayAmount,
     userIdsClaimedByOverrides,
     counter.decay?.amount_overrides ?? [],
+    counter.max_value,
   );
 
   // Check for trigger matches, if any, when the counter value changes

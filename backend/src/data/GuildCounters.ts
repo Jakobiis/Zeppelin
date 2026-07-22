@@ -110,6 +110,7 @@ export class GuildCounters extends BaseGuildRepository {
     userId: string | null,
     change: number,
     initialValue: number,
+    maxValue: number = MAX_COUNTER_VALUE,
   ): Promise<void> {
     if (typeof change !== "number" || Number.isNaN(change) || !Number.isFinite(change)) {
       throw new Error(`changeCounterValue() change argument must be a number`);
@@ -120,7 +121,7 @@ export class GuildCounters extends BaseGuildRepository {
 
     const rawUpdate =
       change >= 0
-        ? `value = LEAST(value + ${change}, ${MAX_COUNTER_VALUE})`
+        ? `value = LEAST(value + ${change}, ${maxValue})`
         : `value = GREATEST(value ${change}, ${MIN_COUNTER_VALUE})`;
 
     await this.counterValues.query(
@@ -129,11 +130,17 @@ export class GuildCounters extends BaseGuildRepository {
       VALUES (?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE ${rawUpdate}
     `,
-      [id, channelId, userId, Math.max(initialValue + change, 0)],
+      [id, channelId, userId, Math.min(Math.max(initialValue + change, MIN_COUNTER_VALUE), maxValue)],
     );
   }
 
-  async setCounterValue(id: number, channelId: string | null, userId: string | null, value: number): Promise<void> {
+  async setCounterValue(
+    id: number,
+    channelId: string | null,
+    userId: string | null,
+    value: number,
+    maxValue: number = MAX_COUNTER_VALUE,
+  ): Promise<void> {
     if (typeof value !== "number" || Number.isNaN(value) || !Number.isFinite(value)) {
       throw new Error(`setCounterValue() value argument must be a number`);
     }
@@ -141,7 +148,7 @@ export class GuildCounters extends BaseGuildRepository {
     channelId = channelId || "0";
     userId = userId || "0";
 
-    value = Math.max(value, 0);
+    value = Math.min(Math.max(value, MIN_COUNTER_VALUE), maxValue);
 
     await this.counterValues.query(
       `
@@ -174,6 +181,7 @@ export class GuildCounters extends BaseGuildRepository {
     persistNewLastDecayAt: (newLastDecayAt: string) => Promise<any>,
     userIdFilter: { include: string[] } | { exclude: string[] } | null,
     amountOverrides: Array<{ threshold: number; amount: number }> = [],
+    maxValue: number = MAX_COUNTER_VALUE,
   ): Promise<void> {
     const diffFromLastDecayMs = moment.utc().diff(moment.utc(lastDecayAt), "ms");
     if (diffFromLastDecayMs < decayPeriodMs) {
@@ -205,7 +213,7 @@ export class GuildCounters extends BaseGuildRepository {
     const buildValueExpr = (amountToApply: number): string =>
       amountToApply >= 0
         ? `GREATEST(value - ${amountToApply}, ${MIN_COUNTER_VALUE})`
-        : `LEAST(value + ${Math.abs(amountToApply)}, ${MAX_COUNTER_VALUE})`;
+        : `LEAST(value + ${Math.abs(amountToApply)}, ${maxValue})`;
 
     // First matching threshold (in config order) wins, same convention as decay.role_overrides
     const rawUpdate = overridesToApply.length
@@ -240,6 +248,7 @@ export class GuildCounters extends BaseGuildRepository {
     decayAmount: number,
     excludeUserIds: string[] = [],
     amountOverrides: Array<{ threshold: number; amount: number }> = [],
+    maxValue: number = MAX_COUNTER_VALUE,
   ) {
     return decayQueue.add(async () => {
       const counter = (await this.counters.findOne({
@@ -256,6 +265,7 @@ export class GuildCounters extends BaseGuildRepository {
         (newLastDecayAt) => this.counters.update({ id }, { last_decay_at: newLastDecayAt }),
         excludeUserIds.length ? { exclude: excludeUserIds } : null,
         amountOverrides,
+        maxValue,
       );
     });
   }
@@ -265,7 +275,14 @@ export class GuildCounters extends BaseGuildRepository {
    * specific role), tracked with its own independent last-decay timestamp so it doesn't interfere with the base
    * decay rate's timing.
    */
-  async decayForRole(id: number, roleId: string, decayPeriodMs: number, decayAmount: number, userIds: string[]) {
+  async decayForRole(
+    id: number,
+    roleId: string,
+    decayPeriodMs: number,
+    decayAmount: number,
+    userIds: string[],
+    maxValue: number = MAX_COUNTER_VALUE,
+  ) {
     if (userIds.length === 0) {
       return;
     }
@@ -294,6 +311,8 @@ export class GuildCounters extends BaseGuildRepository {
         (newLastDecayAt) =>
           this.counterDecayRoleStates.update({ counter_id: id, role_id: roleId }, { last_decay_at: newLastDecayAt }),
         { include: userIds },
+        [],
+        maxValue,
       );
     });
   }

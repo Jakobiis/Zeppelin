@@ -68,6 +68,7 @@ export const zCounter = z
     per_channel: z.boolean().default(false),
     per_user: z.boolean().default(false),
     initial_value: z.number().min(MIN_COUNTER_VALUE).max(MAX_COUNTER_VALUE).default(0),
+    max_value: z.number().min(MIN_COUNTER_VALUE).max(MAX_COUNTER_VALUE).default(MAX_COUNTER_VALUE),
     triggers: zBoundedRecord(z.record(zBoundedCharacters(0, 100), zTriggerInput), 1, MAX_TRIGGERS_PER_COUNTER),
     decay: z
       .strictObject({
@@ -90,6 +91,9 @@ export const zCounter = z
   })
   .refine((counter) => !counter.decay?.role_overrides.length || counter.per_user, {
     message: "decay.role_overrides can only be used on counters with per_user: true",
+  })
+  .refine((counter) => counter.initial_value <= counter.max_value, {
+    message: "initial_value cannot be greater than max_value",
   });
 
 export const zCountersConfig = z.strictObject({

@@ -31,7 +31,7 @@ export async function setCounterValue(
   const counterId = pluginData.state.counterIds[counterName];
   const lock = await pluginData.locks.acquire(counterIdLock(counterId));
 
-  await pluginData.state.counters.setCounterValue(counterId, channelId, userId, value);
+  await pluginData.state.counters.setCounterValue(counterId, channelId, userId, value, counter.max_value);
 
   // Check for trigger matches, if any, when the counter value changes
   const triggers = pluginData.state.counterTriggersByCounterId.get(counterId);
