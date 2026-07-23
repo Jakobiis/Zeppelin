@@ -263,6 +263,7 @@ export class GuildCounters extends BaseGuildRepository {
    * specific role), tracked with its own independent last-decay timestamp so it doesn't interfere with the base
    * decay rate's timing.
    */
+
   async decayForRole(
     id: number,
     roleId: string,
