@@ -5,6 +5,7 @@ import { DAYS, DBDateFormat, HOURS, MINUTES } from "../utils.js";
 import { BaseGuildRepository } from "./BaseGuildRepository.js";
 import { dataSource } from "./dataSource.js";
 import { Counter } from "./entities/Counter.js";
+import { CounterDecayAmountOverrideState } from "./entities/CounterDecayAmountOverrideState.js";
 import { CounterDecayRoleState } from "./entities/CounterDecayRoleState.js";
 import { CounterTrigger, TriggerComparisonOp, isValidCounterComparisonOp } from "./entities/CounterTrigger.js";
 import { CounterTriggerState } from "./entities/CounterTriggerState.js";
@@ -38,6 +39,7 @@ export class GuildCounters extends BaseGuildRepository {
   private counterTriggers: Repository<CounterTrigger>;
   private counterTriggerStates: Repository<CounterTriggerState>;
   private counterDecayRoleStates: Repository<CounterDecayRoleState>;
+  private counterDecayAmountOverrideStates: Repository<CounterDecayAmountOverrideState>;
 
   constructor(guildId) {
     super(guildId);
@@ -46,6 +48,7 @@ export class GuildCounters extends BaseGuildRepository {
     this.counterTriggers = dataSource.getRepository(CounterTrigger);
     this.counterTriggerStates = dataSource.getRepository(CounterTriggerState);
     this.counterDecayRoleStates = dataSource.getRepository(CounterDecayRoleState);
+    this.counterDecayAmountOverrideStates = dataSource.getRepository(CounterDecayAmountOverrideState);
   }
 
   async findOrCreateCounter(name: string, perChannel: boolean, perUser: boolean): Promise<Counter> {
@@ -162,16 +165,10 @@ export class GuildCounters extends BaseGuildRepository {
 
   /**
    * Applies decay to counter_values rows for the given counter, optionally restricted to (or excluding) a set of
-   * user IDs. `lastDecayAt`/`persistNewLastDecayAt` are abstracted out so this same logic can drive both the
-   * counter-wide decay rate (stored on the `counters` row) and per-role decay rate overrides (stored in
-   * `counter_decay_role_states`), each with their own independently-compensated last-decay timestamp.
-   *
-   * `amountOverrides` (decay.amount_overrides in config) apply a different amount, still on this same
-   * last-decay timestamp, to rows whose *current* value crosses a threshold — e.g. taxing high-value rows
-   * harder. Unlike role_overrides, these don't get their own last-decay timestamp since the bracket a row falls
-   * into can change from tick to tick; the base amount's rounding remains the only thing compensated for over
-   * time, so bracket amounts may drift slightly under heavy rounding — negligible in practice for hour/day-scale
-   * decay periods.
+   * user IDs and/or a [min, max) value range. `lastDecayAt`/`persistNewLastDecayAt` are abstracted out so this same
+   * logic can drive the counter-wide decay rate (stored on the `counters` row), per-role decay rate overrides
+   * (stored in `counter_decay_role_states`), and per-threshold amount_overrides brackets (stored in
+   * `counter_decay_amount_override_states`) — each with their own independently-compensated last-decay timestamp.
    */
   private async applyDecay(
     id: number,
@@ -180,8 +177,8 @@ export class GuildCounters extends BaseGuildRepository {
     lastDecayAt: string,
     persistNewLastDecayAt: (newLastDecayAt: string) => Promise<any>,
     userIdFilter: { include: string[] } | { exclude: string[] } | null,
-    amountOverrides: Array<{ threshold: number; amount: number }> = [],
     maxValue: number = MAX_COUNTER_VALUE,
+    valueRangeFilter: { min?: number; max?: number } | null = null,
   ): Promise<void> {
     const diffFromLastDecayMs = moment.utc().diff(moment.utc(lastDecayAt), "ms");
     if (diffFromLastDecayMs < decayPeriodMs) {
@@ -190,37 +187,19 @@ export class GuildCounters extends BaseGuildRepository {
 
     const periodRatio = diffFromLastDecayMs / decayPeriodMs;
     const decayAmountToApply = Math.round(periodRatio * decayAmount);
-    const overridesToApply = amountOverrides.map((override) => ({
-      threshold: override.threshold,
-      amountToApply: Math.round(periodRatio * override.amount),
-    }));
-
-    const allZeroOrNaN =
-      (decayAmountToApply === 0 || Number.isNaN(decayAmountToApply)) &&
-      overridesToApply.every((override) => override.amountToApply === 0 || Number.isNaN(override.amountToApply));
-    if (allZeroOrNaN) {
+    if (decayAmountToApply === 0 || Number.isNaN(decayAmountToApply)) {
       return;
     }
 
-    // Calculate new last_decay_at based on the rounded base decay amount we applied, regardless of which
-    // amount_overrides bracket (if any) a given row actually fell into. This makes it so that over time, the
-    // decayed amount will stay accurate, even if we round some here. If the base amount is 0 (e.g. decay only
-    // happens through amount_overrides brackets), there's no base rounding to compensate for, so just advance to now.
-    const timeConsumedMs =
-      decayAmount !== 0 ? (decayAmountToApply / decayAmount) * decayPeriodMs : diffFromLastDecayMs;
+    // Calculate new last_decay_at based on the rounded decay amount we applied, so that over time the decayed
+    // amount stays accurate even if we round some here.
+    const timeConsumedMs = (decayAmountToApply / decayAmount) * decayPeriodMs;
     const newLastDecayDate = moment.utc(lastDecayAt).add(timeConsumedMs, "ms").format(DBDateFormat);
 
-    const buildValueExpr = (amountToApply: number): string =>
-      amountToApply >= 0
-        ? `GREATEST(value - ${amountToApply}, ${MIN_COUNTER_VALUE})`
-        : `LEAST(value + ${Math.abs(amountToApply)}, ${maxValue})`;
-
-    // First matching threshold (in config order) wins, same convention as decay.role_overrides
-    const rawUpdate = overridesToApply.length
-      ? `CASE ${overridesToApply
-          .map((override) => `WHEN value >= ${override.threshold} THEN ${buildValueExpr(override.amountToApply)}`)
-          .join(" ")} ELSE ${buildValueExpr(decayAmountToApply)} END`
-      : buildValueExpr(decayAmountToApply);
+    const rawUpdate =
+      decayAmountToApply >= 0
+        ? `GREATEST(value - ${decayAmountToApply}, ${MIN_COUNTER_VALUE})`
+        : `LEAST(value + ${Math.abs(decayAmountToApply)}, ${maxValue})`;
 
     // Using an UPDATE with ORDER BY in an attempt to avoid deadlocks from simultaneous decays
     // Also see https://dev.mysql.com/doc/refman/8.0/en/innodb-deadlocks-handling.html
@@ -230,6 +209,13 @@ export class GuildCounters extends BaseGuildRepository {
       query = query.andWhere("user_id IN (:...userIds)", { userIds: userIdFilter.include });
     } else if (userIdFilter && "exclude" in userIdFilter) {
       query = query.andWhere("user_id NOT IN (:...userIds)", { userIds: userIdFilter.exclude });
+    }
+
+    if (valueRangeFilter?.min !== undefined) {
+      query = query.andWhere("value >= :minValue", { minValue: valueRangeFilter.min });
+    }
+    if (valueRangeFilter?.max !== undefined) {
+      query = query.andWhere("value < :maxValue", { maxValue: valueRangeFilter.max });
     }
 
     await query
@@ -247,8 +233,10 @@ export class GuildCounters extends BaseGuildRepository {
     decayPeriodMs: number,
     decayAmount: number,
     excludeUserIds: string[] = [],
-    amountOverrides: Array<{ threshold: number; amount: number }> = [],
     maxValue: number = MAX_COUNTER_VALUE,
+    // If set, only rows below this value are decayed at the base rate — rows at/above it belong to an
+    // amount_overrides bracket instead and are decayed independently via decayForAmountOverride()
+    belowValue?: number,
   ) {
     return decayQueue.add(async () => {
       const counter = (await this.counters.findOne({
@@ -264,8 +252,8 @@ export class GuildCounters extends BaseGuildRepository {
         counter.last_decay_at!,
         (newLastDecayAt) => this.counters.update({ id }, { last_decay_at: newLastDecayAt }),
         excludeUserIds.length ? { exclude: excludeUserIds } : null,
-        amountOverrides,
         maxValue,
+        belowValue !== undefined ? { max: belowValue } : null,
       );
     });
   }
@@ -311,8 +299,61 @@ export class GuildCounters extends BaseGuildRepository {
         (newLastDecayAt) =>
           this.counterDecayRoleStates.update({ counter_id: id, role_id: roleId }, { last_decay_at: newLastDecayAt }),
         { include: userIds },
-        [],
         maxValue,
+      );
+    });
+  }
+
+  /**
+   * Like `decayForRole()`, but for a single decay.amount_overrides bracket — each bracket gets its own independent
+   * last-decay timestamp (stored in `counter_decay_amount_override_states`, keyed by counter + threshold), so its
+   * `every` period is measured from when *that bracket* last decayed rather than from the base rate's timing.
+   *
+   * Brackets are mutually exclusive by value range rather than by config list order: this bracket only claims rows
+   * in [threshold, nextHigherThreshold) among `allThresholds`, so a row is always decayed by exactly one bracket —
+   * whichever is the highest threshold its current value meets — regardless of the order overrides are configured
+   * in.
+   */
+  async decayForAmountOverride(
+    id: number,
+    threshold: number,
+    decayPeriodMs: number,
+    decayAmount: number,
+    allThresholds: number[],
+    excludeUserIds: string[] = [],
+    maxValue: number = MAX_COUNTER_VALUE,
+  ) {
+    return decayQueue.add(async () => {
+      let state = await this.counterDecayAmountOverrideStates.findOne({
+        where: { counter_id: id, threshold },
+      });
+
+      if (!state) {
+        const insertResult = await this.counterDecayAmountOverrideStates.insert({
+          counter_id: id,
+          threshold,
+          last_decay_at: moment.utc().format(DBDateFormat),
+        });
+        state = (await this.counterDecayAmountOverrideStates.findOne({
+          where: { id: insertResult.identifiers[0].id },
+        }))!;
+      }
+
+      const nextThreshold = allThresholds.filter((t) => t > threshold).sort((a, b) => a - b)[0];
+
+      await this.applyDecay(
+        id,
+        decayPeriodMs,
+        decayAmount,
+        state.last_decay_at!,
+        (newLastDecayAt) =>
+          this.counterDecayAmountOverrideStates.update(
+            { counter_id: id, threshold },
+            { last_decay_at: newLastDecayAt },
+          ),
+        excludeUserIds.length ? { exclude: excludeUserIds } : null,
+        maxValue,
+        { min: threshold, max: nextThreshold },
       );
     });
   }

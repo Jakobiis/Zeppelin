@@ -53,13 +53,36 @@ export async function decayCounter(
     );
   }
 
+  const amountOverrides = counter.decay?.amount_overrides ?? [];
+  const allThresholds = amountOverrides.map((override) => override.threshold);
+
+  for (const override of amountOverrides) {
+    const overridePeriodMs = convertDelayStringToMS(override.every ?? counter.decay!.every);
+    if (!overridePeriodMs) {
+      continue;
+    }
+
+    await pluginData.state.counters.decayForAmountOverride(
+      counterId,
+      override.threshold,
+      overridePeriodMs,
+      override.amount,
+      allThresholds,
+      userIdsClaimedByOverrides,
+      counter.max_value,
+    );
+  }
+
+  // Rows in an amount_overrides bracket are decayed independently above, so exclude them from the base rate here
+  const belowValue = allThresholds.length ? Math.min(...allThresholds) : undefined;
+
   await pluginData.state.counters.decay(
     counterId,
     decayPeriodMS,
     decayAmount,
     userIdsClaimedByOverrides,
-    counter.decay?.amount_overrides ?? [],
     counter.max_value,
+    belowValue,
   );
 
   // Check for trigger matches, if any, when the counter value changes

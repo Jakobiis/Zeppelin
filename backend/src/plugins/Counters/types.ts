@@ -60,6 +60,8 @@ export const zDecayRoleOverride = z.strictObject({
 export const zDecayAmountOverride = z.strictObject({
   threshold: z.number(),
   amount: z.number(),
+  // Defaults to the base decay.every period if omitted
+  every: zDelayString.optional(),
 });
 
 export const zCounter = z

@@ -136,7 +136,7 @@ function getEffectiveDecayRate(
 
     const amountOverride = decay.amount_overrides.find((o) => currentValue >= o.threshold);
     if (amountOverride) {
-        return { amount: amountOverride.amount, every: decay.every };
+        return { amount: amountOverride.amount, every: amountOverride.every ?? decay.every };
     }
 
     return decay;
@@ -158,8 +158,9 @@ function buildDecayInfoLines(
     }
 
     for (const override of decay.amount_overrides) {
+        const overridePeriodMs = override.every ? convertDelayStringToMS(override.every) : basePeriodMs;
         lines.push(
-            `- **${override.threshold}+ points**: **${override.amount}** points every ${humanizeDuration(basePeriodMs ?? 0)}`,
+            `- **${override.threshold}+ points**: **${override.amount}** points every ${humanizeDuration(overridePeriodMs ?? 0)}`,
         );
     }
 
