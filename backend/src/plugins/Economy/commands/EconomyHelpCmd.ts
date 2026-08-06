@@ -7,7 +7,7 @@ export const EconomyHelpCmd = guildPluginMessageCommand<EconomyPluginType>()({
     permission: "can_view",
 
     async run({ pluginData, message }) {
-        const embed = buildEconomyInfoEmbed(pluginData);
+        const embed = await buildEconomyInfoEmbed(pluginData, message);
         await message.channel.send({ embeds: [embed] });
     },
 });

@@ -1,12 +1,16 @@
-import { EmbedBuilder } from "discord.js";
+import { EmbedBuilder, Message, OmitPartialGroupDMChannel } from "discord.js";
 import { GuildPluginData } from "vety";
 import { humanizeDuration } from "../../../humanizeDuration.js";
 import { convertDelayStringToMS } from "../../../utils.js";
 import { getGuildPrefix } from "../../../utils/getGuildPrefix.js";
 import { EconomyPluginType } from "../types.js";
+import { buildCoinsSourceLines } from "./buildCoinsSourceLines.js";
 import { formatRewardAmount, formatWinMultiplier } from "./numberOrRange.js";
 
-export function buildEconomyInfoEmbed(pluginData: GuildPluginData<EconomyPluginType>): EmbedBuilder {
+export async function buildEconomyInfoEmbed(
+    pluginData: GuildPluginData<EconomyPluginType>,
+    message: OmitPartialGroupDMChannel<Message>,
+): Promise<EmbedBuilder> {
     const config = pluginData.config.get();
     const prefix = getGuildPrefix(pluginData);
     const emojiPrefix = config.currency_emoji ? `${config.currency_emoji} ` : "";
@@ -17,6 +21,11 @@ export function buildEconomyInfoEmbed(pluginData: GuildPluginData<EconomyPluginT
     const sections: string[] = [
         `${emojiPrefix}**${config.currency_name}** is this server's currency. Check your balance, trade for it, and wager it on games below.`,
     ];
+
+    const coinsSourceLines = await buildCoinsSourceLines(pluginData, message);
+    if (coinsSourceLines.length) {
+        sections.push(`**Earning ${config.currency_name} From Messages**\n${coinsSourceLines.join("\n")}`);
+    }
 
     const commandLines = [
         `\`${prefix}balance [user]\` — check a ${config.currency_name} balance`,
