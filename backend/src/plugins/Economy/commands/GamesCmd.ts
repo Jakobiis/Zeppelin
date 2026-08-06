@@ -3,6 +3,7 @@ import { guildPluginMessageCommand } from "vety";
 import { humanizeDuration } from "../../../humanizeDuration.js";
 import { convertDelayStringToMS } from "../../../utils.js";
 import { getGuildPrefix } from "../../../utils/getGuildPrefix.js";
+import { formatRewardAmount, formatWinMultiplier } from "../functions/numberOrRange.js";
 import { EconomyPluginType } from "../types.js";
 
 export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
@@ -20,20 +21,28 @@ export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
       return;
     }
 
+    const prefix = getGuildPrefix(pluginData);
+
     const lines = gameEntries.map(([gameName, game]) => {
       const label = game.label ?? gameName;
       const emojiPrefix = game.emoji ? `${game.emoji} ` : "";
-      const winPercent = Math.round(game.win_chance * 100);
       const cooldownMs = game.cooldown ? convertDelayStringToMS(game.cooldown) : null;
       const cooldownText = cooldownMs ? `, cooldown ${humanizeDuration(cooldownMs)}` : "";
 
-      return `${emojiPrefix}**${label}** (\`${gameName}\`) — ${winPercent}% to win **${game.win_multiplier}x**, bet ${game.min_bet}-${game.max_bet} ${config.currency_name}${cooldownText}`;
+      if (game.type === "reward") {
+        const winText =
+          game.win_chance >= 1 ? "Guaranteed" : `${Math.round(game.win_chance * 100)}% chance for`;
+        return `${emojiPrefix}**${label}** (\`${prefix}work\`) — ${winText} **${formatRewardAmount(game.reward)}** ${config.currency_name}${cooldownText}`;
+      }
+
+      const winPercent = Math.round(game.win_chance * 100);
+      return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${game.min_bet}-${game.max_bet} ${config.currency_name}${cooldownText}`;
     });
 
     const embed = new EmbedBuilder()
       .setColor(0x0159b2)
       .setTitle("Games")
-      .setDescription(`${lines.join("\n")}\n\nUse \`${getGuildPrefix(pluginData)}play <game> <amount>\` to play.`);
+      .setDescription(lines.join("\n"));
 
     await message.channel.send({ embeds: [embed] });
   },

@@ -2,11 +2,13 @@ import { PluginOverride, guildPlugin } from "vety";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { CountersPlugin } from "../Counters/CountersPlugin.js";
 import { BalanceCmd } from "./commands/BalanceCmd.js";
+import { EconomyHelpCmd } from "./commands/EconomyHelpCmd.js";
 import { GamesCmd } from "./commands/GamesCmd.js";
 import { LeaderboardCmd } from "./commands/LeaderboardCmd.js";
 import { PlayCmd } from "./commands/PlayCmd.js";
 import { TradeBackCmd } from "./commands/TradeBackCmd.js";
 import { TradeCmd } from "./commands/TradeCmd.js";
+import { WorkCmd } from "./commands/WorkCmd.js";
 import { EconomyPluginType, zEconomyConfig } from "./types.js";
 
 const defaultOverrides: Array<PluginOverride<EconomyPluginType>> = [
@@ -42,11 +44,13 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
   // prettier-ignore
   messageCommands: [
     BalanceCmd,
+    EconomyHelpCmd,
     GamesCmd,
     LeaderboardCmd,
     PlayCmd,
     TradeCmd,
     TradeBackCmd,
+    WorkCmd,
   ],
 
   beforeLoad(pluginData) {

@@ -6,23 +6,61 @@ import { CountersPlugin } from "../Counters/CountersPlugin.js";
 
 const MAX_GAMES = 20;
 
-export const zEconomyGame = z
+// Either a flat number (e.g. 2) or a {min, max} range that gets rolled randomly each time (e.g. {min: 1.5, max: 3}
+// = a fresh value between 1.5-3 picked per play). Used both for win_multiplier (wager games) and reward (reward
+// games) — same shape, different meaning attached by whichever field uses it.
+export const zNumberOrRange = z.union([
+  z.number().positive(),
+  z
+    .strictObject({
+      min: z.number().positive(),
+      max: z.number().positive(),
+    })
+    .refine((range) => range.max >= range.min, {
+      message: "max must be greater than or equal to min",
+    }),
+]);
+
+const zGameCommon = {
+  label: zBoundedCharacters(0, 100).nullable().default(null),
+  emoji: z.string().nullable().default(null),
+  cooldown: zDelayString.nullable().default(null),
+};
+
+// A "wager" game: the player picks a bet amount (within min_bet-max_bet), win_chance decides whether they win,
+// and on a win the bet is multiplied by win_multiplier. Played with `!play <game> <amount>`.
+export const zEconomyWagerGame = z
   .strictObject({
-    label: zBoundedCharacters(0, 100).nullable().default(null),
-    emoji: z.string().nullable().default(null),
-    // Chance (0-1) that a play wins
+    type: z.literal("wager"),
+    ...zGameCommon,
     win_chance: z.number().min(0).max(1),
-    // On a win, the bet is returned multiplied by this (e.g. 2 = double your bet back)
-    win_multiplier: z.number().positive(),
+    win_multiplier: zNumberOrRange,
     min_bet: z.number().int().positive(),
     max_bet: z.number().int().positive(),
     // Caps the net amount a single win can add to the balance, regardless of bet/multiplier
     max_payout: z.number().int().positive().nullable().default(null),
-    cooldown: zDelayString.nullable().default(null),
   })
   .refine((game) => game.max_bet >= game.min_bet, {
     message: "max_bet must be greater than or equal to min_bet",
   });
+
+// A "reward" game: no bet — just a guaranteed (or win_chance-gated) flat payout on a cooldown, e.g. a `work` or
+// `daily` command. Played with `!work <game>`.
+export const zEconomyRewardGame = z.strictObject({
+  type: z.literal("reward"),
+  ...zGameCommon,
+  // Defaults to 1 (always pays out) since most reward games (work/daily) are meant to be guaranteed; set lower
+  // to make it a "sometimes you get nothing" gamble instead.
+  win_chance: z.number().min(0).max(1).default(1),
+  reward: zNumberOrRange,
+});
+
+// Existing configs predate the `type` field (only wager games existed), so default it to "wager" when omitted
+// rather than making it a breaking change.
+export const zEconomyGame = z.preprocess(
+  (value) => (value && typeof value === "object" && !("type" in value) ? { ...value, type: "wager" } : value),
+  z.discriminatedUnion("type", [zEconomyWagerGame, zEconomyRewardGame]),
+);
 
 export const zEconomyTrade = z.strictObject({
   // The Counters plugin counter that represents "points" to trade to/from

@@ -1,18 +1,18 @@
 import { GuildPluginData } from "vety";
 import { z } from "zod";
-import { humanizeDuration } from "../../../humanizeDuration.js";
-import { convertDelayStringToMS } from "../../../utils.js";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
-import { EconomyPluginType, zEconomyGame } from "../types.js";
+import { EconomyPluginType, zEconomyWagerGame } from "../types.js";
+import { checkCooldown } from "./checkCooldown.js";
+import { rollNumberOrRange } from "./numberOrRange.js";
 
 export type PlayResult =
   | { type: "error"; message: string }
-  | { type: "result"; win: boolean; amountChanged: number; newBalance: number };
+  | { type: "result"; win: boolean; amountChanged: number; newBalance: number; multiplier: number | null };
 
 export async function playGame(
   pluginData: GuildPluginData<EconomyPluginType>,
   gameName: string,
-  game: z.infer<typeof zEconomyGame>,
+  game: z.infer<typeof zEconomyWagerGame>,
   userId: string,
   bet: number,
 ): Promise<PlayResult> {
@@ -30,18 +30,9 @@ export async function playGame(
   }
 
   const cooldownKey = `${gameName}:${userId}`;
-  const cooldownMs = game.cooldown ? convertDelayStringToMS(game.cooldown) : null;
-  if (cooldownMs) {
-    const lastPlayedAt = pluginData.state.lastPlayedAt.get(cooldownKey);
-    if (lastPlayedAt) {
-      const remainingMs = cooldownMs - (Date.now() - lastPlayedAt);
-      if (remainingMs > 0) {
-        return {
-          type: "error",
-          message: `You can play this game again in ${humanizeDuration(remainingMs, { round: true })}`,
-        };
-      }
-    }
+  const cooldownCheck = checkCooldown(pluginData, cooldownKey, game.cooldown);
+  if (cooldownCheck.onCooldown) {
+    return { type: "error", message: cooldownCheck.message };
   }
 
   const lock = await pluginData.locks.acquire(economyUserLock({ id: userId }));
@@ -56,8 +47,10 @@ export async function playGame(
 
     const win = Math.random() < game.win_chance;
     let amountChanged: number;
+    let multiplier: number | null = null;
     if (win) {
-      amountChanged = Math.floor(bet * (game.win_multiplier - 1));
+      multiplier = rollNumberOrRange(game.win_multiplier);
+      amountChanged = Math.floor(bet * (multiplier - 1));
       if (game.max_payout != null) {
         amountChanged = Math.min(amountChanged, game.max_payout);
       }
@@ -67,11 +60,11 @@ export async function playGame(
 
     await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, amountChanged);
 
-    if (cooldownMs) {
+    if (cooldownCheck.cooldownMs) {
       pluginData.state.lastPlayedAt.set(cooldownKey, Date.now());
     }
 
-    return { type: "result", win, amountChanged, newBalance: balance + amountChanged };
+    return { type: "result", win, amountChanged, newBalance: balance + amountChanged, multiplier };
   } finally {
     lock.unlock();
   }
