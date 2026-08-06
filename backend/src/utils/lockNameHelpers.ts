@@ -13,6 +13,10 @@ export function counterIdLock(counterId: number | string) {
   return `counter-${counterId}`;
 }
 
+export function economyUserLock(user: GuildMember | User | { id: string }) {
+  return `economy-${user.id}`;
+}
+
 export function memberRolesLock(member: GuildMember | User | { id: string }) {
   return `member-roles-${member.id}`;
 }
