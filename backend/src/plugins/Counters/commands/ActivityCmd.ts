@@ -36,6 +36,12 @@ interface GrantDefinition {
     unlockMessage: string;
     /** True if this grant is never taken away once earned — hides "Lost At"/removal info for it. */
     permanent?: boolean;
+    /**
+     * False if the command should never re-add this role on the user's behalf, even if they meet the requirement
+     * but don't have it — used when the role's absence can mean access was revoked on purpose (e.g. a ban from
+     * that access), so the role itself is the source of truth rather than the point requirement. Defaults to true.
+     */
+    autoGrant?: boolean;
 }
 
 const GRANTS: GrantDefinition[] = [
@@ -54,10 +60,11 @@ const GRANTS: GrantDefinition[] = [
     },
     {
         triggerName: "grant_minecraft_access_role",
-        roleId: "1526896146759290977",
+        roleId: "1526321616810803342",
         label: "Minecraft Access",
         unlockMessage: "You met the requirement but didn't have Minecraft access — it's been added now!",
         permanent: true,
+        autoGrant: false,
     },
 ];
 
@@ -382,7 +389,7 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
             } else {
                 text += `\n-# Requirement Met`;
 
-                if (!hasRole && member) {
+                if (!hasRole && member && grant.autoGrant !== false) {
                     try {
                         await member.roles.add(
                             grant.roleId,
