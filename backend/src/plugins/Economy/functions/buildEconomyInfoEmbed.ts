@@ -21,6 +21,9 @@ export function buildEconomyInfoEmbed(pluginData: GuildPluginData<EconomyPluginT
     const commandLines = [
         `\`${prefix}balance [user]\` — check a ${config.currency_name} balance`,
         `\`${prefix}balance leaderboard\` — see the top ${config.currency_name} holders`,
+        `\`${prefix}give <user> <amount|all>\` — give another user some of your ${config.currency_name}${
+            config.give.fee ? ` (${Math.round(config.give.fee * 100)}% fee)` : ""
+        }`,
     ];
     if (gameEntries.length) {
         commandLines.push(`\`${prefix}games\` — list games and their odds`);

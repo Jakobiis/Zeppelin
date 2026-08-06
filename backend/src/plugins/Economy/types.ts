@@ -62,6 +62,14 @@ export const zEconomyGame = z.preprocess(
   z.discriminatedUnion("type", [zEconomyWagerGame, zEconomyRewardGame]),
 );
 
+export const zEconomyGive = z.strictObject({
+  cooldown: zDelayString.nullable().default(null),
+  // Fraction (0-1) of the given amount taken as a fee, removed from the economy entirely rather than handed to
+  // the recipient — e.g. 0.1 = a 10% tax on transfers. The giver still loses the full amount; the recipient just
+  // receives less than that.
+  fee: z.number().min(0).max(1).nullable().default(null),
+});
+
 export const zEconomyTrade = z.strictObject({
   // The Counters plugin counter that represents "points" to trade to/from
   points_counter_name: zBoundedCharacters(1, 100),
@@ -78,10 +86,12 @@ export const zEconomyConfig = z.strictObject({
   // The Counters plugin counter used to store each user's coin balance
   counter_name: zBoundedCharacters(1, 100).default("coins"),
   trade: zEconomyTrade.nullable().default(null),
+  give: zEconomyGive.default({ cooldown: null, fee: null }),
   games: zBoundedRecord(z.record(zBoundedCharacters(1, 32), zEconomyGame), 0, MAX_GAMES).default({}),
   can_view: z.boolean().default(false),
   can_play: z.boolean().default(false),
   can_trade: z.boolean().default(false),
+  can_give: z.boolean().default(false),
 });
 
 export interface EconomyPluginType extends BasePluginType {

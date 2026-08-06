@@ -4,6 +4,7 @@ import { CountersPlugin } from "../Counters/CountersPlugin.js";
 import { BalanceCmd } from "./commands/BalanceCmd.js";
 import { EconomyHelpCmd } from "./commands/EconomyHelpCmd.js";
 import { GamesCmd } from "./commands/GamesCmd.js";
+import { GiveCmd } from "./commands/GiveCmd.js";
 import { LeaderboardCmd } from "./commands/LeaderboardCmd.js";
 import { PlayCmd } from "./commands/PlayCmd.js";
 import { TradeBackCmd } from "./commands/TradeBackCmd.js";
@@ -23,6 +24,7 @@ const defaultOverrides: Array<PluginOverride<EconomyPluginType>> = [
     config: {
       can_play: true,
       can_trade: true,
+      can_give: true,
     },
   },
 ];
@@ -46,6 +48,7 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
     BalanceCmd,
     EconomyHelpCmd,
     GamesCmd,
+    GiveCmd,
     LeaderboardCmd,
     PlayCmd,
     TradeCmd,
