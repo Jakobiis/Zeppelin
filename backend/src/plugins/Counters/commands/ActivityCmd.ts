@@ -22,12 +22,19 @@ import { humanizeDuration } from "../../../humanizeDuration.js";
 import { MINUTES, convertDelayStringToMS, noop } from "../../../utils.js";
 import { CountersPluginType, zCounter } from "../types.js";
 
-const ACTIVITY_COUNTER_NAME = "activity";
+export const ACTIVITY_COUNTER_NAME = "activity";
 // The Automod rule that feeds the activity counter — there's no formal link between the two, this is just
 // this server's naming convention (see zeppelin config: automod.rules.accumulate_activity).
 const ACTIVITY_AUTOMOD_RULE_NAME = "accumulate_activity";
 const BAR_LENGTH = 15;
 const INFO_BUTTON_TIMEOUT = 5 * MINUTES;
+
+export const MINECRAFT_ACCESS_TRIGGER_NAME = "grant_minecraft_access_role";
+export const MINECRAFT_ACCESS_ROLE_ID = "1526321616810803342";
+// Per-user counter (must be configured in this server's YAML under counters:) used purely as a persistent
+// ban flag — see MinecraftBanCmd/MinecraftUnbanCmd. A value >0 means the user is banned from Minecraft access,
+// which blocks both the auto-grant below and future re-grants even if autoGrant were ever turned back on.
+export const MINECRAFT_ACCESS_BAN_COUNTER_NAME = "minecraft_access_banned";
 
 interface GrantDefinition {
     triggerName: string;
@@ -42,6 +49,8 @@ interface GrantDefinition {
      * that access), so the role itself is the source of truth rather than the point requirement. Defaults to true.
      */
     autoGrant?: boolean;
+    /** Name of a per-user counter used as a persistent ban flag for this grant — see MINECRAFT_ACCESS_BAN_COUNTER_NAME. */
+    banCounterName?: string;
 }
 
 const GRANTS: GrantDefinition[] = [
@@ -59,16 +68,17 @@ const GRANTS: GrantDefinition[] = [
         permanent: true,
     },
     {
-        triggerName: "grant_minecraft_access_role",
-        roleId: "1526321616810803342",
+        triggerName: MINECRAFT_ACCESS_TRIGGER_NAME,
+        roleId: MINECRAFT_ACCESS_ROLE_ID,
         label: "Minecraft Access",
         unlockMessage: "You met the requirement but didn't have Minecraft access — it's been added now!",
         permanent: true,
         autoGrant: false,
+        banCounterName: MINECRAFT_ACCESS_BAN_COUNTER_NAME,
     },
 ];
 
-function evaluateCondition(op: TriggerComparisonOp, threshold: number, value: number): boolean {
+export function evaluateCondition(op: TriggerComparisonOp, threshold: number, value: number): boolean {
     switch (op) {
         case "=":
             return value === threshold;
@@ -380,12 +390,23 @@ export const ActivityCmd = guildPluginMessageCommand<CountersPluginType>()({
             const percent = requiredPoints > 0 ? finalValue / requiredPoints : 1;
             const hasRole = member?.roles.cache.has(grant.roleId) ?? false;
 
+            let isBanned = false;
+            if (grant.banCounterName) {
+                const banCounterId = pluginData.state.counterIds[grant.banCounterName];
+                if (banCounterId) {
+                    const banValue = await pluginData.state.counters.getCurrentValue(banCounterId, null, targetUser.id);
+                    isBanned = (banValue ?? 0) > 0;
+                }
+            }
+
             text += `\n\n**${grant.label}** — ${requiredPoints} Points`;
             text += `\n\`${renderProgressBar(percent)}\` **${Math.floor(Math.min(percent, 1) * 100)}%**`;
 
             if (!hasReachedGoal) {
                 const remaining = requiredPoints - finalValue;
                 text += `\n-# **${remaining}** Points To Go`;
+            } else if (isBanned) {
+                text += `\n-# Access Revoked`;
             } else {
                 text += `\n-# Requirement Met`;
 
