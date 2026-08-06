@@ -26,7 +26,9 @@ import { changeCounterValue } from "./functions/changeCounterValue.js";
 import { counterExists } from "./functions/counterExists.js";
 import { decayCounter } from "./functions/decayCounter.js";
 import { getCounterValue } from "./functions/getCounterValue.js";
+import { getCounterValueCount } from "./functions/getCounterValueCount.js";
 import { getPrettyNameForCounter } from "./functions/getPrettyNameForCounter.js";
+import { getTopCounterValues } from "./functions/getTopCounterValues.js";
 import { getPrettyNameForCounterTrigger } from "./functions/getPrettyNameForCounterTrigger.js";
 import { offCounterEvent } from "./functions/offCounterEvent.js";
 import { onCounterEvent } from "./functions/onCounterEvent.js";
@@ -72,6 +74,8 @@ export const CountersPlugin = guildPlugin<CountersPluginType>()({
       changeCounterValue: makePublicFn(pluginData, changeCounterValue),
       setCounterValue: makePublicFn(pluginData, setCounterValue),
       getCounterValue: makePublicFn(pluginData, getCounterValue),
+      getTopCounterValues: makePublicFn(pluginData, getTopCounterValues),
+      getCounterValueCount: makePublicFn(pluginData, getCounterValueCount),
       getPrettyNameForCounter: makePublicFn(pluginData, getPrettyNameForCounter),
       getPrettyNameForCounterTrigger: makePublicFn(pluginData, getPrettyNameForCounterTrigger),
       onCounterEvent: makePublicFn(pluginData, onCounterEvent),

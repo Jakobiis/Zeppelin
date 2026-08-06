@@ -4,7 +4,7 @@
  */
 export function parseAmountInput(input: string, allValue: number): number | null {
   const trimmed = input.trim().toLowerCase();
-  if (trimmed === "all") {
+  if (trimmed === "all" || trimmed === "max") {
     return allValue;
   }
 

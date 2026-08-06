@@ -3,7 +3,9 @@ import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { CountersPlugin } from "../Counters/CountersPlugin.js";
 import { BalanceCmd } from "./commands/BalanceCmd.js";
 import { GamesCmd } from "./commands/GamesCmd.js";
+import { LeaderboardCmd } from "./commands/LeaderboardCmd.js";
 import { PlayCmd } from "./commands/PlayCmd.js";
+import { TradeBackCmd } from "./commands/TradeBackCmd.js";
 import { TradeCmd } from "./commands/TradeCmd.js";
 import { EconomyPluginType, zEconomyConfig } from "./types.js";
 
@@ -41,8 +43,10 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
   messageCommands: [
     BalanceCmd,
     GamesCmd,
+    LeaderboardCmd,
     PlayCmd,
     TradeCmd,
+    TradeBackCmd,
   ],
 
   beforeLoad(pluginData) {

@@ -27,11 +27,11 @@ export const zEconomyGame = z
 export const zEconomyTrade = z.strictObject({
   // The Counters plugin counter that represents "points" to trade to/from
   points_counter_name: zBoundedCharacters(1, 100),
-  // Points charged per coin when buying coins with points
-  points_per_coin: z.number().positive(),
-  // Points refunded per coin when selling coins back for points. Defaults to points_per_coin (symmetric
-  // exchange) if omitted — set lower than points_per_coin to charge an effective trading fee/spread.
-  points_per_coin_sell: z.number().positive().nullable().default(null),
+  // Coins granted per point when buying coins with points (can be < 1, e.g. 0.1 = 10 points per coin)
+  coins_per_point: z.number().positive(),
+  // Coins "spent" per point refunded when selling coins back for points. Defaults to coins_per_point
+  // (symmetric exchange) if omitted — set higher than coins_per_point to charge an effective trading fee/spread.
+  coins_per_point_sell: z.number().positive().nullable().default(null),
 });
 
 export const zEconomyConfig = z.strictObject({

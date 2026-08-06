@@ -2,6 +2,10 @@ import { GuildPluginData } from "vety";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
 import { EconomyPluginType } from "../types.js";
 
+// Guards floor()/ceil() against float rounding noise (e.g. 3 * 0.1 === 0.30000000000000004) at exchange-rate
+// boundaries, so a user isn't shortchanged (or overcharged) by a fraction of a cent's worth of float error.
+const RATE_EPSILON = 1e-9;
+
 export type TradeDirection = "buy" | "sell";
 
 export type TradeResult =
@@ -37,16 +41,17 @@ export async function tradeCoins(
         return { type: "error", message: `You don't have that many points (balance: ${pointsBalance})` };
       }
 
-      const coinsGained = Math.floor(amount / trade.points_per_coin);
+      const coinsGained = Math.floor(amount * trade.coins_per_point + RATE_EPSILON);
       if (coinsGained <= 0) {
+        const pointsNeeded = Math.ceil(1 / trade.coins_per_point - RATE_EPSILON);
         return {
           type: "error",
-          message: `You need at least ${trade.points_per_coin} points to buy 1 ${config.currency_name}`,
+          message: `You need at least ${pointsNeeded} points to buy 1 ${config.currency_name}`,
         };
       }
 
       // Only charge for the points that actually converted, so no partial-coin remainder is lost
-      const actualPointsCost = coinsGained * trade.points_per_coin;
+      const actualPointsCost = Math.ceil(coinsGained / trade.coins_per_point - RATE_EPSILON);
 
       await pluginData.state.counters.changeCounterValue(trade.points_counter_name, null, userId, -actualPointsCost);
       await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, coinsGained);
@@ -62,8 +67,8 @@ export async function tradeCoins(
       return { type: "error", message: `You don't have that many ${config.currency_name} (balance: ${coinBalance})` };
     }
 
-    const sellRate = trade.points_per_coin_sell ?? trade.points_per_coin;
-    const pointsGained = Math.floor(amount * sellRate);
+    const sellRate = trade.coins_per_point_sell ?? trade.coins_per_point;
+    const pointsGained = Math.floor(amount / sellRate + RATE_EPSILON);
 
     await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, -amount);
     await pluginData.state.counters.changeCounterValue(trade.points_counter_name, null, userId, pointsGained);

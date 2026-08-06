@@ -4,7 +4,7 @@ import { commandTypeHelpers as ct } from "../../../commandTypes.js";
 import { EconomyPluginType } from "../types.js";
 
 export const BalanceCmd = guildPluginMessageCommand<EconomyPluginType>()({
-  trigger: ["balance", "coins"],
+  trigger: ["balance", "coins", "bal"],
   permission: "can_view",
 
   signature: {
