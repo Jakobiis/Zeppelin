@@ -52,7 +52,9 @@ export async function buildEconomyInfoEmbed(
         commandLines.push(`\`${prefix}work\` — claim a free, cooldown-gated payout`);
     }
     if (hasPvpGames) {
-        commandLines.push(`\`${prefix}play <game> @user <amount|all>\` — challenge another user for ${config.currency_name}`);
+        commandLines.push(
+            `\`${prefix}play <game> [@user] <amount|all>\` — challenge another user for ${config.currency_name}, or the bot if you omit @user`,
+        );
         commandLines.push(`\`${prefix}pvp\` — toggle whether you can be challenged to PvP games`);
     }
     if (config.trade) {
@@ -89,7 +91,7 @@ export async function buildEconomyInfoEmbed(
 
             if (game.type === "pvp") {
                 const variantName = PVP_VARIANT_NAMES[game.variant];
-                return `${emoji}**${label}** (\`${prefix}play ${gameName} @user <amount>\`) — ${variantName}, bet ${game.min_bet}-${game.max_bet}${cooldownText}`;
+                return `${emoji}**${label}** (\`${prefix}play ${gameName} [@user] <amount>\`) — ${variantName}, vs a player or the bot, bet ${game.min_bet}-${game.max_bet}${cooldownText}`;
             }
 
             const winPercent = Math.round(game.win_chance * 100);

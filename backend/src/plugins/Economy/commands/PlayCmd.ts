@@ -6,6 +6,7 @@ import { parseAmountInput } from "../functions/parseAmountInput.js";
 import { playGame } from "../functions/playGame.js";
 import { runBlackjack } from "../functions/runBlackjack.js";
 import { runPvpGame } from "../functions/pvpChallenge.js";
+import { runPvpVsBot } from "../functions/pvpVsBot.js";
 import { EconomyPluginType } from "../types.js";
 
 export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
@@ -34,10 +35,7 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
 
     if (game.type === "pvp") {
       if (!args.user) {
-        void pluginData.state.common.sendErrorMessage(
-          message,
-          `**${args.game}** is a PvP game — use \`${getGuildPrefix(pluginData)}play ${args.game} @user <amount>\``,
-        );
+        await runPvpVsBot(pluginData, message, args.game, game, args.amount);
         return;
       }
       await runPvpGame(pluginData, message, args.game, game, args.user, args.amount);

@@ -47,7 +47,7 @@ export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
 
       if (game.type === "pvp") {
         const variantName = PVP_VARIANT_NAMES[game.variant];
-        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} @user <amount>\`) — ${variantName}, bet ${game.min_bet}-${game.max_bet} ${config.currency_name}${cooldownText}`;
+        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} [@user] <amount>\`) — ${variantName} vs another player, or vs the bot if you omit @user, bet ${game.min_bet}-${game.max_bet} ${config.currency_name}${cooldownText}`;
       }
 
       const winPercent = Math.round(game.win_chance * 100);
