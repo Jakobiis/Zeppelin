@@ -5,6 +5,9 @@ import { zSnowflake } from "./utils.js";
 export const zZeppelinGuildConfig = z.strictObject({
   // From BaseConfig
   prefix: z.string().optional(),
+  // Default color for embeds the bot sends that don't specify their own color (e.g. log embeds) — a decimal or
+  // hex (0x...) number, same format as any other embed "color" field
+  embed_color: z.number().int().min(0).max(0xffffff).optional(),
   levels: z.record(zSnowflake, z.number()).optional(),
   plugins: z.record(z.string(), z.unknown()).optional(),
 });

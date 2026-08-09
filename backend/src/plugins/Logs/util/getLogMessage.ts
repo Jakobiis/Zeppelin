@@ -18,6 +18,7 @@ import {
   verboseUserMention,
   verboseUserName,
 } from "../../../utils.js";
+import { getGuildEmbedColor } from "../../../utils/getGuildEmbedColor.js";
 import {
   getTemplateSafeMemberLevel,
   memberToTemplateSafeMember,
@@ -131,9 +132,15 @@ export async function getLogMessage<TLogType extends keyof ILogTypeData>(
   } else if (formatted != null) {
     formatted = validateAndParseMessageContent(formatted);
 
-    if (formatted.embeds && Array.isArray(formatted.embeds) && includeEmbedTimestamp) {
+    if (formatted.embeds && Array.isArray(formatted.embeds)) {
       for (const embed of formatted.embeds) {
-        embed.timestamp = isoTimestamp;
+        if (includeEmbedTimestamp) {
+          embed.timestamp = isoTimestamp;
+        }
+        // Let a per-embed color set in the format override this, only fill in a default when it's unset
+        if (embed.color == null) {
+          embed.color = getGuildEmbedColor(pluginData);
+        }
       }
     }
   }
