@@ -17,6 +17,7 @@ export async function buildEconomyInfoEmbed(
     const gameEntries = Object.entries(config.games);
     const hasWagerGames = gameEntries.some(([, game]) => game.type === "wager");
     const hasRewardGames = gameEntries.some(([, game]) => game.type === "reward");
+    const hasBlackjackGames = gameEntries.some(([, game]) => game.type === "blackjack");
 
     const sections: string[] = [
         `${emojiPrefix}**${config.currency_name}** is this server's currency. Check your balance, trade for it, and wager it on games below.`,
@@ -37,7 +38,7 @@ export async function buildEconomyInfoEmbed(
     if (gameEntries.length) {
         commandLines.push(`\`${prefix}games\` — list games and their odds`);
     }
-    if (hasWagerGames) {
+    if (hasWagerGames || hasBlackjackGames) {
         commandLines.push(`\`${prefix}play <game> <amount|all>\` — wager ${config.currency_name} on a game`);
     }
     if (hasRewardGames) {
@@ -69,6 +70,10 @@ export async function buildEconomyInfoEmbed(
                 const winText =
                     game.win_chance >= 1 ? "Guaranteed" : `${Math.round(game.win_chance * 100)}% chance for`;
                 return `${emoji}**${label}** (\`${prefix}work\`) — ${winText} **${formatRewardAmount(game.reward)}** ${config.currency_name}${cooldownText}`;
+            }
+
+            if (game.type === "blackjack") {
+                return `${emoji}**${label}** (\`${prefix}play ${gameName} <amount>\`) — standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${game.min_bet}-${game.max_bet}${cooldownText}`;
             }
 
             const winPercent = Math.round(game.win_chance * 100);

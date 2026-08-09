@@ -4,6 +4,7 @@ import { commandTypeHelpers as ct } from "../../../commandTypes.js";
 import { getGuildPrefix } from "../../../utils/getGuildPrefix.js";
 import { parseAmountInput } from "../functions/parseAmountInput.js";
 import { playGame } from "../functions/playGame.js";
+import { runBlackjack } from "../functions/runBlackjack.js";
 import { EconomyPluginType } from "../types.js";
 
 export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
@@ -20,6 +21,11 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
     const game = config.games[args.game];
     if (!game) {
       void pluginData.state.common.sendErrorMessage(message, `Unknown game: ${args.game}`);
+      return;
+    }
+
+    if (game.type === "blackjack") {
+      await runBlackjack(pluginData, message, args.game, game, args.amount);
       return;
     }
 

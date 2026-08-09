@@ -55,11 +55,27 @@ export const zEconomyRewardGame = z.strictObject({
   reward: zNumberOrRange,
 });
 
+// A "blackjack" game: standard blackjack rules (hit/stand/double/split), played interactively via buttons with
+// `!blackjack <game> <amount>`. Dealer stands on all 17s; splitting is allowed once (2 hands max) and split aces
+// only ever receive one card each; doubling down is allowed after splitting.
+export const zEconomyBlackjackGame = z
+  .strictObject({
+    type: z.literal("blackjack"),
+    ...zGameCommon,
+    min_bet: z.number().int().positive(),
+    max_bet: z.number().int().positive(),
+    // Payout multiplier for a natural (2-card) blackjack that the dealer doesn't also have — traditionally 3:2
+    blackjack_payout: z.number().positive().default(1.5),
+  })
+  .refine((game) => game.max_bet >= game.min_bet, {
+    message: "max_bet must be greater than or equal to min_bet",
+  });
+
 // Existing configs predate the `type` field (only wager games existed), so default it to "wager" when omitted
 // rather than making it a breaking change.
 export const zEconomyGame = z.preprocess(
   (value) => (value && typeof value === "object" && !("type" in value) ? { ...value, type: "wager" } : value),
-  z.discriminatedUnion("type", [zEconomyWagerGame, zEconomyRewardGame]),
+  z.discriminatedUnion("type", [zEconomyWagerGame, zEconomyRewardGame, zEconomyBlackjackGame]),
 );
 
 export const zEconomyGive = z.strictObject({

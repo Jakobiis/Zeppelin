@@ -35,6 +35,10 @@ export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
         return `${emojiPrefix}**${label}** (\`${prefix}work\`) — ${winText} **${formatRewardAmount(game.reward)}** ${config.currency_name}${cooldownText}`;
       }
 
+      if (game.type === "blackjack") {
+        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${game.min_bet}-${game.max_bet} ${config.currency_name}${cooldownText}`;
+      }
+
       const winPercent = Math.round(game.win_chance * 100);
       return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${game.min_bet}-${game.max_bet} ${config.currency_name}${cooldownText}`;
     });
