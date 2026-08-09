@@ -1,4 +1,4 @@
-import { Message, OmitPartialGroupDMChannel } from "discord.js";
+import { EmbedBuilder, Message, OmitPartialGroupDMChannel } from "discord.js";
 import { GuildPluginData } from "vety";
 import { z } from "zod";
 import { chargeBalance } from "./chargeBalance.js";
@@ -88,4 +88,17 @@ export async function runPvpVsBot(
     await pluginData.state.counters.changeCounterValue(config.counter_name, null, playerId, amount);
   }
   // "loss" — the bet was already deducted up front and isn't returned; nothing left to settle
+
+  const balanceAfter = await pluginData.state.counters.getCounterValue(config.counter_name, null, playerId);
+  const resultTag = outcome.type === "win" ? "Won" : outcome.type === "push" ? "Push" : "Lost";
+
+  await message.channel.send({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x0159b2)
+        .setDescription(
+          `<@${playerId}>: ${emojiPrefix}**${balanceAfter}** ${config.currency_name} (${resultTag})`,
+        ),
+    ],
+  });
 }

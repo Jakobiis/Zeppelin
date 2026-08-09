@@ -186,4 +186,25 @@ export async function runPvpGame(
   } else {
     await pluginData.state.counters.changeCounterValue(config.counter_name, null, outcome.winnerId, amount * 2);
   }
+
+  const challengerBalanceAfter = await pluginData.state.counters.getCounterValue(
+    config.counter_name,
+    null,
+    challengerId,
+  );
+  const opponentBalanceAfter = await pluginData.state.counters.getCounterValue(config.counter_name, null, opponent.id);
+
+  const resultTag = (userId: string): string => {
+    if (outcome.type === "push") return "Push";
+    return outcome.winnerId === userId ? "Won" : "Lost";
+  };
+
+  const balanceLines = [
+    `<@${challengerId}>: ${emojiPrefix}**${challengerBalanceAfter}** ${config.currency_name} (${resultTag(challengerId)})`,
+    `<@${opponent.id}>: ${emojiPrefix}**${opponentBalanceAfter}** ${config.currency_name} (${resultTag(opponent.id)})`,
+  ];
+
+  await message.channel.send({
+    embeds: [new EmbedBuilder().setColor(0x0159b2).setDescription(balanceLines.join("\n"))],
+  });
 }
