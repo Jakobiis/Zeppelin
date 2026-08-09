@@ -5,22 +5,47 @@ import { getGuildPrefix } from "../../../utils/getGuildPrefix.js";
 import { parseAmountInput } from "../functions/parseAmountInput.js";
 import { playGame } from "../functions/playGame.js";
 import { runBlackjack } from "../functions/runBlackjack.js";
+import { runPvpGame } from "../functions/pvpChallenge.js";
 import { EconomyPluginType } from "../types.js";
 
 export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
   trigger: ["play"],
   permission: "can_play",
 
-  signature: {
-    game: ct.string(),
-    amount: ct.string(),
-  },
+  signature: [
+    {
+      game: ct.string(),
+      amount: ct.string(),
+    },
+    {
+      game: ct.string(),
+      user: ct.resolvedUser(),
+      amount: ct.string(),
+    },
+  ],
 
   async run({ pluginData, message, args }) {
     const config = pluginData.config.get();
     const game = config.games[args.game];
     if (!game) {
       void pluginData.state.common.sendErrorMessage(message, `Unknown game: ${args.game}`);
+      return;
+    }
+
+    if (game.type === "pvp") {
+      if (!args.user) {
+        void pluginData.state.common.sendErrorMessage(
+          message,
+          `**${args.game}** is a PvP game — use \`${getGuildPrefix(pluginData)}play ${args.game} @user <amount>\``,
+        );
+        return;
+      }
+      await runPvpGame(pluginData, message, args.game, game, args.user, args.amount);
+      return;
+    }
+
+    if (args.user) {
+      void pluginData.state.common.sendErrorMessage(message, `**${args.game}** isn't a PvP game.`);
       return;
     }
 

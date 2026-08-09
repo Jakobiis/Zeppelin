@@ -71,11 +71,26 @@ export const zEconomyBlackjackGame = z
     message: "max_bet must be greater than or equal to min_bet",
   });
 
+// A "pvp" game: two players challenge each other (with a Discord ping + Accept/Decline buttons) and, once
+// accepted, both stake `amount` — the loser's stake goes to the winner, a tie/timeout refunds both. `variant`
+// picks which actual game is played. Played with `!play <game> @user <amount>`.
+export const zEconomyPvpGame = z
+  .strictObject({
+    type: z.literal("pvp"),
+    variant: z.enum(["rock_paper_scissors", "dice_duel", "tic_tac_toe"]),
+    ...zGameCommon,
+    min_bet: z.number().int().positive(),
+    max_bet: z.number().int().positive(),
+  })
+  .refine((game) => game.max_bet >= game.min_bet, {
+    message: "max_bet must be greater than or equal to min_bet",
+  });
+
 // Existing configs predate the `type` field (only wager games existed), so default it to "wager" when omitted
 // rather than making it a breaking change.
 export const zEconomyGame = z.preprocess(
   (value) => (value && typeof value === "object" && !("type" in value) ? { ...value, type: "wager" } : value),
-  z.discriminatedUnion("type", [zEconomyWagerGame, zEconomyRewardGame, zEconomyBlackjackGame]),
+  z.discriminatedUnion("type", [zEconomyWagerGame, zEconomyRewardGame, zEconomyBlackjackGame, zEconomyPvpGame]),
 );
 
 export const zEconomyGive = z.strictObject({

@@ -7,6 +7,7 @@ import { GamesCmd } from "./commands/GamesCmd.js";
 import { GiveCmd } from "./commands/GiveCmd.js";
 import { LeaderboardCmd } from "./commands/LeaderboardCmd.js";
 import { PlayCmd } from "./commands/PlayCmd.js";
+import { PvpToggleCmd } from "./commands/PvpToggleCmd.js";
 import { TradeBackCmd } from "./commands/TradeBackCmd.js";
 import { TradeCmd } from "./commands/TradeCmd.js";
 import { WorkCmd } from "./commands/WorkCmd.js";
@@ -51,6 +52,7 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
     GiveCmd,
     LeaderboardCmd,
     PlayCmd,
+    PvpToggleCmd,
     TradeCmd,
     TradeBackCmd,
     WorkCmd,

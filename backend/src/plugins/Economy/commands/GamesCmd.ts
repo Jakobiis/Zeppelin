@@ -6,6 +6,12 @@ import { getGuildPrefix } from "../../../utils/getGuildPrefix.js";
 import { formatRewardAmount, formatWinMultiplier } from "../functions/numberOrRange.js";
 import { EconomyPluginType } from "../types.js";
 
+const PVP_VARIANT_NAMES = {
+  rock_paper_scissors: "Rock Paper Scissors",
+  dice_duel: "Dice Duel",
+  tic_tac_toe: "Tic Tac Toe",
+};
+
 export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
   trigger: ["games"],
   permission: "can_view",
@@ -37,6 +43,11 @@ export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
 
       if (game.type === "blackjack") {
         return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${game.min_bet}-${game.max_bet} ${config.currency_name}${cooldownText}`;
+      }
+
+      if (game.type === "pvp") {
+        const variantName = PVP_VARIANT_NAMES[game.variant];
+        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} @user <amount>\`) — ${variantName}, bet ${game.min_bet}-${game.max_bet} ${config.currency_name}${cooldownText}`;
       }
 
       const winPercent = Math.round(game.win_chance * 100);

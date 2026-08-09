@@ -7,6 +7,12 @@ import { EconomyPluginType } from "../types.js";
 import { buildCoinsSourceLines } from "./buildCoinsSourceLines.js";
 import { formatRewardAmount, formatWinMultiplier } from "./numberOrRange.js";
 
+const PVP_VARIANT_NAMES = {
+    rock_paper_scissors: "Rock Paper Scissors",
+    dice_duel: "Dice Duel",
+    tic_tac_toe: "Tic Tac Toe",
+};
+
 export async function buildEconomyInfoEmbed(
     pluginData: GuildPluginData<EconomyPluginType>,
     message: OmitPartialGroupDMChannel<Message>,
@@ -18,6 +24,7 @@ export async function buildEconomyInfoEmbed(
     const hasWagerGames = gameEntries.some(([, game]) => game.type === "wager");
     const hasRewardGames = gameEntries.some(([, game]) => game.type === "reward");
     const hasBlackjackGames = gameEntries.some(([, game]) => game.type === "blackjack");
+    const hasPvpGames = gameEntries.some(([, game]) => game.type === "pvp");
 
     const sections: string[] = [
         `${emojiPrefix}**${config.currency_name}** is this server's currency. Check your balance, trade for it, and wager it on games below.`,
@@ -43,6 +50,10 @@ export async function buildEconomyInfoEmbed(
     }
     if (hasRewardGames) {
         commandLines.push(`\`${prefix}work\` — claim a free, cooldown-gated payout`);
+    }
+    if (hasPvpGames) {
+        commandLines.push(`\`${prefix}play <game> @user <amount|all>\` — challenge another user for ${config.currency_name}`);
+        commandLines.push(`\`${prefix}pvp\` — toggle whether you can be challenged to PvP games`);
     }
     if (config.trade) {
         commandLines.push(`\`${prefix}trade <amount|all>\` — trade points for ${config.currency_name}`);
@@ -74,6 +85,11 @@ export async function buildEconomyInfoEmbed(
 
             if (game.type === "blackjack") {
                 return `${emoji}**${label}** (\`${prefix}play ${gameName} <amount>\`) — standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${game.min_bet}-${game.max_bet}${cooldownText}`;
+            }
+
+            if (game.type === "pvp") {
+                const variantName = PVP_VARIANT_NAMES[game.variant];
+                return `${emoji}**${label}** (\`${prefix}play ${gameName} @user <amount>\`) — ${variantName}, bet ${game.min_bet}-${game.max_bet}${cooldownText}`;
             }
 
             const winPercent = Math.round(game.win_chance * 100);
