@@ -17,6 +17,10 @@ const WIN_LINES = [
 
 type Cell = "X" | "O" | null;
 
+// Chance the bot skips its win/block check on a given move and just plays positionally instead — without this,
+// the heuristic below never misses a win or a block, so a player could at best force a draw and never actually win.
+const MISTAKE_CHANCE = 0.15;
+
 function checkWinner(board: Cell[]): "X" | "O" | null {
   for (const [a, b, c] of WIN_LINES) {
     if (board[a] && board[a] === board[b] && board[a] === board[c]) {
@@ -27,23 +31,26 @@ function checkWinner(board: Cell[]): "X" | "O" | null {
 }
 
 /** Simple heuristic, not a full minimax: take a winning move if there is one, block the human's winning move if
- * there is one, otherwise prefer the center, then a corner, then whatever's left. */
+ * there is one, otherwise prefer the center, then a corner, then whatever's left. Occasionally (see
+ * MISTAKE_CHANCE) skips straight to the positional fallback, giving the player a real shot at winning. */
 function pickBotMove(board: Cell[], botSymbol: "X" | "O", humanSymbol: "X" | "O"): number {
   const empty: number[] = [];
   board.forEach((cell, i) => {
     if (cell === null) empty.push(i);
   });
 
-  for (const i of empty) {
-    const copy = [...board];
-    copy[i] = botSymbol;
-    if (checkWinner(copy) === botSymbol) return i;
-  }
+  if (Math.random() >= MISTAKE_CHANCE) {
+    for (const i of empty) {
+      const copy = [...board];
+      copy[i] = botSymbol;
+      if (checkWinner(copy) === botSymbol) return i;
+    }
 
-  for (const i of empty) {
-    const copy = [...board];
-    copy[i] = humanSymbol;
-    if (checkWinner(copy) === humanSymbol) return i;
+    for (const i of empty) {
+      const copy = [...board];
+      copy[i] = humanSymbol;
+      if (checkWinner(copy) === humanSymbol) return i;
+    }
   }
 
   if (empty.includes(4)) return 4;

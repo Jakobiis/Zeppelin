@@ -90,14 +90,15 @@ export async function runPvpVsBot(
   // "loss" — the bet was already deducted up front and isn't returned; nothing left to settle
 
   const balanceAfter = await pluginData.state.counters.getCounterValue(config.counter_name, null, playerId);
-  const resultTag = outcome.type === "win" ? "Won" : outcome.type === "push" ? "Push" : "Lost";
+  const resultTag = outcome.type === "win" ? "🏆 Won" : outcome.type === "push" ? "🤝 Push" : "💀 Lost";
 
   await message.channel.send({
     embeds: [
       new EmbedBuilder()
         .setColor(0x0159b2)
+        .setTitle("Final Balance")
         .setDescription(
-          `<@${playerId}>: ${emojiPrefix}**${balanceAfter}** ${config.currency_name} (${resultTag})`,
+          `${resultTag} — <@${playerId}>'s balance: ${emojiPrefix}**${balanceAfter}** ${config.currency_name}`,
         ),
     ],
   });

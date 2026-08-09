@@ -195,16 +195,16 @@ export async function runPvpGame(
   const opponentBalanceAfter = await pluginData.state.counters.getCounterValue(config.counter_name, null, opponent.id);
 
   const resultTag = (userId: string): string => {
-    if (outcome.type === "push") return "Push";
-    return outcome.winnerId === userId ? "Won" : "Lost";
+    if (outcome.type === "push") return "🤝 Push";
+    return outcome.winnerId === userId ? "🏆 Won" : "💀 Lost";
   };
 
   const balanceLines = [
-    `<@${challengerId}>: ${emojiPrefix}**${challengerBalanceAfter}** ${config.currency_name} (${resultTag(challengerId)})`,
-    `<@${opponent.id}>: ${emojiPrefix}**${opponentBalanceAfter}** ${config.currency_name} (${resultTag(opponent.id)})`,
+    `${resultTag(challengerId)} — <@${challengerId}>'s balance: ${emojiPrefix}**${challengerBalanceAfter}** ${config.currency_name}`,
+    `${resultTag(opponent.id)} — <@${opponent.id}>'s balance: ${emojiPrefix}**${opponentBalanceAfter}** ${config.currency_name}`,
   ];
 
   await message.channel.send({
-    embeds: [new EmbedBuilder().setColor(0x0159b2).setDescription(balanceLines.join("\n"))],
+    embeds: [new EmbedBuilder().setColor(0x0159b2).setTitle("Final Balances").setDescription(balanceLines.join("\n"))],
   });
 }
