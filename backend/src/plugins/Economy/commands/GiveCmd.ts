@@ -45,13 +45,21 @@ export const GiveCmd = guildPluginMessageCommand<EconomyPluginType>()({
     }
 
     const emojiPrefix = config.currency_emoji ? `${config.currency_emoji} ` : "";
-    const feeText = result.fee > 0 ? ` (**${formatAmount(result.fee)}** ${config.currency_name} fee taken)` : "";
 
     const embed = new EmbedBuilder()
       .setColor(0x0159b2)
-      .setDescription(
-        `You gave ${emojiPrefix}**${formatAmount(result.amountSent)}** ${config.currency_name} to <@!${args.user.id}>${feeText}. They received ${emojiPrefix}**${formatAmount(result.amountReceived)}** ${config.currency_name}.\nYour new balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`,
+      .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
+      .setTitle("Gift Sent")
+      .setDescription(`To <@${args.user.id}>`)
+      .addFields(
+        { name: "Sent", value: `${emojiPrefix}**${formatAmount(result.amountSent)}**`, inline: true },
+        { name: "They Received", value: `${emojiPrefix}**${formatAmount(result.amountReceived)}**`, inline: true },
+        { name: "Your Balance", value: `${emojiPrefix}**${formatAmount(result.newBalance)}**`, inline: true },
       );
+
+    if (result.fee > 0) {
+      embed.setFooter({ text: `${formatAmount(result.fee)} ${config.currency_name} fee applied` });
+    }
 
     await message.channel.send({ embeds: [embed] });
   },

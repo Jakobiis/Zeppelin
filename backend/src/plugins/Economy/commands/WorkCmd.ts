@@ -33,10 +33,12 @@ export const WorkCmd = guildPluginMessageCommand<EconomyPluginType>()({
 
     const embed = new EmbedBuilder()
       .setColor(result.win ? 0x4caf50 : 0x99aab5)
+      .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
+      .setTitle(label)
       .setDescription(
         result.win
-          ? `You did **${label}** and earned ${emojiPrefix}**${formatAmount(result.amountChanged)}** ${config.currency_name}!\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`
-          : `You did **${label}** but came up empty this time.\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`,
+          ? `Earned ${emojiPrefix}**${formatAmount(result.amountChanged)}** ${config.currency_name}!\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`
+          : `Came up empty this time.\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`,
       );
 
     await message.channel.send({ embeds: [embed] });

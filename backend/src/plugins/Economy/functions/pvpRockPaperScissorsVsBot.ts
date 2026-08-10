@@ -17,6 +17,7 @@ export async function playRockPaperScissorsVsBot(ctx: PvpBotMatchContext): Promi
   const buildEmbed = (description: string): EmbedBuilder =>
     new EmbedBuilder()
       .setColor(0x0159b2)
+      .setAuthor({ name: ctx.player.username, iconURL: ctx.player.displayAvatarURL() })
       .setTitle(`${ctx.label} — Rock Paper Scissors vs Bot`)
       .setDescription(description);
 

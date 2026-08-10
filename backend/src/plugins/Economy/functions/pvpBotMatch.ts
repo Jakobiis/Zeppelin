@@ -1,12 +1,15 @@
+import { User } from "discord.js";
 import { GuildPluginData } from "vety";
 import { EconomyPluginType } from "../types.js";
 import { PvpChannel } from "./pvpMatch.js";
 
 /** Same idea as PvpMatchContext, but for a solo player facing the bot instead of a second human — no
- * opponentId/escrow-for-two, since the bot has no balance of its own. */
+ * opponentId/escrow-for-two, since the bot has no balance of its own. Carries the full `player` User (not just
+ * their ID) so variant handlers can set the embed author (avatar + username) without an extra fetch. */
 export interface PvpBotMatchContext {
   pluginData: GuildPluginData<EconomyPluginType>;
   channel: PvpChannel;
+  player: User;
   playerId: string;
   amount: number;
   label: string;

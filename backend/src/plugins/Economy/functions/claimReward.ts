@@ -5,7 +5,7 @@ import { EconomyPluginType, zEconomyRewardGame } from "../types.js";
 import { checkCooldown } from "./checkCooldown.js";
 import { logGameHistory } from "./gameHistory.js";
 import { rollNumberOrRange } from "./numberOrRange.js";
-import { applyGameHold } from "./pendingBalance.js";
+import { applyGameHold, getSpendableBalance } from "./pendingBalance.js";
 
 export type ClaimRewardResult =
   | { type: "error"; message: string }
@@ -42,7 +42,7 @@ export async function claimReward(
       pluginData.state.lastPlayedAt.set(cooldownKey, Date.now());
     }
 
-    const newBalance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
+    const totalAfter = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
 
     await logGameHistory(pluginData, {
       userId,
@@ -51,8 +51,12 @@ export async function claimReward(
       outcome: win ? "win" : "loss",
       betAmount: 0,
       amountChanged,
-      balanceAfter: newBalance,
+      balanceAfter: totalAfter,
     });
+
+    // Reported balance excludes anything just put on hold, so the result embed doesn't show coins the player
+    // can't actually spend yet.
+    const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
 
     return { type: "result", win, amountChanged, newBalance };
   } finally {

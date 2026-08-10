@@ -148,7 +148,8 @@ export async function runBlackjack(
   const buildEmbed = (description: string): EmbedBuilder =>
     new EmbedBuilder()
       .setColor(0x0159b2)
-      .setTitle(`${label} — ${config.currency_name} Blackjack`)
+      .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
+      .setTitle(label)
       .setDescription(description);
 
   const buildButtons = (): ActionRowBuilder<ButtonBuilder> =>
@@ -196,7 +197,7 @@ export async function runBlackjack(
       }
     }
 
-    const newBalance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
+    const totalAfter = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
 
     await logGameHistory(pluginData, {
       userId,
@@ -205,9 +206,12 @@ export async function runBlackjack(
       outcome: initialOutcome === "player_blackjack" ? "win" : initialOutcome === "push_blackjack" ? "push" : "loss",
       betAmount: bet,
       amountChanged: payout - bet,
-      balanceAfter: newBalance,
+      balanceAfter: totalAfter,
     });
 
+    // Displayed balance excludes anything just put on hold, so the embed doesn't show coins the player can't
+    // actually spend yet.
+    const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
     const description = `${buildDescription({ revealDealer: true })}\n\n${resultText}\nNew balance: ${emojiPrefix}**${formatAmount(newBalance)}** ${config.currency_name}`;
 
     await message.channel.send({ embeds: [buildEmbed(description)] });
@@ -275,7 +279,9 @@ export async function runBlackjack(
           ? `-${emojiPrefix}${formatAmount(Math.abs(net))}`
           : "no change";
 
-    const newBalance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
+    // Displayed balance excludes anything just put on hold, so the embed doesn't show coins the player can't
+    // actually spend yet.
+    const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
     const description = `${buildDescription({ revealDealer: true, results })}\n\nNet: **${netText}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${formatAmount(newBalance)}** ${config.currency_name}`;
     const embed = buildEmbed(description);
 

@@ -70,7 +70,7 @@ export async function playGame(
       pluginData.state.lastPlayedAt.set(cooldownKey, Date.now());
     }
 
-    const newBalance = balance + amountChanged;
+    const totalAfter = balance + amountChanged;
     await logGameHistory(pluginData, {
       userId,
       gameName,
@@ -78,8 +78,12 @@ export async function playGame(
       outcome: win ? "win" : "loss",
       betAmount: bet,
       amountChanged,
-      balanceAfter: newBalance,
+      balanceAfter: totalAfter,
     });
+
+    // Reported balance excludes anything just put on hold, so the result embed doesn't show coins the player
+    // can't actually spend yet.
+    const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
 
     return { type: "result", win, amountChanged, newBalance, multiplier };
   } finally {

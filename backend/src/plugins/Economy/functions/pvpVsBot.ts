@@ -77,6 +77,7 @@ export async function runPvpVsBot(
   const ctx: PvpBotMatchContext = {
     pluginData,
     channel: message.channel,
+    player: message.author,
     playerId,
     amount,
     label,
@@ -100,7 +101,7 @@ export async function runPvpVsBot(
   }
   // "loss" — the bet was already deducted up front and isn't returned; nothing left to settle
 
-  const balanceAfter = await pluginData.state.counters.getCounterValue(config.counter_name, null, playerId);
+  const totalAfter = await pluginData.state.counters.getCounterValue(config.counter_name, null, playerId);
   const resultTag = outcome.type === "win" ? "🏆 Won" : outcome.type === "push" ? "🤝 Push" : "💀 Lost";
 
   const net = outcome.type === "win" ? amount : outcome.type === "loss" ? -amount : 0;
@@ -112,9 +113,14 @@ export async function runPvpVsBot(
     outcome: outcome.type,
     betAmount: amount,
     amountChanged: net,
-    balanceAfter,
+    balanceAfter: totalAfter,
     opponentId: "bot",
   });
+
+  // Displayed balance excludes anything just put on hold, so the embed doesn't show coins the player can't
+  // actually spend yet.
+  const { spendable: balanceAfter } = await getSpendableBalance(pluginData, config.counter_name, playerId);
+
   const netText =
     net > 0
       ? `+${emojiPrefix}**${formatAmount(net)}**`
@@ -126,9 +132,10 @@ export async function runPvpVsBot(
     embeds: [
       new EmbedBuilder()
         .setColor(0x0159b2)
+        .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
         .setTitle("Final Balance")
         .setDescription(
-          `${resultTag} — <@${playerId}>\n` +
+          `${resultTag}\n` +
             `Net: ${netText} ${config.currency_name}\n` +
             `New balance: ${emojiPrefix}**${formatAmount(balanceAfter)}** ${config.currency_name}`,
         ),

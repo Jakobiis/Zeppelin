@@ -57,7 +57,9 @@ export async function tradeCoins(
       await pluginData.state.counters.changeCounterValue(trade.points_counter_name, null, userId, -actualPointsCost);
       await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, coinsGained);
 
-      const newBalance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
+      // Excludes any unrelated active hold (e.g. from a recent gift), so the displayed balance only counts
+      // coins the user can actually spend.
+      const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
 
       return { type: "result", direction, spent: actualPointsCost, received: coinsGained, newBalance };
     }
@@ -74,7 +76,9 @@ export async function tradeCoins(
     await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, -amount);
     await pluginData.state.counters.changeCounterValue(trade.points_counter_name, null, userId, pointsGained);
 
-    const newBalance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
+    // Excludes any unrelated active hold (e.g. from a recent gift), so the displayed balance only counts
+    // coins the user can actually spend.
+    const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
 
     return { type: "result", direction, spent: amount, received: pointsGained, newBalance };
   } finally {

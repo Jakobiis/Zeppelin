@@ -97,7 +97,8 @@ export const GameHistoryCmd = guildPluginMessageCommand<EconomyPluginType>()({
 
       return new EmbedBuilder()
         .setColor(0x0159b2)
-        .setAuthor({ name: `${targetUser.username} — Game History`, iconURL: targetUser.displayAvatarURL() })
+        .setAuthor({ name: targetUser.username, iconURL: targetUser.displayAvatarURL() })
+        .setTitle("Game History")
         .setDescription(`${filterText}\n${summaryText}\n\n${lines.join("\n")}`)
         .setFooter({ text: `Page ${page}/${lastPage}` });
     };

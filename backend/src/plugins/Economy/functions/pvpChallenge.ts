@@ -252,9 +252,18 @@ export async function runPvpGame(
     `Net: ${formatNet(netFor(userId))} ${config.currency_name}\n` +
     `New balance: ${emojiPrefix}**${formatAmount(balance)}** ${config.currency_name}`;
 
+  // Displayed balances exclude anything just put on hold, so the embed doesn't show coins the winner can't
+  // actually spend yet.
+  const { spendable: challengerSpendableAfter } = await getSpendableBalance(
+    pluginData,
+    config.counter_name,
+    challengerId,
+  );
+  const { spendable: opponentSpendableAfter } = await getSpendableBalance(pluginData, config.counter_name, opponent.id);
+
   const description = [
-    playerBlock(challengerId, challengerBalanceAfter),
-    playerBlock(opponent.id, opponentBalanceAfter),
+    playerBlock(challengerId, challengerSpendableAfter),
+    playerBlock(opponent.id, opponentSpendableAfter),
   ].join("\n\n");
 
   await message.channel.send({

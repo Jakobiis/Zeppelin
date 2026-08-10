@@ -88,10 +88,12 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
 
     const embed = new EmbedBuilder()
       .setColor(result.win ? 0x4caf50 : 0xe53935)
+      .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
+      .setTitle(label)
       .setDescription(
         result.win
-          ? `🎉 You won on **${label}**${multiplierText}! +${emojiPrefix}**${formatAmount(result.amountChanged)}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`
-          : `💸 You lost on **${label}**. -${emojiPrefix}**${formatAmount(Math.abs(result.amountChanged))}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`,
+          ? `🎉 You won${multiplierText}! +${emojiPrefix}**${formatAmount(result.amountChanged)}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`
+          : `💸 You lost. -${emojiPrefix}**${formatAmount(Math.abs(result.amountChanged))}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`,
       );
 
     await message.channel.send({ embeds: [embed] });

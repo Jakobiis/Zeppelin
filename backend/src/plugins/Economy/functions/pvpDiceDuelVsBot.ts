@@ -25,6 +25,7 @@ export async function playDiceDuelVsBot(ctx: PvpBotMatchContext): Promise<PvpBot
 
   const embed = new EmbedBuilder()
     .setColor(0x0159b2)
+    .setAuthor({ name: ctx.player.username, iconURL: ctx.player.displayAvatarURL() })
     .setTitle(`${ctx.label} — Dice Duel vs Bot`)
     .setDescription(
       `<@${ctx.playerId}> rolled 🎲 **${playerRoll}**\n🤖 Bot rolled 🎲 **${botRoll}**\n\n${resultText}`,

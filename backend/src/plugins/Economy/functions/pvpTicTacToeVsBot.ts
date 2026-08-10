@@ -119,6 +119,7 @@ export async function playTicTacToeVsBot(ctx: PvpBotMatchContext): Promise<PvpBo
   const buildEmbed = (extra?: string): EmbedBuilder =>
     new EmbedBuilder()
       .setColor(0x0159b2)
+      .setAuthor({ name: ctx.player.username, iconURL: ctx.player.displayAvatarURL() })
       .setTitle(`${ctx.label} — Tic Tac Toe vs Bot`)
       .setDescription(buildDescription(extra));
 

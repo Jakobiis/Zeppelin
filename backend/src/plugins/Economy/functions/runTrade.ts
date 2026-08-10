@@ -43,6 +43,8 @@ export async function runTrade(
 
   const embed = new EmbedBuilder()
     .setColor(0x0159b2)
+    .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
+    .setTitle("Trade")
     .setDescription(
       result.direction === "buy"
         ? `Spent **${formatAmount(result.spent)}** points for ${emojiPrefix}**${formatAmount(result.received)}** ${config.currency_name}.\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`
