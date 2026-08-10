@@ -10,6 +10,7 @@ import {
 import moment from "moment-timezone";
 import { guildPluginMessageCommand } from "vety";
 import { MINUTES, noop } from "../../../utils.js";
+import { formatAmount } from "../functions/formatAmount.js";
 import { EconomyPluginType } from "../types.js";
 
 const PER_PAGE = 10;
@@ -47,7 +48,7 @@ export const LeaderboardCmd = guildPluginMessageCommand<EconomyPluginType>()({
             const lines = topValues.map((entry, i) => {
                 const rank = offset + i;
                 const label = medals[rank] ?? `**#${rank + 1}**`;
-                return `${label} <@!${entry.user_id}> — ${emojiPrefix}**${entry.value}** ${config.currency_name}`;
+                return `${label} <@!${entry.user_id}> — ${emojiPrefix}**${formatAmount(entry.value)}** ${config.currency_name}`;
             });
 
             return new EmbedBuilder()

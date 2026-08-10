@@ -3,7 +3,9 @@ import { z } from "zod";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
 import { EconomyPluginType, zEconomyRewardGame } from "../types.js";
 import { checkCooldown } from "./checkCooldown.js";
+import { logGameHistory } from "./gameHistory.js";
 import { rollNumberOrRange } from "./numberOrRange.js";
+import { applyGameHold } from "./pendingBalance.js";
 
 export type ClaimRewardResult =
   | { type: "error"; message: string }
@@ -32,11 +34,25 @@ export async function claimReward(
       await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, amountChanged);
     }
 
+    if (win && amountChanged > 0) {
+      await applyGameHold(pluginData, userId, amountChanged, game.hold);
+    }
+
     if (cooldownCheck.cooldownMs) {
       pluginData.state.lastPlayedAt.set(cooldownKey, Date.now());
     }
 
     const newBalance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
+
+    await logGameHistory(pluginData, {
+      userId,
+      gameName,
+      gameType: "reward",
+      outcome: win ? "win" : "loss",
+      betAmount: 0,
+      amountChanged,
+      balanceAfter: newBalance,
+    });
 
     return { type: "result", win, amountChanged, newBalance };
   } finally {

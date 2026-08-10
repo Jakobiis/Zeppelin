@@ -3,6 +3,8 @@ import { guildPluginMessageCommand } from "vety";
 import { commandTypeHelpers as ct } from "../../../commandTypes.js";
 import { MINUTES, noop } from "../../../utils.js";
 import { buildEconomyInfoEmbed } from "../functions/buildEconomyInfoEmbed.js";
+import { formatAmount } from "../functions/formatAmount.js";
+import { getSpendableBalance } from "../functions/pendingBalance.js";
 import { EconomyPluginType } from "../types.js";
 
 const INFO_BUTTON_TIMEOUT = 5 * MINUTES;
@@ -18,16 +20,27 @@ export const BalanceCmd = guildPluginMessageCommand<EconomyPluginType>()({
   async run({ pluginData, message, args }) {
     const config = pluginData.config.get();
     const targetUser = args.user ?? message.author;
-    const isSelf = targetUser.id === message.author.id;
 
-    const balance = await pluginData.state.counters.getCounterValue(config.counter_name, null, targetUser.id);
+    const { total, pending, spendable, pendingUnlocksAt } = await getSpendableBalance(
+      pluginData,
+      config.counter_name,
+      targetUser.id,
+    );
 
     const emojiPrefix = config.currency_emoji ? `${config.currency_emoji} ` : "";
-    const who = isSelf ? "You have" : `${targetUser.username} has`;
+    const pendingValue =
+      pending > 0 && pendingUnlocksAt
+        ? `${emojiPrefix}**${formatAmount(pending)}**\nUnlocks <t:${Math.floor(pendingUnlocksAt / 1000)}:R>`
+        : `${emojiPrefix}**${formatAmount(pending)}**`;
 
     const embed = new EmbedBuilder()
       .setColor(0x0159b2)
-      .setDescription(`${who} ${emojiPrefix}**${balance}** ${config.currency_name}`);
+      .setAuthor({ name: targetUser.username, iconURL: targetUser.displayAvatarURL() })
+      .addFields(
+        { name: "Spendable", value: `${emojiPrefix}**${formatAmount(spendable)}**`, inline: true },
+        { name: "Pending", value: pendingValue, inline: true },
+        { name: "Total", value: `${emojiPrefix}**${formatAmount(total)}**`, inline: true },
+      );
 
     const infoCustomId = `economyInfo:${message.id}`;
     const infoRow = new ActionRowBuilder<ButtonBuilder>().addComponents(

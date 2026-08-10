@@ -1,7 +1,9 @@
 import { GuildPluginData } from "vety";
+import { convertDelayStringToMS } from "../../../utils.js";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
 import { EconomyPluginType } from "../types.js";
 import { checkCooldown } from "./checkCooldown.js";
+import { addPendingHold, getSpendableBalance, pendingHoldCountersConfigured } from "./pendingBalance.js";
 
 export type GiveResult =
   | { type: "error"; message: string }
@@ -29,6 +31,16 @@ export async function giveCoins(
     return { type: "error", message: cooldownCheck.message };
   }
 
+  // If a hold is configured, fail before touching any balances rather than silently giving out a
+  // gift that never actually gets tracked as held.
+  const holdDurationMs = config.give.hold_duration ? convertDelayStringToMS(config.give.hold_duration) : null;
+  if (config.give.hold_duration && (!holdDurationMs || !pendingHoldCountersConfigured(pluginData))) {
+    return {
+      type: "error",
+      message: "Gift holds are misconfigured on this server (missing the pending-hold counters) — ask an admin to fix this.",
+    };
+  }
+
   // Lock both accounts — a transfer touches two balances, and either side could otherwise race with a
   // concurrent play/trade/give involving the same user.
   const lock = await pluginData.locks.acquire([
@@ -36,7 +48,7 @@ export async function giveCoins(
     economyUserLock({ id: recipientId }),
   ]);
   try {
-    const balance = await pluginData.state.counters.getCounterValue(config.counter_name, null, giverId);
+    const { spendable: balance } = await getSpendableBalance(pluginData, config.counter_name, giverId);
     if (balance < amount) {
       return {
         type: "error",
@@ -50,6 +62,10 @@ export async function giveCoins(
     await pluginData.state.counters.changeCounterValue(config.counter_name, null, giverId, -amount);
     if (amountReceived > 0) {
       await pluginData.state.counters.changeCounterValue(config.counter_name, null, recipientId, amountReceived);
+
+      if (holdDurationMs) {
+        await addPendingHold(pluginData, recipientId, amountReceived, holdDurationMs);
+      }
     }
 
     if (cooldownCheck.cooldownMs) {

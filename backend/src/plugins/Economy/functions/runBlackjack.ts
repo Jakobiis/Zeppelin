@@ -30,7 +30,10 @@ import {
   stand,
 } from "./blackjackState.js";
 import { checkCooldown } from "./checkCooldown.js";
+import { formatAmount } from "./formatAmount.js";
+import { logGameHistory } from "./gameHistory.js";
 import { parseAmountInput } from "./parseAmountInput.js";
+import { applyGameHold, getSpendableBalance } from "./pendingBalance.js";
 import { EconomyPluginType, zEconomyBlackjackGame } from "../types.js";
 
 const ROUND_TIMEOUT = 3 * MINUTES;
@@ -55,7 +58,7 @@ export async function runBlackjack(
     return;
   }
 
-  const estimateBalance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
+  const { spendable: estimateBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
 
   let bet = parseAmountInput(amountArg, estimateBalance);
   if (bet === null) {
@@ -81,8 +84,8 @@ export async function runBlackjack(
   const chargeBet = async (amount: number): Promise<boolean> => {
     const lock = await pluginData.locks.acquire(economyUserLock({ id: userId }));
     try {
-      const balance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
-      if (balance < amount) {
+      const { spendable } = await getSpendableBalance(pluginData, config.counter_name, userId);
+      if (spendable < amount) {
         return false;
       }
       await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, -amount);
@@ -96,7 +99,7 @@ export async function runBlackjack(
   if (!charged) {
     void pluginData.state.common.sendErrorMessage(
       message,
-      `You don't have enough ${config.currency_name} for that bet (balance: ${estimateBalance})`,
+      `You don't have enough ${config.currency_name} for that bet (balance: ${formatAmount(estimateBalance)})`,
     );
     return;
   }
@@ -108,7 +111,7 @@ export async function runBlackjack(
   const state = dealInitialState(bet);
 
   const handResultText = (outcome: HandOutcome, hand: BlackjackHand): string => {
-    if (outcome === "win") return `Won +${emojiPrefix}${hand.bet}`;
+    if (outcome === "win") return `Won +${emojiPrefix}${formatAmount(hand.bet)}`;
     if (outcome === "push") return "Push";
     return "Lost";
   };
@@ -175,17 +178,37 @@ export async function runBlackjack(
       resultText = "Both you and the dealer got Blackjack — push!";
     } else if (initialOutcome === "player_blackjack") {
       payout = bet + Math.floor(bet * game.blackjack_payout);
-      resultText = `Blackjack! You win ${emojiPrefix}**${payout - bet}** ${config.currency_name}!`;
+      resultText = `Blackjack! You win ${emojiPrefix}**${formatAmount(payout - bet)}** ${config.currency_name}!`;
     } else {
       resultText = "Dealer has Blackjack — you lose.";
     }
 
     if (payout > 0) {
-      await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, payout);
+      const settleLock = await pluginData.locks.acquire(economyUserLock({ id: userId }));
+      try {
+        await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, payout);
+        const netWinnings = payout - bet;
+        if (netWinnings > 0) {
+          await applyGameHold(pluginData, userId, netWinnings, game.hold);
+        }
+      } finally {
+        settleLock.unlock();
+      }
     }
 
     const newBalance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
-    const description = `${buildDescription({ revealDealer: true })}\n\n${resultText}\nNew balance: ${emojiPrefix}**${newBalance}** ${config.currency_name}`;
+
+    await logGameHistory(pluginData, {
+      userId,
+      gameName,
+      gameType: "blackjack",
+      outcome: initialOutcome === "player_blackjack" ? "win" : initialOutcome === "push_blackjack" ? "push" : "loss",
+      betAmount: bet,
+      amountChanged: payout - bet,
+      balanceAfter: newBalance,
+    });
+
+    const description = `${buildDescription({ revealDealer: true })}\n\n${resultText}\nNew balance: ${emojiPrefix}**${formatAmount(newBalance)}** ${config.currency_name}`;
 
     await message.channel.send({ embeds: [buildEmbed(description)] });
     return;
@@ -207,21 +230,53 @@ export async function runBlackjack(
     const dealerTotal = handValue(state.dealerHand).total;
 
     const results: Array<{ outcome: HandOutcome; payout: number }> = [];
-    for (const hand of state.hands) {
-      const result = settleHand(hand, dealerTotal);
-      if (result.payout > 0) {
-        await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, result.payout);
+    const settleLock = await pluginData.locks.acquire(economyUserLock({ id: userId }));
+    try {
+      for (const hand of state.hands) {
+        const result = settleHand(hand, dealerTotal);
+        if (result.payout > 0) {
+          await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, result.payout);
+        }
+        results.push(result);
       }
-      results.push(result);
+
+      const netWinnings = results.reduce((sum, r, i) => sum + Math.max(0, r.payout - state.hands[i].bet), 0);
+      if (netWinnings > 0) {
+        await applyGameHold(pluginData, userId, netWinnings, game.hold);
+      }
+
+      // Logged one entry per hand (rather than aggregated) since split hands are functionally separate bets.
+      let runningBalance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
+      for (let i = results.length - 1; i >= 0; i--) {
+        const result = results[i];
+        const hand = state.hands[i];
+        await logGameHistory(pluginData, {
+          userId,
+          gameName,
+          gameType: "blackjack",
+          outcome: result.outcome === "lose" ? "loss" : result.outcome,
+          betAmount: hand.bet,
+          amountChanged: result.payout - hand.bet,
+          balanceAfter: runningBalance,
+        });
+        runningBalance -= result.payout;
+      }
+    } finally {
+      settleLock.unlock();
     }
 
     const totalBet = state.hands.reduce((sum, hand) => sum + hand.bet, 0);
     const totalPayout = results.reduce((sum, r) => sum + r.payout, 0);
     const net = totalPayout - totalBet;
-    const netText = net > 0 ? `+${emojiPrefix}${net}` : net < 0 ? `-${emojiPrefix}${Math.abs(net)}` : "no change";
+    const netText =
+      net > 0
+        ? `+${emojiPrefix}${formatAmount(net)}`
+        : net < 0
+          ? `-${emojiPrefix}${formatAmount(Math.abs(net))}`
+          : "no change";
 
     const newBalance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
-    const description = `${buildDescription({ revealDealer: true, results })}\n\nNet: **${netText}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${newBalance}** ${config.currency_name}`;
+    const description = `${buildDescription({ revealDealer: true, results })}\n\nNet: **${netText}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${formatAmount(newBalance)}** ${config.currency_name}`;
     const embed = buildEmbed(description);
 
     if (interaction) {

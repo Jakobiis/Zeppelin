@@ -3,6 +3,7 @@ import { guildPluginMessageCommand } from "vety";
 import { humanizeDuration } from "../../../humanizeDuration.js";
 import { convertDelayStringToMS } from "../../../utils.js";
 import { getGuildPrefix } from "../../../utils/getGuildPrefix.js";
+import { formatAmount } from "../functions/formatAmount.js";
 import { formatRewardAmount, formatWinMultiplier } from "../functions/numberOrRange.js";
 import { EconomyPluginType } from "../types.js";
 
@@ -42,16 +43,16 @@ export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
       }
 
       if (game.type === "blackjack") {
-        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${game.min_bet}-${game.max_bet} ${config.currency_name}${cooldownText}`;
+        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
       }
 
       if (game.type === "pvp") {
         const variantName = PVP_VARIANT_NAMES[game.variant];
-        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} [@user] <amount>\`) — ${variantName} vs another player, or vs the bot if you omit @user, bet ${game.min_bet}-${game.max_bet} ${config.currency_name}${cooldownText}`;
+        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} [@user] <amount>\`) — ${variantName} vs another player, or vs the bot if you omit @user, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
       }
 
       const winPercent = Math.round(game.win_chance * 100);
-      return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${game.min_bet}-${game.max_bet} ${config.currency_name}${cooldownText}`;
+      return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
     });
 
     const embed = new EmbedBuilder()

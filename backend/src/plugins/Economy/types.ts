@@ -1,5 +1,6 @@
 import { BasePluginType, pluginUtils } from "vety";
 import { z } from "zod";
+import { GuildEconomyGameHistory } from "../../data/GuildEconomyGameHistory.js";
 import { zBoundedCharacters, zBoundedRecord, zDelayString } from "../../utils.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { CountersPlugin } from "../Counters/CountersPlugin.js";
@@ -21,10 +22,22 @@ export const zNumberOrRange = z.union([
     }),
 ]);
 
+// Puts a portion of a game win on hold instead of it being immediately spendable — same underlying mechanism as
+// give.hold_duration (see below), just triggered by winning a game rather than receiving a gift.
+export const zGameHold = z.strictObject({
+  // Only apply the hold if the net winnings are at least this much. Omit to apply regardless of size.
+  min_amount: z.number().int().positive().nullable().default(null),
+  // Fraction (0-1) of the net winnings to hold. Omit to hold the entire win.
+  percentage: z.number().min(0).max(1).nullable().default(null),
+  // How long the held portion stays locked — required, since a hold block with no duration doesn't mean anything.
+  duration: zDelayString,
+});
+
 const zGameCommon = {
   label: zBoundedCharacters(0, 100).nullable().default(null),
   emoji: z.string().nullable().default(null),
   cooldown: zDelayString.nullable().default(null),
+  hold: zGameHold.nullable().default(null),
 };
 
 // A "wager" game: the player picks a bet amount (within min_bet-max_bet), win_chance decides whether they win,
@@ -99,6 +112,10 @@ export const zEconomyGive = z.strictObject({
   // the recipient — e.g. 0.1 = a 10% tax on transfers. The giver still loses the full amount; the recipient just
   // receives less than that.
   fee: z.number().min(0).max(1).nullable().default(null),
+  // How long a received gift stays "pending" before the recipient can spend it — it's added to their balance
+  // (and counts toward totals/the leaderboard) immediately, it just can't be wagered/traded/given away again
+  // until the hold clears. Null (default) means no hold — gifts are spendable immediately.
+  hold_duration: zDelayString.nullable().default(null),
 });
 
 export const zEconomyTrade = z.strictObject({
@@ -117,12 +134,15 @@ export const zEconomyConfig = z.strictObject({
   // The Counters plugin counter used to store each user's coin balance
   counter_name: zBoundedCharacters(1, 100).default("coins"),
   trade: zEconomyTrade.nullable().default(null),
-  give: zEconomyGive.default({ cooldown: null, fee: null }),
+  give: zEconomyGive.default({ cooldown: null, fee: null, hold_duration: null }),
   games: zBoundedRecord(z.record(zBoundedCharacters(1, 32), zEconomyGame), 0, MAX_GAMES).default({}),
   can_view: z.boolean().default(false),
   can_play: z.boolean().default(false),
   can_trade: z.boolean().default(false),
   can_give: z.boolean().default(false),
+  // Lets staff look up another user's game history (see GameHistoryCmd) — not granted by any default override,
+  // since it's an audit tool rather than a normal player-facing permission.
+  can_manage: z.boolean().default(false),
 });
 
 export interface EconomyPluginType extends BasePluginType {
@@ -130,6 +150,7 @@ export interface EconomyPluginType extends BasePluginType {
   state: {
     common: pluginUtils.PluginPublicInterface<typeof CommonPlugin>;
     counters: pluginUtils.PluginPublicInterface<typeof CountersPlugin>;
+    gameHistory: GuildEconomyGameHistory;
     // Per (gameName, userId) last-played timestamp (ms) for game cooldowns. In-memory only — resets on restart,
     // which is fine for an anti-spam cooldown rather than something the economy's integrity depends on.
     lastPlayedAt: Map<string, number>;

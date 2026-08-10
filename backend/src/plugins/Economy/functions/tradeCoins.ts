@@ -1,6 +1,7 @@
 import { GuildPluginData } from "vety";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
 import { EconomyPluginType } from "../types.js";
+import { getSpendableBalance } from "./pendingBalance.js";
 
 // Guards floor()/ceil() against float rounding noise (e.g. 3 * 0.1 === 0.30000000000000004) at exchange-rate
 // boundaries, so a user isn't shortchanged (or overcharged) by a fraction of a cent's worth of float error.
@@ -62,7 +63,7 @@ export async function tradeCoins(
     }
 
     // amount = coins the user wants to sell
-    const coinBalance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
+    const { spendable: coinBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
     if (coinBalance < amount) {
       return { type: "error", message: `You don't have that many ${config.currency_name} (balance: ${coinBalance})` };
     }

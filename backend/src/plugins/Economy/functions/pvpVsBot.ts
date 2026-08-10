@@ -1,9 +1,13 @@
 import { EmbedBuilder, Message, OmitPartialGroupDMChannel } from "discord.js";
 import { GuildPluginData } from "vety";
 import { z } from "zod";
+import { economyUserLock } from "../../../utils/lockNameHelpers.js";
 import { chargeBalance } from "./chargeBalance.js";
 import { checkCooldown } from "./checkCooldown.js";
+import { formatAmount } from "./formatAmount.js";
+import { logGameHistory } from "./gameHistory.js";
 import { parseAmountInput } from "./parseAmountInput.js";
+import { applyGameHold, getSpendableBalance } from "./pendingBalance.js";
 import { PlayPvpBotMatchFn, PvpBotMatchContext } from "./pvpBotMatch.js";
 import { playDiceDuelVsBot } from "./pvpDiceDuelVsBot.js";
 import { playRockPaperScissorsVsBot } from "./pvpRockPaperScissorsVsBot.js";
@@ -37,7 +41,7 @@ export async function runPvpVsBot(
     return;
   }
 
-  const balance = await pluginData.state.counters.getCounterValue(config.counter_name, null, playerId);
+  const { spendable: balance } = await getSpendableBalance(pluginData, config.counter_name, playerId);
 
   let amount = parseAmountInput(amountArg, balance);
   if (amount === null) {
@@ -61,7 +65,7 @@ export async function runPvpVsBot(
   if (!charged) {
     void pluginData.state.common.sendErrorMessage(
       message,
-      `You don't have enough ${config.currency_name} for that bet (balance: ${balance})`,
+      `You don't have enough ${config.currency_name} for that bet (balance: ${formatAmount(balance)})`,
     );
     return;
   }
@@ -83,7 +87,14 @@ export async function runPvpVsBot(
   const outcome = await VARIANT_HANDLERS[game.variant](ctx);
 
   if (outcome.type === "win") {
-    await pluginData.state.counters.changeCounterValue(config.counter_name, null, playerId, amount * 2);
+    const settleLock = await pluginData.locks.acquire(economyUserLock({ id: playerId }));
+    try {
+      await pluginData.state.counters.changeCounterValue(config.counter_name, null, playerId, amount * 2);
+      // amount*2 returns the player's own stake plus their winnings — only the winnings half is held
+      await applyGameHold(pluginData, playerId, amount, game.hold);
+    } finally {
+      settleLock.unlock();
+    }
   } else if (outcome.type === "push") {
     await pluginData.state.counters.changeCounterValue(config.counter_name, null, playerId, amount);
   }
@@ -93,7 +104,23 @@ export async function runPvpVsBot(
   const resultTag = outcome.type === "win" ? "🏆 Won" : outcome.type === "push" ? "🤝 Push" : "💀 Lost";
 
   const net = outcome.type === "win" ? amount : outcome.type === "loss" ? -amount : 0;
-  const netText = net > 0 ? `+${emojiPrefix}**${net}**` : net < 0 ? `-${emojiPrefix}**${Math.abs(net)}**` : `${emojiPrefix}**0**`;
+
+  await logGameHistory(pluginData, {
+    userId: playerId,
+    gameName,
+    gameType: "pvp",
+    outcome: outcome.type,
+    betAmount: amount,
+    amountChanged: net,
+    balanceAfter,
+    opponentId: "bot",
+  });
+  const netText =
+    net > 0
+      ? `+${emojiPrefix}**${formatAmount(net)}**`
+      : net < 0
+        ? `-${emojiPrefix}**${formatAmount(Math.abs(net))}**`
+        : `${emojiPrefix}**0**`;
 
   await message.channel.send({
     embeds: [
@@ -103,7 +130,7 @@ export async function runPvpVsBot(
         .setDescription(
           `${resultTag} — <@${playerId}>\n` +
             `Net: ${netText} ${config.currency_name}\n` +
-            `New balance: ${emojiPrefix}**${balanceAfter}** ${config.currency_name}`,
+            `New balance: ${emojiPrefix}**${formatAmount(balanceAfter)}** ${config.currency_name}`,
         ),
     ],
   });

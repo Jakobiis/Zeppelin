@@ -1,8 +1,10 @@
 import { PluginOverride, guildPlugin } from "vety";
+import { GuildEconomyGameHistory } from "../../data/GuildEconomyGameHistory.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { CountersPlugin } from "../Counters/CountersPlugin.js";
 import { BalanceCmd } from "./commands/BalanceCmd.js";
 import { EconomyHelpCmd } from "./commands/EconomyHelpCmd.js";
+import { GameHistoryCmd } from "./commands/GameHistoryCmd.js";
 import { GamesCmd } from "./commands/GamesCmd.js";
 import { GiveCmd } from "./commands/GiveCmd.js";
 import { LeaderboardCmd } from "./commands/LeaderboardCmd.js";
@@ -48,6 +50,7 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
   messageCommands: [
     BalanceCmd,
     EconomyHelpCmd,
+    GameHistoryCmd,
     GamesCmd,
     GiveCmd,
     LeaderboardCmd,
@@ -65,5 +68,6 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
   beforeStart(pluginData) {
     pluginData.state.common = pluginData.getPlugin(CommonPlugin);
     pluginData.state.counters = pluginData.getPlugin(CountersPlugin);
+    pluginData.state.gameHistory = GuildEconomyGameHistory.getGuildInstance(pluginData.guild.id);
   },
 });

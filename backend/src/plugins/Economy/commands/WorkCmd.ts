@@ -1,6 +1,7 @@
 import { EmbedBuilder } from "discord.js";
 import { guildPluginMessageCommand } from "vety";
 import { claimReward } from "../functions/claimReward.js";
+import { formatAmount } from "../functions/formatAmount.js";
 import { EconomyPluginType } from "../types.js";
 
 // The reward-type game the `work` command claims from — configure it under this exact key in `economy.games`.
@@ -34,8 +35,8 @@ export const WorkCmd = guildPluginMessageCommand<EconomyPluginType>()({
       .setColor(result.win ? 0x4caf50 : 0x99aab5)
       .setDescription(
         result.win
-          ? `You did **${label}** and earned ${emojiPrefix}**${result.amountChanged}** ${config.currency_name}!\nNew balance: ${emojiPrefix}**${result.newBalance}** ${config.currency_name}`
-          : `You did **${label}** but came up empty this time.\nNew balance: ${emojiPrefix}**${result.newBalance}** ${config.currency_name}`,
+          ? `You did **${label}** and earned ${emojiPrefix}**${formatAmount(result.amountChanged)}** ${config.currency_name}!\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`
+          : `You did **${label}** but came up empty this time.\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`,
       );
 
     await message.channel.send({ embeds: [embed] });

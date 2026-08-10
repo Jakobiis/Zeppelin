@@ -3,6 +3,7 @@ import { GuildPluginData } from "vety";
 import { humanizeDuration } from "../../../humanizeDuration.js";
 import { convertDelayStringToMS } from "../../../utils.js";
 import { EconomyPluginType } from "../types.js";
+import { formatAmount } from "./formatAmount.js";
 
 // The Automod rule that feeds the coins counter — there's no formal link between the two, this is just this
 // server's naming convention (mirrors how the `activity` counter is fed by `accumulate_activity`, see
@@ -34,7 +35,7 @@ export async function buildCoinsSourceLines(
       return [];
     }
 
-    const lines = [`+**${addToCounter.amount}** ${config.currency_name} per qualifying message`];
+    const lines = [`+**${formatAmount(addToCounter.amount)}** ${config.currency_name} per qualifying message`];
 
     if (rule.cooldown) {
       const cooldownMs = convertDelayStringToMS(rule.cooldown);
@@ -58,7 +59,7 @@ export async function buildCoinsSourceLines(
         }
         if (anyActive) {
           lines.push(
-            `Boosted right now: **${addToCounter.amount * totalMultiplier}** ${config.currency_name} per message`,
+            `Boosted right now: **${formatAmount(addToCounter.amount * totalMultiplier)}** ${config.currency_name} per message`,
           );
         }
       }

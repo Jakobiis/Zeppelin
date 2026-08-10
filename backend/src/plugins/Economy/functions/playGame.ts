@@ -3,7 +3,9 @@ import { z } from "zod";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
 import { EconomyPluginType, zEconomyWagerGame } from "../types.js";
 import { checkCooldown } from "./checkCooldown.js";
+import { logGameHistory } from "./gameHistory.js";
 import { rollNumberOrRange } from "./numberOrRange.js";
+import { applyGameHold, getSpendableBalance } from "./pendingBalance.js";
 
 export type PlayResult =
   | { type: "error"; message: string }
@@ -37,11 +39,11 @@ export async function playGame(
 
   const lock = await pluginData.locks.acquire(economyUserLock({ id: userId }));
   try {
-    const balance = await pluginData.state.counters.getCounterValue(config.counter_name, null, userId);
-    if (balance < bet) {
+    const { total: balance, spendable } = await getSpendableBalance(pluginData, config.counter_name, userId);
+    if (spendable < bet) {
       return {
         type: "error",
-        message: `You don't have enough ${config.currency_name} for that bet (balance: ${balance})`,
+        message: `You don't have enough ${config.currency_name} for that bet (balance: ${spendable})`,
       };
     }
 
@@ -60,11 +62,26 @@ export async function playGame(
 
     await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, amountChanged);
 
+    if (win && amountChanged > 0) {
+      await applyGameHold(pluginData, userId, amountChanged, game.hold);
+    }
+
     if (cooldownCheck.cooldownMs) {
       pluginData.state.lastPlayedAt.set(cooldownKey, Date.now());
     }
 
-    return { type: "result", win, amountChanged, newBalance: balance + amountChanged, multiplier };
+    const newBalance = balance + amountChanged;
+    await logGameHistory(pluginData, {
+      userId,
+      gameName,
+      gameType: "wager",
+      outcome: win ? "win" : "loss",
+      betAmount: bet,
+      amountChanged,
+      balanceAfter: newBalance,
+    });
+
+    return { type: "result", win, amountChanged, newBalance, multiplier };
   } finally {
     lock.unlock();
   }

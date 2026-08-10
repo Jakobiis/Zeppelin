@@ -1,8 +1,10 @@
 import { EmbedBuilder } from "discord.js";
 import { guildPluginMessageCommand } from "vety";
 import { commandTypeHelpers as ct } from "../../../commandTypes.js";
+import { formatAmount } from "../functions/formatAmount.js";
 import { giveCoins } from "../functions/giveCoins.js";
 import { parseAmountInput } from "../functions/parseAmountInput.js";
+import { getSpendableBalance } from "../functions/pendingBalance.js";
 import { EconomyPluginType } from "../types.js";
 
 export const GiveCmd = guildPluginMessageCommand<EconomyPluginType>()({
@@ -27,11 +29,7 @@ export const GiveCmd = guildPluginMessageCommand<EconomyPluginType>()({
       return;
     }
 
-    const currentBalance = await pluginData.state.counters.getCounterValue(
-      config.counter_name,
-      null,
-      message.author.id,
-    );
+    const { spendable: currentBalance } = await getSpendableBalance(pluginData, config.counter_name, message.author.id);
 
     const amount = parseAmountInput(args.amount, currentBalance);
     if (amount === null) {
@@ -47,12 +45,12 @@ export const GiveCmd = guildPluginMessageCommand<EconomyPluginType>()({
     }
 
     const emojiPrefix = config.currency_emoji ? `${config.currency_emoji} ` : "";
-    const feeText = result.fee > 0 ? ` (**${result.fee}** ${config.currency_name} fee taken)` : "";
+    const feeText = result.fee > 0 ? ` (**${formatAmount(result.fee)}** ${config.currency_name} fee taken)` : "";
 
     const embed = new EmbedBuilder()
       .setColor(0x0159b2)
       .setDescription(
-        `You gave ${emojiPrefix}**${result.amountSent}** ${config.currency_name} to <@!${args.user.id}>${feeText}. They received ${emojiPrefix}**${result.amountReceived}** ${config.currency_name}.\nYour new balance: ${emojiPrefix}**${result.newBalance}** ${config.currency_name}`,
+        `You gave ${emojiPrefix}**${formatAmount(result.amountSent)}** ${config.currency_name} to <@!${args.user.id}>${feeText}. They received ${emojiPrefix}**${formatAmount(result.amountReceived)}** ${config.currency_name}.\nYour new balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`,
       );
 
     await message.channel.send({ embeds: [embed] });

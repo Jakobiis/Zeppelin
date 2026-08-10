@@ -2,9 +2,13 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Message, Me
 import { GuildPluginData } from "vety";
 import { z } from "zod";
 import { MINUTES, noop } from "../../../utils.js";
+import { economyUserLock } from "../../../utils/lockNameHelpers.js";
 import { chargeBalance } from "./chargeBalance.js";
 import { checkCooldown } from "./checkCooldown.js";
+import { formatAmount } from "./formatAmount.js";
+import { logGameHistory } from "./gameHistory.js";
 import { parseAmountInput } from "./parseAmountInput.js";
+import { applyGameHold, getSpendableBalance } from "./pendingBalance.js";
 import { playDiceDuel } from "./pvpDiceDuel.js";
 import { PlayPvpMatchFn, PvpMatchContext } from "./pvpMatch.js";
 import { playRockPaperScissors } from "./pvpRockPaperScissors.js";
@@ -55,7 +59,7 @@ export async function runPvpGame(
     return;
   }
 
-  const challengerBalance = await pluginData.state.counters.getCounterValue(config.counter_name, null, challengerId);
+  const { spendable: challengerBalance } = await getSpendableBalance(pluginData, config.counter_name, challengerId);
 
   let amount = parseAmountInput(amountArg, challengerBalance);
   if (amount === null) {
@@ -78,13 +82,13 @@ export async function runPvpGame(
   if (challengerBalance < amount) {
     void pluginData.state.common.sendErrorMessage(
       message,
-      `You don't have enough ${config.currency_name} for that bet (balance: ${challengerBalance})`,
+      `You don't have enough ${config.currency_name} for that bet (balance: ${formatAmount(challengerBalance)})`,
     );
     return;
   }
 
   const idBase = `pvpChallenge:${message.id}`;
-  const challengeText = `<@${challengerId}> is challenging <@${opponent.id}> to **${label}** for ${emojiPrefix}**${amount}** ${config.currency_name}!`;
+  const challengeText = `<@${challengerId}> is challenging <@${opponent.id}> to **${label}** for ${emojiPrefix}**${formatAmount(amount)}** ${config.currency_name}!`;
 
   const buildChallengeEmbed = (extra?: string): EmbedBuilder =>
     new EmbedBuilder()
@@ -184,7 +188,14 @@ export async function runPvpGame(
     await pluginData.state.counters.changeCounterValue(config.counter_name, null, challengerId, amount);
     await pluginData.state.counters.changeCounterValue(config.counter_name, null, opponent.id, amount);
   } else {
-    await pluginData.state.counters.changeCounterValue(config.counter_name, null, outcome.winnerId, amount * 2);
+    const settleLock = await pluginData.locks.acquire(economyUserLock({ id: outcome.winnerId }));
+    try {
+      await pluginData.state.counters.changeCounterValue(config.counter_name, null, outcome.winnerId, amount * 2);
+      // amount*2 pays back the winner's own stake plus the loser's — only the loser's half is actual "winnings"
+      await applyGameHold(pluginData, outcome.winnerId, amount, game.hold);
+    } finally {
+      settleLock.unlock();
+    }
   }
 
   const challengerBalanceAfter = await pluginData.state.counters.getCounterValue(
@@ -193,6 +204,32 @@ export async function runPvpGame(
     challengerId,
   );
   const opponentBalanceAfter = await pluginData.state.counters.getCounterValue(config.counter_name, null, opponent.id);
+
+  const outcomeFor = (userId: string): "win" | "loss" | "push" => {
+    if (outcome.type === "push") return "push";
+    return outcome.winnerId === userId ? "win" : "loss";
+  };
+
+  await logGameHistory(pluginData, {
+    userId: challengerId,
+    gameName,
+    gameType: "pvp",
+    outcome: outcomeFor(challengerId),
+    betAmount: amount,
+    amountChanged: outcomeFor(challengerId) === "win" ? amount : outcomeFor(challengerId) === "loss" ? -amount : 0,
+    balanceAfter: challengerBalanceAfter,
+    opponentId: opponent.id,
+  });
+  await logGameHistory(pluginData, {
+    userId: opponent.id,
+    gameName,
+    gameType: "pvp",
+    outcome: outcomeFor(opponent.id),
+    betAmount: amount,
+    amountChanged: outcomeFor(opponent.id) === "win" ? amount : outcomeFor(opponent.id) === "loss" ? -amount : 0,
+    balanceAfter: opponentBalanceAfter,
+    opponentId: challengerId,
+  });
 
   const resultTag = (userId: string): string => {
     if (outcome.type === "push") return "🤝 Push";
@@ -205,15 +242,15 @@ export async function runPvpGame(
   };
 
   const formatNet = (net: number): string => {
-    if (net > 0) return `+${emojiPrefix}**${net}**`;
-    if (net < 0) return `-${emojiPrefix}**${Math.abs(net)}**`;
+    if (net > 0) return `+${emojiPrefix}**${formatAmount(net)}**`;
+    if (net < 0) return `-${emojiPrefix}**${formatAmount(Math.abs(net))}**`;
     return `${emojiPrefix}**0**`;
   };
 
   const playerBlock = (userId: string, balance: number): string =>
     `${resultTag(userId)} — <@${userId}>\n` +
     `Net: ${formatNet(netFor(userId))} ${config.currency_name}\n` +
-    `New balance: ${emojiPrefix}**${balance}** ${config.currency_name}`;
+    `New balance: ${emojiPrefix}**${formatAmount(balance)}** ${config.currency_name}`;
 
   const description = [
     playerBlock(challengerId, challengerBalanceAfter),

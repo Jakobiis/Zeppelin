@@ -5,6 +5,7 @@ import { convertDelayStringToMS } from "../../../utils.js";
 import { getGuildPrefix } from "../../../utils/getGuildPrefix.js";
 import { EconomyPluginType } from "../types.js";
 import { buildCoinsSourceLines } from "./buildCoinsSourceLines.js";
+import { formatAmount } from "./formatAmount.js";
 import { formatRewardAmount, formatWinMultiplier } from "./numberOrRange.js";
 
 const PVP_VARIANT_NAMES = {
@@ -66,8 +67,8 @@ export async function buildEconomyInfoEmbed(
     if (config.trade) {
         const sellRate = config.trade.coins_per_point_sell ?? config.trade.coins_per_point;
         const tradeLines = [
-            `Buy: 1 point → **${config.trade.coins_per_point}** ${config.currency_name}`,
-            `Sell: **${sellRate}** ${config.currency_name} → 1 point`,
+            `Buy: 1 point → **${formatAmount(config.trade.coins_per_point)}** ${config.currency_name}`,
+            `Sell: **${formatAmount(sellRate)}** ${config.currency_name} → 1 point`,
         ];
         sections.push(`**Trading**\n${tradeLines.join("\n")}`);
     }
@@ -86,16 +87,16 @@ export async function buildEconomyInfoEmbed(
             }
 
             if (game.type === "blackjack") {
-                return `${emoji}**${label}** (\`${prefix}play ${gameName} <amount>\`) — standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${game.min_bet}-${game.max_bet}${cooldownText}`;
+                return `${emoji}**${label}** (\`${prefix}play ${gameName} <amount>\`) — standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
             }
 
             if (game.type === "pvp") {
                 const variantName = PVP_VARIANT_NAMES[game.variant];
-                return `${emoji}**${label}** (\`${prefix}play ${gameName} [@user] <amount>\`) — ${variantName}, vs a player or the bot, bet ${game.min_bet}-${game.max_bet}${cooldownText}`;
+                return `${emoji}**${label}** (\`${prefix}play ${gameName} [@user] <amount>\`) — ${variantName}, vs a player or the bot, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
             }
 
             const winPercent = Math.round(game.win_chance * 100);
-            return `${emoji}**${label}** (\`${prefix}play ${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${game.min_bet}-${game.max_bet}${cooldownText}`;
+            return `${emoji}**${label}** (\`${prefix}play ${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
         });
         sections.push(`**Games**\n${gameLines.join("\n")}`);
     }

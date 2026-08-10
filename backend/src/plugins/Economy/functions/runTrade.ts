@@ -1,7 +1,9 @@
 import { EmbedBuilder, Message, OmitPartialGroupDMChannel } from "discord.js";
 import { GuildPluginData } from "vety";
 import { EconomyPluginType } from "../types.js";
+import { formatAmount } from "./formatAmount.js";
 import { parseAmountInput } from "./parseAmountInput.js";
+import { getSpendableBalance } from "./pendingBalance.js";
 import { TradeDirection, tradeCoins } from "./tradeCoins.js";
 
 /**
@@ -22,11 +24,7 @@ export async function runTrade(
   }
 
   const balanceCounterName = direction === "buy" ? config.trade.points_counter_name : config.counter_name;
-  const currentBalance = await pluginData.state.counters.getCounterValue(
-    balanceCounterName,
-    null,
-    message.author.id,
-  );
+  const { spendable: currentBalance } = await getSpendableBalance(pluginData, balanceCounterName, message.author.id);
 
   const amount = parseAmountInput(rawAmount, currentBalance);
   if (amount === null) {
@@ -47,8 +45,8 @@ export async function runTrade(
     .setColor(0x0159b2)
     .setDescription(
       result.direction === "buy"
-        ? `Spent **${result.spent}** points for ${emojiPrefix}**${result.received}** ${config.currency_name}.\nNew balance: ${emojiPrefix}**${result.newBalance}** ${config.currency_name}`
-        : `Sold ${emojiPrefix}**${result.spent}** ${config.currency_name} for **${result.received}** points.\nNew balance: ${emojiPrefix}**${result.newBalance}** ${config.currency_name}`,
+        ? `Spent **${formatAmount(result.spent)}** points for ${emojiPrefix}**${formatAmount(result.received)}** ${config.currency_name}.\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`
+        : `Sold ${emojiPrefix}**${formatAmount(result.spent)}** ${config.currency_name} for **${formatAmount(result.received)}** points.\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`,
     );
 
   await message.channel.send({ embeds: [embed] });

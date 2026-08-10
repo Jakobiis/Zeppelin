@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { zNumberOrRange } from "../types.js";
+import { formatAmount } from "./formatAmount.js";
 
 type NumberOrRange = z.infer<typeof zNumberOrRange>;
 
@@ -25,8 +26,8 @@ export function formatWinMultiplier(value: NumberOrRange): string {
 
 export function formatRewardAmount(value: NumberOrRange): string {
   if (typeof value === "number") {
-    return `${value}`;
+    return formatAmount(value);
   }
 
-  return `${value.min}-${value.max}`;
+  return `${formatAmount(value.min)}-${formatAmount(value.max)}`;
 }
