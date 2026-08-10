@@ -21,6 +21,7 @@ export function logMessageDeleteBulk(pluginData: GuildPluginData<LogsPluginType>
     createTypedTemplateSafeValueContainer({
       count: data.count,
       authorIds: data.authorIds,
+      authorMentions: data.authorIds.map((id) => `<@!${id}>`).join(", "),
       channel: channelToTemplateSafeChannel(data.channel),
       archiveUrl: data.archiveUrl,
     }),

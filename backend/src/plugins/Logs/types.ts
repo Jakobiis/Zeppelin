@@ -247,6 +247,7 @@ export const LogTypeData = z.object({
   [LogType.MESSAGE_DELETE_BULK]: z.object({
     count: z.number(),
     authorIds: z.array(z.string()),
+    authorMentions: z.string(),
     channel: z.instanceof(TemplateSafeChannel),
     archiveUrl: z.string(),
   }),

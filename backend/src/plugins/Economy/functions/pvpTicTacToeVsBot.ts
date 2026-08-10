@@ -19,7 +19,7 @@ type Cell = "X" | "O" | null;
 
 // Chance the bot skips its win/block check on a given move and just plays positionally instead — without this,
 // the heuristic below never misses a win or a block, so a player could at best force a draw and never actually win.
-const MISTAKE_CHANCE = 0.15;
+const MISTAKE_CHANCE = 0.05;
 
 function checkWinner(board: Cell[]): "X" | "O" | null {
   for (const [a, b, c] of WIN_LINES) {
@@ -30,27 +30,60 @@ function checkWinner(board: Cell[]): "X" | "O" | null {
   return null;
 }
 
-/** Simple heuristic, not a full minimax: take a winning move if there is one, block the human's winning move if
- * there is one, otherwise prefer the center, then a corner, then whatever's left. Occasionally (see
- * MISTAKE_CHANCE) skips straight to the positional fallback, giving the player a real shot at winning. */
-function pickBotMove(board: Cell[], botSymbol: "X" | "O", humanSymbol: "X" | "O"): number {
+function emptyCells(board: Cell[]): number[] {
   const empty: number[] = [];
   board.forEach((cell, i) => {
     if (cell === null) empty.push(i);
   });
+  return empty;
+}
+
+/**
+ * Full minimax over the (tiny, 9-cell) game tree — the previous version only checked one move ahead for an
+ * immediate win/block, which a player can reliably beat with a fork (two simultaneous threats it can't see
+ * coming, since it only ever blocks one at a time). Minimax can't be forked: from any reachable position it
+ * always picks the move that's least bad in the worst case, so a human can at best force a draw against it.
+ */
+function minimax(
+  board: Cell[],
+  turnSymbol: "X" | "O",
+  botSymbol: "X" | "O",
+  humanSymbol: "X" | "O",
+  depth: number,
+): { score: number; move: number | null } {
+  const winner = checkWinner(board);
+  if (winner === botSymbol) return { score: 10 - depth, move: null };
+  if (winner === humanSymbol) return { score: depth - 10, move: null };
+
+  const empty = emptyCells(board);
+  if (empty.length === 0) return { score: 0, move: null };
+
+  const maximizing = turnSymbol === botSymbol;
+  let bestScore = maximizing ? -Infinity : Infinity;
+  let bestMove = empty[0];
+
+  for (const i of empty) {
+    const copy = [...board];
+    copy[i] = turnSymbol;
+    const { score } = minimax(copy, turnSymbol === "X" ? "O" : "X", botSymbol, humanSymbol, depth + 1);
+
+    if (maximizing ? score > bestScore : score < bestScore) {
+      bestScore = score;
+      bestMove = i;
+    }
+  }
+
+  return { score: bestScore, move: bestMove };
+}
+
+/** Plays perfectly (via minimax) unless it rolls a deliberate mistake (see MISTAKE_CHANCE), in which case it
+ * falls back to a simple, non-lookahead positional pick so the player gets a genuine, if infrequent, shot at
+ * winning instead of the bot being flat-out unbeatable. */
+function pickBotMove(board: Cell[], botSymbol: "X" | "O", humanSymbol: "X" | "O"): number {
+  const empty = emptyCells(board);
 
   if (Math.random() >= MISTAKE_CHANCE) {
-    for (const i of empty) {
-      const copy = [...board];
-      copy[i] = botSymbol;
-      if (checkWinner(copy) === botSymbol) return i;
-    }
-
-    for (const i of empty) {
-      const copy = [...board];
-      copy[i] = humanSymbol;
-      if (checkWinner(copy) === humanSymbol) return i;
-    }
+    return minimax(board, botSymbol, botSymbol, humanSymbol, 0).move ?? empty[0];
   }
 
   if (empty.includes(4)) return 4;
