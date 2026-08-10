@@ -12,7 +12,7 @@ import { zBoundedCharacters, zBoundedRecord, zDelayString, zSnowflake } from "..
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import Timeout = NodeJS.Timeout;
 
-const MAX_COUNTERS = 5;
+const MAX_COUNTERS = 25;
 const MAX_TRIGGERS_PER_COUNTER = 5;
 const MAX_DECAY_ROLE_OVERRIDES = 10;
 const MAX_DECAY_AMOUNT_OVERRIDES = 10;
