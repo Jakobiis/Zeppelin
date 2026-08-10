@@ -152,10 +152,23 @@ export async function playTicTacToeVsBot(ctx: PvpBotMatchContext): Promise<PvpBo
       filter: (interaction) => interaction.customId.startsWith(idBase),
     });
 
-    const endWith = async (outcome: PvpBotMatchOutcome, extra: string): Promise<void> => {
+    // When ending as a direct result of a button click, we must acknowledge that click itself (via
+    // interaction.update) rather than editing the message through a separate REST call — otherwise Discord shows
+    // the clicking user "This interaction failed"/"didn't respond in time" even though the board did update.
+    // The timeout path (collector "end") has no interaction to acknowledge, so it falls back to a plain edit.
+    const endWith = async (
+      outcome: PvpBotMatchOutcome,
+      extra: string,
+      interaction?: MessageComponentInteraction,
+    ): Promise<void> => {
       settled = true;
       collector.stop();
-      await sentMessage.edit({ embeds: [buildEmbed(extra)], components: buildButtons(true) }).catch(noop);
+      const payload = { embeds: [buildEmbed(extra)], components: buildButtons(true) };
+      if (interaction) {
+        await interaction.update(payload).catch(noop);
+      } else {
+        await sentMessage.edit(payload).catch(noop);
+      }
       resolve(outcome);
     };
 
@@ -179,11 +192,11 @@ export async function playTicTacToeVsBot(ctx: PvpBotMatchContext): Promise<PvpBo
       board[index] = humanSymbol;
 
       if (checkWinner(board)) {
-        await endWith({ type: "win" }, `🎉 <@${ctx.playerId}> wins!`);
+        await endWith({ type: "win" }, `🎉 <@${ctx.playerId}> wins!`, interaction);
         return;
       }
       if (board.every((cell) => cell !== null)) {
-        await endWith({ type: "push" }, "It's a draw! Bet refunded.");
+        await endWith({ type: "push" }, "It's a draw! Bet refunded.", interaction);
         return;
       }
 
@@ -192,11 +205,11 @@ export async function playTicTacToeVsBot(ctx: PvpBotMatchContext): Promise<PvpBo
       board[pickBotMove(board, botSymbol, humanSymbol)] = botSymbol;
 
       if (checkWinner(board)) {
-        await endWith({ type: "loss" }, "🤖 The Bot wins!");
+        await endWith({ type: "loss" }, "🤖 The Bot wins!", interaction);
         return;
       }
       if (board.every((cell) => cell !== null)) {
-        await endWith({ type: "push" }, "It's a draw! Bet refunded.");
+        await endWith({ type: "push" }, "It's a draw! Bet refunded.", interaction);
         return;
       }
 
