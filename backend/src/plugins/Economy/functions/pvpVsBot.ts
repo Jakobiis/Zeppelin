@@ -92,13 +92,18 @@ export async function runPvpVsBot(
   const balanceAfter = await pluginData.state.counters.getCounterValue(config.counter_name, null, playerId);
   const resultTag = outcome.type === "win" ? "🏆 Won" : outcome.type === "push" ? "🤝 Push" : "💀 Lost";
 
+  const net = outcome.type === "win" ? amount : outcome.type === "loss" ? -amount : 0;
+  const netText = net > 0 ? `+${emojiPrefix}**${net}**` : net < 0 ? `-${emojiPrefix}**${Math.abs(net)}**` : `${emojiPrefix}**0**`;
+
   await message.channel.send({
     embeds: [
       new EmbedBuilder()
         .setColor(0x0159b2)
         .setTitle("Final Balance")
         .setDescription(
-          `${resultTag} — <@${playerId}>'s balance: ${emojiPrefix}**${balanceAfter}** ${config.currency_name}`,
+          `${resultTag} — <@${playerId}>\n` +
+            `Net: ${netText} ${config.currency_name}\n` +
+            `New balance: ${emojiPrefix}**${balanceAfter}** ${config.currency_name}`,
         ),
     ],
   });

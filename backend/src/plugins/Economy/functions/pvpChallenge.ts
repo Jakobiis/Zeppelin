@@ -199,12 +199,28 @@ export async function runPvpGame(
     return outcome.winnerId === userId ? "🏆 Won" : "💀 Lost";
   };
 
-  const balanceLines = [
-    `${resultTag(challengerId)} — <@${challengerId}>'s balance: ${emojiPrefix}**${challengerBalanceAfter}** ${config.currency_name}`,
-    `${resultTag(opponent.id)} — <@${opponent.id}>'s balance: ${emojiPrefix}**${opponentBalanceAfter}** ${config.currency_name}`,
-  ];
+  const netFor = (userId: string): number => {
+    if (outcome.type === "push") return 0;
+    return outcome.winnerId === userId ? amount : -amount;
+  };
+
+  const formatNet = (net: number): string => {
+    if (net > 0) return `+${emojiPrefix}**${net}**`;
+    if (net < 0) return `-${emojiPrefix}**${Math.abs(net)}**`;
+    return `${emojiPrefix}**0**`;
+  };
+
+  const playerBlock = (userId: string, balance: number): string =>
+    `${resultTag(userId)} — <@${userId}>\n` +
+    `Net: ${formatNet(netFor(userId))} ${config.currency_name}\n` +
+    `New balance: ${emojiPrefix}**${balance}** ${config.currency_name}`;
+
+  const description = [
+    playerBlock(challengerId, challengerBalanceAfter),
+    playerBlock(opponent.id, opponentBalanceAfter),
+  ].join("\n\n");
 
   await message.channel.send({
-    embeds: [new EmbedBuilder().setColor(0x0159b2).setTitle("Final Balances").setDescription(balanceLines.join("\n"))],
+    embeds: [new EmbedBuilder().setColor(0x0159b2).setTitle("Final Balances").setDescription(description)],
   });
 }
