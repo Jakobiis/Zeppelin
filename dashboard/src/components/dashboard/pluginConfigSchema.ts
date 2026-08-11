@@ -107,6 +107,34 @@ export function prettifyKey(key: string): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Builds a short "key: value · key: value" preview from an object's own leaf (string/number/boolean/scalar-array)
+// properties, in schema property order — used as the collapsed-state label for array items and record entries
+// so a collapsed override/rule/game doesn't just show a blank bar. Skips nested objects/arrays (like an
+// override's `config` block) since those don't summarize into a short string usefully.
+export function summarizeObjectValue(value: any, propsSchema: Record<string, any> | undefined): string {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) return "";
+
+  const parts: string[] = [];
+  for (const key of Object.keys(propsSchema ?? {})) {
+    if (parts.length >= 3) break;
+
+    const v = value[key];
+    if (v == null) continue;
+
+    if (typeof v === "string") {
+      if (v.trim() === "") continue;
+      parts.push(`${prettifyKey(key)}: ${v.length > 24 ? `${v.slice(0, 24)}…` : v}`);
+    } else if (typeof v === "number") {
+      parts.push(`${prettifyKey(key)}: ${v}`);
+    } else if (typeof v === "boolean") {
+      if (v) parts.push(prettifyKey(key));
+    } else if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string" || typeof x === "number")) {
+      parts.push(`${prettifyKey(key)}: ${v.slice(0, 2).join(", ")}${v.length > 2 ? "…" : ""}`);
+    }
+  }
+  return parts.join(" · ");
+}
+
 // Detects the common "a single T, or a list of T" pattern (e.g. override criteria like `channel: string |
 // string[]`) — a 2-branch union where one branch is a simple leaf type and the other is an array of that same
 // leaf type. Returns the leaf schema (used to render/default each item) or null if the shape doesn't match.

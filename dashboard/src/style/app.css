@@ -2,6 +2,15 @@
 @import "./base.css";
 @import "./splash.css";
 
+/* Self-hosted (no third-party CDN calls) — only the weights actually used by Tailwind's font-medium/
+   font-semibold/font-bold utilities, plus normal text, to avoid pulling in all 9 static weights. */
+@import "@fontsource/geist-sans/400.css";
+@import "@fontsource/geist-sans/500.css";
+@import "@fontsource/geist-sans/600.css";
+@import "@fontsource/geist-sans/700.css";
+@import "@fontsource/geist-mono/400.css";
+@import "@fontsource/geist-mono/500.css";
+
 @import "tailwindcss";
 @import "./theme.css";
 @import "vue-material-design-icons/styles.css";

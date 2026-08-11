@@ -1,8 +1,8 @@
 <template>
   <div>
-    <div v-if="label || isCollapsible" class="flex items-center gap-2">
+    <div v-if="label || showChevron || nullable" class="flex items-center gap-2">
       <button
-        v-if="isCollapsible"
+        v-if="showChevron"
         type="button"
         class="text-muted-foreground hover:text-foreground shrink-0 w-4"
         :aria-label="collapsed ? 'Expand' : 'Collapse'"
@@ -22,8 +22,8 @@
       <label
         v-if="label"
         class="font-medium text-sm"
-        :class="isCollapsible ? 'cursor-pointer select-none' : ''"
-        @click="isCollapsible && (collapsed = !collapsed)"
+        :class="showChevron ? 'cursor-pointer select-none' : ''"
+        @click="showChevron && (collapsed = !collapsed)"
       >{{ label }}</label>
 
       <button
@@ -98,7 +98,7 @@
         <PluginConfigField
           v-for="(propSchema, key) in innerSchema.properties"
           :key="key"
-          :class="isWide(propSchema, String(key)) ? 'col-span-full' : ''"
+          :class="[isWide(propSchema, String(key)) ? 'col-span-full' : '', String(key) === 'config' ? 'border-t border-border pt-3' : '']"
           :schema="propSchema"
           :field-key="String(key)"
           :label="prettifyKey(String(key))"
@@ -147,6 +147,7 @@
             </div>
             <div v-show="!isEntryCollapsed(entry.key)" class="mt-2">
               <PluginConfigField
+                no-header
                 :schema="innerSchema.additionalProperties"
                 :model-value="(modelValue ?? {})[entry.key]"
                 @update:model-value="(val) => updateObjectKey(entry.key, val)"
@@ -181,11 +182,13 @@
               >
                 <span class="inline-block transition-transform duration-150" :class="{ 'rotate-90': !isItemCollapsed(index) }">▸</span>
               </button>
-              <div class="flex-1"></div>
+              <span v-if="itemSummary(item)" class="flex-1 text-sm text-muted-foreground truncate">{{ itemSummary(item) }}</span>
+              <div v-else class="flex-1"></div>
               <button type="button" class="btn-sm btn-destructive shrink-0" @click="removeArrayItem(index)">Remove</button>
             </div>
             <div v-show="!isItemCollapsed(index)" class="mt-2">
               <PluginConfigField
+                no-header
                 :schema="innerSchema.items"
                 :model-value="item"
                 @update:model-value="(val) => updateArrayItem(index, val)"
@@ -286,6 +289,7 @@ import {
   isWide,
   prettifyKey,
   SpecialFieldKind,
+  summarizeObjectValue,
   unwrapNullable,
 } from "./pluginConfigSchema";
 import RoleChannelPickerField from "./RoleChannelPickerField.vue";
@@ -299,6 +303,10 @@ const props = defineProps<{
   label?: string;
   fieldKey?: string;
   forcedSpecialKind?: SpecialFieldKind | null;
+  // Set by a parent that's already rendering its own collapse chevron for this field (e.g. a record entry or
+  // array item) — suppresses this instance's own chevron/collapse so expanding the parent's chevron doesn't
+  // reveal a second, redundant one before you see any actual content.
+  noHeader?: boolean;
   modelValue: any;
 }>();
 
@@ -321,7 +329,9 @@ const multiLeafSchema = computed(() => (kind.value === "union" ? detectMultiLeaf
 const specialKind = computed(() => props.forcedSpecialKind ?? detectSpecialFieldKind(props.fieldKey, props.schema));
 
 const isCollapsible = computed(() => kind.value === "object" || kind.value === "array" || kind.value === "record");
-const collapsed = ref(true);
+const showChevron = computed(() => isCollapsible.value && !props.noHeader);
+// Starts expanded when noHeader is set, since there'd otherwise be no chevron left to un-collapse it with.
+const collapsed = ref(!props.noHeader);
 
 // A labeled, non-nullable boolean renders its checkbox in the header row (next to the label) instead of on its
 // own line below — this is what lets a page full of toggles stay compact instead of every single one costing
@@ -400,6 +410,17 @@ function renameRecordKey(oldKey: string, newKey: string) {
 // --- arrays ---
 
 const itemsAreSimple = computed(() => isSimple(innerSchema.value?.items));
+
+// Schema for a complex item's own properties, used only to order/pick which values show up in the collapsed
+// summary below — falls back to {} (empty summary) for item shapes that aren't a plain object (e.g. a union).
+const arrayItemsPropsSchema = computed(() => {
+  const items = innerSchema.value?.items;
+  return items ? unwrapNullable(items).inner?.properties : undefined;
+});
+
+function itemSummary(item: any): string {
+  return summarizeObjectValue(item, arrayItemsPropsSchema.value);
+}
 
 // Array items are only identified by index, which shifts on removal — track a stable synthetic id per item
 // (in step with add/remove) so each item's collapse state doesn't jump to a different item after a removal.

@@ -44,7 +44,7 @@
   --sidebar-accent-foreground: oklch(0.2571 0.1161 272.2400);
   --sidebar-border: oklch(0.9200 0 0);
   --sidebar-ring: oklch(0.5144 0.1605 267.4400);
-  --font-sans: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Geist Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-serif: "Noto Serif Georgian", ui-serif, serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --radius: 0.5rem;
