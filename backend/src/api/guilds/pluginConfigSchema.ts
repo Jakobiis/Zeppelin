@@ -5,15 +5,17 @@ import { z } from "zod";
 import { validateGuildConfig } from "../../configValidator.js";
 import { Configs } from "../../data/Configs.js";
 import { availableGuildPlugins } from "../../plugins/availablePlugins.js";
+import { buildOverrideSchema } from "../../pluginOverridesSchema.js";
 import { loadYamlSafely } from "../../utils/loadYamlSafely.js";
 import { requireGuildPermission } from "../permissions.js";
 import { clientError, ok } from "../responses.js";
 
 /**
- * Serves a single plugin's config as JSON Schema + the guild's current value for that plugin, and accepts writes
+ * Serves a single plugin's config (+ overrides) as JSON Schema + the guild's current value, and accepts writes
  * back — a structured alternative to hand-editing the whole guild's raw YAML for plugins the dashboard knows how
- * to render as a form. Storage is still the same YAML config document under the hood (this just reads/writes one
- * `plugins.<name>.config` key of it) so it stays fully compatible with the existing raw YAML editor.
+ * to render as a form. Storage is still the same YAML config document under the hood (this just reads/writes the
+ * `plugins.<name>.config` / `plugins.<name>.overrides` keys of it) so it stays fully compatible with the existing
+ * raw YAML editor.
  *
  * Pilot scope: any plugin's schema/value can technically be fetched here, but the dashboard frontend currently
  * only builds a form for `welcome_message` — everything else still goes through the YAML editor.
@@ -26,6 +28,20 @@ export function initGuildPluginConfigSchemaAPI(router: express.Router) {
     return availableGuildPlugins.find((p) => p.plugin.name === pluginName) ?? null;
   }
 
+  // config + overrides together, so the dashboard's generic form renderer can render both from one schema/value
+  // pair without needing to know anything plugin-specific.
+  function buildCombinedSchema(configSchema: z.ZodType) {
+    return z.object({
+      config: configSchema,
+      overrides: z
+        .array(buildOverrideSchema(configSchema))
+        .default([])
+        .describe(
+          "Applies different config values for specific channels, categories, roles, permission levels, users, or threads. Each override's own config only needs to list the values it changes — everything else keeps using the base config above.",
+        ),
+    });
+  }
+
   pluginConfigRouter.get(
     "/:guildId/config-schema/:pluginName",
     requireGuildPermission(ApiPermissions.ReadConfig),
@@ -35,14 +51,18 @@ export function initGuildPluginConfigSchemaAPI(router: express.Router) {
         return clientError(res, "Unknown plugin");
       }
 
-      const schema = z.toJSONSchema(pluginInfo.docs.configSchema, { io: "input", cycles: "ref" });
+      const combinedSchema = buildCombinedSchema(pluginInfo.docs.configSchema);
+      const schema = z.toJSONSchema(combinedSchema, { io: "input", cycles: "ref" });
 
       const currentConfig = await configs.getActiveByKey(`guild-${req.params.guildId}`);
       const parsedYaml = currentConfig ? loadYamlSafely(currentConfig.config) : {};
-      const rawPluginConfig = parsedYaml?.plugins?.[req.params.pluginName]?.config ?? {};
+      const rawPluginEntry = parsedYaml?.plugins?.[req.params.pluginName] ?? {};
 
-      const parseResult = pluginInfo.docs.configSchema.safeParse(rawPluginConfig);
-      const value = parseResult.success ? parseResult.data : pluginInfo.docs.configSchema.parse({});
+      const parseResult = combinedSchema.safeParse({
+        config: rawPluginEntry.config ?? {},
+        overrides: rawPluginEntry.overrides ?? [],
+      });
+      const value = parseResult.success ? parseResult.data : combinedSchema.parse({ config: {}, overrides: [] });
 
       res.json({ schema, value });
     },
@@ -57,7 +77,8 @@ export function initGuildPluginConfigSchemaAPI(router: express.Router) {
         return clientError(res, "Unknown plugin");
       }
 
-      const parseResult = pluginInfo.docs.configSchema.safeParse(req.body.value);
+      const combinedSchema = buildCombinedSchema(pluginInfo.docs.configSchema);
+      const parseResult = combinedSchema.safeParse(req.body.value);
       if (!parseResult.success) {
         return res.status(422).json({ errors: parseResult.error.issues.map((issue) => issue.message) });
       }
@@ -74,7 +95,15 @@ export function initGuildPluginConfigSchemaAPI(router: express.Router) {
       ) {
         parsedYaml.plugins[req.params.pluginName] = {};
       }
-      parsedYaml.plugins[req.params.pluginName].config = parseResult.data;
+
+      // Only touches the config/overrides keys — any other sibling key on this plugin's entry (e.g.
+      // replaceDefaultOverrides) is left untouched.
+      parsedYaml.plugins[req.params.pluginName].config = parseResult.data.config;
+      if (parseResult.data.overrides && parseResult.data.overrides.length > 0) {
+        parsedYaml.plugins[req.params.pluginName].overrides = parseResult.data.overrides;
+      } else {
+        delete parsedYaml.plugins[req.params.pluginName].overrides;
+      }
 
       // Re-validated as a full guild config (not just this plugin in isolation) since plugin configs can have
       // cross-plugin implications — same safety net the raw YAML editor's save path uses.

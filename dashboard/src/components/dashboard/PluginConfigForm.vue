@@ -7,14 +7,28 @@
         <pre v-for="(error, i) in errors" :key="i" class="text-sm whitespace-pre-wrap">{{ error }}</pre>
       </div>
 
-      <PluginConfigField
-        v-for="(propSchema, key) in schema?.properties ?? {}"
-        :key="key"
-        :schema="propSchema"
-        :label="prettifyKey(String(key))"
-        :model-value="value[key]"
-        @update:model-value="(val) => (value[key] = val)"
-      />
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-3 items-start mb-6">
+        <PluginConfigField
+          v-for="(propSchema, key) in configSchema?.properties ?? {}"
+          :key="key"
+          :class="isWide(propSchema) ? 'col-span-full' : ''"
+          :schema="propSchema"
+          :field-key="String(key)"
+          :label="prettifyKey(String(key))"
+          :model-value="value.config[key]"
+          @update:model-value="(val) => (value.config[key] = val)"
+        />
+      </div>
+
+      <div v-if="overridesSchema" class="border-t border-border pt-4 mb-4">
+        <PluginConfigField
+          :schema="overridesSchema"
+          field-key="overrides"
+          label="Overrides"
+          :model-value="value.overrides"
+          @update:model-value="(val) => (value.overrides = val)"
+        />
+      </div>
 
       <button type="button" class="btn-primary" :disabled="saving" @click="save">
         <span v-if="saved">Saved!</span>
@@ -26,25 +40,29 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, provide, reactive, ref } from "vue";
 import { ApiError, get, post } from "../../api";
 import PluginConfigField from "./PluginConfigField.vue";
+import { isWide, prettifyKey } from "./pluginConfigSchema";
 
 const props = defineProps<{
   guildId: string;
   pluginName: string;
 }>();
 
+provide("pluginConfigGuildId", props.guildId);
+
 const loading = ref(true);
 const saving = ref(false);
 const saved = ref(false);
 const errors = ref<string[]>([]);
 const schema = ref<any>(null);
-const value = reactive<Record<string, any>>({});
+// Holds { config: {...plugin config fields}, overrides: [...] } — matches the shape the backend serves so the
+// two sections below can bind straight into it without any reshaping.
+const value = reactive<{ config: Record<string, any>; overrides: any[] }>({ config: {}, overrides: [] });
 
-function prettifyKey(key: string): string {
-  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
+const configSchema = computed(() => schema.value?.properties?.config ?? null);
+const overridesSchema = computed(() => schema.value?.properties?.overrides ?? null);
 
 onMounted(async () => {
   const result = await get(`guilds/${props.guildId}/config-schema/${props.pluginName}`);
@@ -67,7 +85,9 @@ async function save() {
   }
 
   try {
-    await post(`guilds/${props.guildId}/config-schema/${props.pluginName}`, { value: { ...value } });
+    await post(`guilds/${props.guildId}/config-schema/${props.pluginName}`, {
+      value: { config: { ...value.config }, overrides: value.overrides },
+    });
     saving.value = false;
     saved.value = true;
     savedTimeout = setTimeout(() => (saved.value = false), 3000);

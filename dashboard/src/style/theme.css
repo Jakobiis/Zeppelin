@@ -20,6 +20,8 @@
   --primary-foreground: oklch(0.9700 0.0140 254.6040);
   --secondary: oklch(0.9400 0 0);
   --secondary-foreground: oklch(0.2500 0 0);
+  --tertiary: oklch(0.7200 0.1500 85);
+  --tertiary-foreground: oklch(0.2500 0.0500 85);
   --muted: oklch(0.9700 0 0);
   --muted-foreground: oklch(0.4400 0 0);
   --accent: oklch(0.9214 0.0248 257.6500);
@@ -66,20 +68,22 @@
 
 .dark {
   --background: oklch(0.09 0 0);
-  --foreground: oklch(1 0 0);
+  --foreground: oklch(0.9 0 0);
   --card: oklch(0.2103 0 267.5100);
-  --card-foreground: oklch(0.9461 0 0);
+  --card-foreground: oklch(0.9 0 0);
   --popover: oklch(0.2103 0 267.5100);
-  --popover-foreground: oklch(1 0 0);
+  --popover-foreground: oklch(0.9 0 0);
   --primary: oklch(0.5144 0.1605 267.4400);
   --primary-foreground: oklch(0.9700 0.0140 254.6040);
-  --secondary: oklch(0.2000 0 0);
+  --secondary: oklch(0.1400 0 0);
   --secondary-foreground: oklch(0.9400 0 0);
+  --tertiary: oklch(0.5500 0.1500 85);
+  --tertiary-foreground: oklch(0.9700 0.0200 85);
   --muted: oklch(0.2300 0 0);
   --muted-foreground: oklch(0.7200 0 0);
   --accent: oklch(0.3200 0 0);
   --accent-foreground: oklch(0.9214 0.0248 257.6500);
-  --destructive: oklch(0.7040 0.1910 22.2160);
+  --destructive: oklch(0.3200 0.1910 22.2160);
   --destructive-foreground: oklch(0.9700 0.0140 254.6040);
   --border: oklch(0.2600 0 0);
   --input: oklch(0.3200 0 0);
@@ -90,7 +94,7 @@
   --chart-4: oklch(0.5144 0.1605 267.4400);
   --chart-5: oklch(0.2571 0.1161 272.2400);
   --sidebar: oklch(0.09 0 0);
-  --sidebar-foreground: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.9 0 0);
   --sidebar-primary: oklch(0.5144 0.1605 267.4400);
   --sidebar-primary-foreground: oklch(0.9700 0.0140 254.6040);
   --sidebar-accent: oklch(0.3200 0 0);
@@ -110,6 +114,8 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-tertiary: var(--tertiary);
+  --color-tertiary-foreground: var(--tertiary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);

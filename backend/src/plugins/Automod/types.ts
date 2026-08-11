@@ -45,13 +45,28 @@ const zActionsMap = z
   .partial();
 
 const zRule = z.strictObject({
-  enabled: z.boolean().default(true),
-  pretty_name: z.string().optional(),
-  presets: z.array(z.string().max(100)).max(25).default([]),
-  affects_bots: z.boolean().default(false),
-  affects_self: z.boolean().default(false),
-  cooldown: zDelayString.nullable().default(null),
-  allow_further_rules: z.boolean().default(false),
+  enabled: z.boolean().default(true).describe("Whether this rule is currently active"),
+  pretty_name: z
+    .string()
+    .optional()
+    .describe("Optional display name for this rule, shown instead of its config key in logs and notifications"),
+  presets: z
+    .array(z.string().max(100))
+    .max(25)
+    .default([])
+    .describe("Currently unused — reserved for a future \"named presets\" feature. Safe to leave empty."),
+  affects_bots: z.boolean().default(false).describe("Whether this rule also runs against messages/actions from other bots"),
+  affects_self: z.boolean().default(false).describe("Whether this rule also runs against Zeppelin's own actions"),
+  cooldown: zDelayString
+    .nullable()
+    .default(null)
+    .describe("Minimum time between this rule triggering again for the same user"),
+  allow_further_rules: z
+    .boolean()
+    .default(false)
+    .describe(
+      "By default, a triggered rule stops any later rules from also running on the same message/action — enable this to let later rules still run",
+    ),
   triggers: z.array(zTriggersMap),
   actions: zActionsMap,
 });

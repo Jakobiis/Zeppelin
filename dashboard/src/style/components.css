@@ -37,15 +37,17 @@
   @apply sr-only;
 }
 
-/* Buttons: short + wide + pill-shaped, instead of the tall/barely-rounded default that comes from stacking raw
-   px/py/rounded utilities ad hoc. Each variant is self-contained (Tailwind v4's @apply can't compose a shared
-   custom class the way v3's could) — combine with .btn-sm for a smaller size if needed. */
+/* Buttons: short + wide + squircle-rounded, instead of the tall/barely-rounded default that comes from stacking
+   raw px/py/rounded utilities ad hoc (and not a full pill — rounded-xl reads as a squircle at this size). Each
+   variant is self-contained (Tailwind v4's @apply can't compose a shared custom class the way v3's could) —
+   combine with .btn-sm for a smaller size if needed. */
 .btn-primary,
 .btn-secondary,
+.btn-tertiary,
 .btn-destructive {
   @apply inline-flex items-center justify-center;
-  @apply px-6 py-1.5;
-  @apply rounded-full;
+  @apply px-5 py-1.5;
+  @apply rounded-xl;
   @apply text-sm font-medium;
   @apply transition-colors;
   @apply disabled:opacity-50 disabled:pointer-events-none;
@@ -54,6 +56,7 @@
 .btn-sm {
   @apply px-3 py-1;
   @apply text-xs;
+  @apply rounded-lg;
 }
 
 .btn-primary {
@@ -69,6 +72,14 @@
 
   &:hover {
     @apply bg-secondary/80;
+  }
+}
+
+.btn-tertiary {
+  @apply bg-tertiary text-tertiary-foreground;
+
+  &:hover {
+    @apply bg-tertiary/80;
   }
 }
 
