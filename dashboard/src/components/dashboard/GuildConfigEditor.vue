@@ -3,23 +3,28 @@
     Loading...
   </div>
   <div v-else>
-    <div v-if="errors.length" class="bg-gray-800 py-2 px-3 rounded shadow-md mb-4">
+    <div v-if="errors.length" class="bg-card py-2 px-3 rounded-lg shadow-md mb-4">
       <div class="font-semibold">Errors:</div>
       <pre v-for="error in errors">{{ error }}</pre>
     </div>
 
     <div class="flex items-center flex-wrap">
       <h1 class="flex-full md:flex-auto">Config for {{ guild.name }}</h1>
-      <button v-if="!saving" class="flex-none bg-green-800 px-5 py-2 rounded hover:bg-green-700" v-on:click="save">
+      <button v-if="mode === 'yaml' && !saving" class="flex-none bg-primary text-primary-foreground px-5 py-2 rounded hover:bg-primary/90" v-on:click="save">
         <span v-if="saved">Saved!</span>
         <span v-else>Save</span>
       </button>
-      <div v-if="saving" class="flex-none bg-gray-700 px-5 py-2 rounded">
+      <div v-if="mode === 'yaml' && saving" class="flex-none bg-secondary text-secondary-foreground px-5 py-2 rounded">
         Saving...
       </div>
     </div>
 
-    <v-ace-editor class="rounded shadow-lg border border-gray-700 mt-4"
+    <Tabs class="mt-4">
+      <Tab :active="mode === 'yaml'"><a href="javascript:void(0)" v-on:click="mode = 'yaml'">Raw YAML</a></Tab>
+      <Tab :active="mode === 'welcome_message'"><a href="javascript:void(0)" v-on:click="mode = 'welcome_message'">Welcome Message (beta form)</a></Tab>
+    </Tabs>
+
+    <v-ace-editor v-show="mode === 'yaml'" class="rounded-lg shadow-lg border border-border"
                v-model:value="editableConfig"
                @init="editorInit"
                lang="yaml"
@@ -33,6 +38,14 @@
                   width: editorWidth + 'px',
                   height: editorHeight + 'px',
                 }" />
+
+    <div v-if="mode === 'welcome_message'">
+      <p class="text-sm text-muted-foreground mb-4">
+        A structured form is available for a growing set of plugins — everything else still goes through the raw
+        YAML editor above. Saving here updates the same underlying config as the YAML editor.
+      </p>
+      <PluginConfigForm :guild-id="String($route.params.guildId)" plugin-name="welcome_message" />
+    </div>
   </div>
 </template>
 
@@ -48,12 +61,19 @@
   import "ace-builds/src-noconflict/mode-yaml";
   import "ace-builds/src-noconflict/theme-tomorrow_night";
 
+  import Tab from "../Tab.vue";
+  import Tabs from "../Tabs.vue";
+  import PluginConfigForm from "./PluginConfigForm.vue";
+
   let editorKeybindListener;
   let windowResizeListener;
 
   export default {
     components: {
       VAceEditor,
+      Tab,
+      Tabs,
+      PluginConfigForm,
     },
     async mounted() {
       try {
@@ -99,6 +119,7 @@
         editorWidth: 900,
         editorHeight: 600,
         savedTimeout: null,
+        mode: "yaml",
       };
     },
     computed: {

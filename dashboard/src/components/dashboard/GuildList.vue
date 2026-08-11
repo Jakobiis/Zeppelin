@@ -9,17 +9,17 @@
         <div class="flex items-center">
           <div class="flex-none w-12 h-12">
             <img v-if="guild.icon" class="rounded-full w-full h-full" :src="guild.icon" alt="" :title="'Logo for guild ' + guild.name">
-            <div v-else class="bg-gray-700 rounded-full w-full h-full"></div>
+            <div v-else class="bg-secondary text-secondary-foreground rounded-full w-full h-full"></div>
           </div>
           <div class="flex-auto ml-4">
             <div>
               <div class="font-semibold leading-tight">{{ guild.name }}</div>
-              <div class="text-gray-600 text-sm leading-tight">{{ guild.id }}</div>
+              <div class="text-muted-foreground text-sm leading-tight">{{ guild.id }}</div>
             </div>
             <div class="pt-1">
-              <router-link class="inline-block bg-gray-700 rounded px-1 hover:bg-gray-800" :to="'/dashboard/guilds/' + guild.id + '/config'">Config</router-link>
-              <router-link v-if="canManageAccess(guild.id)" class="inline-block bg-gray-700 rounded px-1 hover:bg-gray-800" :to="'/dashboard/guilds/' + guild.id + '/access'">Access</router-link>
-              <router-link v-if="canManageAccess(guild.id)" class="inline-block bg-gray-700 rounded px-1 hover:bg-gray-800" :to="'/dashboard/guilds/' + guild.id + '/import-export'">Import/export</router-link>
+              <router-link class="inline-block bg-secondary text-secondary-foreground rounded px-1 hover:bg-secondary/80" :to="'/dashboard/guilds/' + guild.id + '/config'">Config</router-link>
+              <router-link v-if="canManageAccess(guild.id)" class="inline-block bg-secondary text-secondary-foreground rounded px-1 hover:bg-secondary/80" :to="'/dashboard/guilds/' + guild.id + '/access'">Access</router-link>
+              <router-link v-if="canManageAccess(guild.id)" class="inline-block bg-secondary text-secondary-foreground rounded px-1 hover:bg-secondary/80" :to="'/dashboard/guilds/' + guild.id + '/import-export'">Import/export</router-link>
             </div>
           </div>
         </div>

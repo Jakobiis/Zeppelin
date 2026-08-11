@@ -13,7 +13,7 @@
     &.active {
       padding-bottom: 0;
       @apply border-b;
-      @apply border-gray-400;
+      @apply border-border;
     }
   }
 
@@ -21,15 +21,15 @@
     @apply block;
     @apply py-2;
     @apply px-4;
-    @apply text-gray-500;
+    @apply text-muted-foreground;
 
     &:hover {
-      @apply text-gray-200;
+      @apply text-foreground;
     }
   }
 
   .active :deep(a) {
-    @apply text-gray-200;
+    @apply text-foreground;
   }
 </style>
 

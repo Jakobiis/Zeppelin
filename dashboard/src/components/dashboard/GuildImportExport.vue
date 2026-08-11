@@ -7,7 +7,7 @@
     </p>
 
     <h2>Export server data</h2>
-    <button class="inline-block bg-gray-700 rounded px-1 hover:bg-gray-800 hover:bg-gray-800" @click="runExport()" :disabled="exporting">Export data</button>
+    <button class="inline-block bg-secondary text-secondary-foreground rounded px-1 hover:bg-secondary/80" @click="runExport()" :disabled="exporting">Export data</button>
 
     <p v-if="exporting">Opened data export in new window!</p>
     <p v-else>&nbsp;</p>
@@ -27,7 +27,7 @@
       <label><input type="radio" v-model="importCaseMode" value="bumpExistingCases"> Leave imported case numbers, re-number existing cases to start after imported cases</label><br>
       <label><input type="radio" v-model="importCaseMode" value="replace"> Replace existing cases (!! THIS WILL DELETE ALL EXISTING CASES !!)</label>
     </div>
-    <button class="inline-block bg-gray-700 rounded px-1 hover:bg-gray-800" :class="{ 'bg-gray-800': importFile == null, 'hover:bg-gray-800': importFile != null }" @click="runImport()" :disabled="importFile == null">Import selected file</button>
+    <button class="inline-block bg-secondary text-secondary-foreground rounded px-1 hover:bg-secondary/80" :class="{ 'bg-muted text-muted-foreground': importFile == null, 'hover:bg-secondary/80': importFile != null }" @click="runImport()" :disabled="importFile == null">Import selected file</button>
 
     <p v-if="importError">Error: {{ importError }}</p>
     <p v-else-if="importing">Importing...</p>

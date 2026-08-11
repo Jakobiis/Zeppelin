@@ -1,22 +1,22 @@
 .link {
-  @apply text-blue-400;
+  @apply text-primary;
   @apply underline;
 
   &:hover {
-    @apply text-blue-200;
+    @apply text-primary/80;
   }
 }
 
 .inline-code {
   @apply inline-block;
-  @apply bg-gray-800;
+  @apply bg-muted;
   @apply px-1;
   @apply rounded;
   @apply text-sm;
 }
 
 .codeblock {
-  @apply bg-gray-800;
+  @apply bg-muted;
   @apply p-3;
   @apply mb-4;
   @apply rounded;

@@ -95,6 +95,10 @@ export async function buildEconomyInfoEmbed(
                 return `${emoji}**${label}** (\`${prefix}play ${gameName} [@user] <amount>\`) — ${variantName}, vs a player or the bot, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
             }
 
+            if (game.type === "hol") {
+                return `${emoji}**${label}** (\`${prefix}play ${gameName} <amount>\`) — guess higher/lower/same, chain multipliers **${game.min_multiplier}x**-**${game.max_multiplier}x**, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
+            }
+
             const winPercent = Math.round(game.win_chance * 100);
             return `${emoji}**${label}** (\`${prefix}play ${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
         });

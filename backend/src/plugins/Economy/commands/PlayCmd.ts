@@ -7,6 +7,7 @@ import { parseAmountInput } from "../functions/parseAmountInput.js";
 import { getSpendableBalance } from "../functions/pendingBalance.js";
 import { playGame } from "../functions/playGame.js";
 import { runBlackjack } from "../functions/runBlackjack.js";
+import { runHigherOrLower } from "../functions/runHigherOrLower.js";
 import { runPvpGame } from "../functions/pvpChallenge.js";
 import { runPvpVsBot } from "../functions/pvpVsBot.js";
 import { EconomyPluginType } from "../types.js";
@@ -51,6 +52,11 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
 
     if (game.type === "blackjack") {
       await runBlackjack(pluginData, message, args.game, game, args.amount);
+      return;
+    }
+
+    if (game.type === "hol") {
+      await runHigherOrLower(pluginData, message, args.game, game, args.amount);
       return;
     }
 

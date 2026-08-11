@@ -3,7 +3,7 @@ import { logger } from "../../../logger.js";
 import { EconomyPluginType } from "../types.js";
 
 export type GameHistoryOutcome = "win" | "loss" | "push";
-export type GameHistoryGameType = "wager" | "reward" | "blackjack" | "pvp";
+export type GameHistoryGameType = "wager" | "reward" | "blackjack" | "pvp" | "hol";
 
 export interface GameHistoryEntryInput {
   userId: string;

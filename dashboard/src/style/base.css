@@ -1,13 +1,5 @@
 body {
-  font: normal 18px/1.5 sans-serif;
-  font-family:
-    system,
-    -apple-system,
-    ".SFNSText-Regular",
-    "San Francisco",
-    "Roboto",
-    "Segoe UI",
-    "Helvetica Neue",
-    "Lucida Grande",
-    sans-serif;
+  font-weight: normal;
+  font-size: 18px;
+  line-height: 1.5;
 }

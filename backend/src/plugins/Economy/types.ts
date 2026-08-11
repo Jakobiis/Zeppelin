@@ -99,11 +99,42 @@ export const zEconomyPvpGame = z
     message: "max_bet must be greater than or equal to min_bet",
   });
 
+// A "hol" (Higher or Lower) game: a number from 1-13 is drawn and the player guesses whether the next draw will
+// be higher, lower, or the same. A correct guess multiplies the running total and starts another round (new
+// number, new odds); the player can cash out after any correct guess, or keep pushing their luck until they
+// guess wrong and lose the bet outright. Each round's per-choice multiplier is derived from that choice's true
+// odds at the current number (rarer guesses pay more), then clamped to [min_multiplier, max_multiplier] so no
+// guess is ever trivial or absurd. Played with `!play <game> <amount>`.
+export const zEconomyHolGame = z
+  .strictObject({
+    type: z.literal("hol"),
+    ...zGameCommon,
+    min_bet: z.number().int().positive(),
+    max_bet: z.number().int().positive(),
+    min_multiplier: z.number().min(1),
+    max_multiplier: z.number().min(1),
+    // Caps the net amount a single cash-out can add to the balance, regardless of how many rounds were
+    // chained — round multipliers compound, so without a cap a long streak could balloon unbounded.
+    max_payout: z.number().int().positive().nullable().default(null),
+  })
+  .refine((game) => game.max_bet >= game.min_bet, {
+    message: "max_bet must be greater than or equal to min_bet",
+  })
+  .refine((game) => game.max_multiplier >= game.min_multiplier, {
+    message: "max_multiplier must be greater than or equal to min_multiplier",
+  });
+
 // Existing configs predate the `type` field (only wager games existed), so default it to "wager" when omitted
 // rather than making it a breaking change.
 export const zEconomyGame = z.preprocess(
   (value) => (value && typeof value === "object" && !("type" in value) ? { ...value, type: "wager" } : value),
-  z.discriminatedUnion("type", [zEconomyWagerGame, zEconomyRewardGame, zEconomyBlackjackGame, zEconomyPvpGame]),
+  z.discriminatedUnion("type", [
+    zEconomyWagerGame,
+    zEconomyRewardGame,
+    zEconomyBlackjackGame,
+    zEconomyPvpGame,
+    zEconomyHolGame,
+  ]),
 );
 
 export const zEconomyGive = z.strictObject({

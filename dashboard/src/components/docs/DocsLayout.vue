@@ -3,7 +3,7 @@
     <Title title="Zeppelin - Documentation" />
 
     <!-- Top bar -->
-    <nav class="flex items-stretch pl-4 pr-2 py-1 border border-gray-700 rounded bg-gray-800 shadow-xl">
+    <nav class="flex items-stretch pl-4 pr-2 py-1 border border-border rounded-lg bg-card shadow-xl">
       <div class="flex-initial flex items-center">
         <img class="flex-auto w-10 mr-5" src="/img/logo.png" alt="" aria-hidden="true">
 
@@ -15,7 +15,7 @@
         <router-link
           to="/dashboard"
           role="menuitem"
-          class="py-1 px-2 rounded hover:bg-gray-700 hidden lg:block">
+          class="py-1 px-2 rounded hover:bg-accent hover:text-accent-foreground hidden lg:block">
           Go to dashboard
         </router-link>
         <button class="link-button text-2xl leading-zero lg:hidden" v-on:click="toggleMobileMenu()" aria-hidden="true">
@@ -29,12 +29,12 @@
     <!-- Content wrapper -->
     <div class="flex flex-wrap lg:flex-nowrap items-start mt-8 gap-8">
       <!-- Sidebar -->
-      <nav class="docs-sidebar px-4 pt-2 pb-3 border border-gray-700 rounded bg-gray-800 shadow-md flex-full lg:flex-none lg:block" v-bind:class="{ closed: !mobileMenuOpen }">
+      <nav class="docs-sidebar px-4 pt-2 pb-3 border border-border rounded-lg bg-card shadow-md flex-full lg:flex-none lg:block" v-bind:class="{ closed: !mobileMenuOpen }">
         <div role="none" v-for="(group, index) in menu">
           <h1 class="font-bold" :aria-owns="'menu-group-' + index" :class="{'mt-4': typeof index === 'number' && index !== 0}">{{ group.label }}</h1>
           <ul v-bind:id="'menu-group-' + index" role="group" class="list-none pl-2">
             <li role="none" v-for="item in group.items">
-              <router-link role="menuitem" :to="item.to" class="text-gray-300 hover:text-gray-500" v-on:click.native="onChooseMenuItem()">{{ item.label }}</router-link>
+              <router-link role="menuitem" :to="item.to" class="text-foreground hover:text-muted-foreground" v-on:click.native="onChooseMenuItem()">{{ item.label }}</router-link>
             </li>
           </ul>
         </div>

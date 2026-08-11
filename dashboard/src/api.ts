@@ -52,7 +52,7 @@ export function get(resource: string, params: QueryParamObject = {}) {
   });
 }
 
-export function post(resource: string, params: QueryParamObject = {}) {
+export function post(resource: string, params: Record<string, any> = {}) {
   const headers: Record<string, string> = RootStore.state.auth.apiKey
     ? { "X-Api-Key": RootStore.state.auth.apiKey }
     : {};

@@ -1,9 +1,9 @@
 <template>
-  <div class="expandable mb-4 bg-gray-800 border border-gray-600 rounded overflow-hidden"
+  <div class="expandable mb-4 bg-card border border-border rounded-lg overflow-hidden"
        ref="root"
        v-bind:class="{ 'shadow-xl': isOpen}">
     <div role="button"
-         class="title p-2 focus:bg-gray-700"
+         class="title p-2 focus:bg-accent focus:text-accent-foreground"
          v-on:click="toggle"
          v-on:keydown.space="$event.preventDefault()"
          v-on:keyup.space="toggle"
@@ -11,7 +11,7 @@
       <chevron-down decorative class="icon" v-bind:class="{'icon-open': isOpen}" />
       <span class="title-text"><slot name="title"></slot></span>
     </div>
-    <div class="content border-t border-gray-700" ref="content">
+    <div class="content border-t border-border" ref="content">
       <div class="p-4 pb-0">
         <slot name="content"></slot>
       </div>
@@ -73,7 +73,7 @@
   .inline-code,
   code:not([class]),
   :deep(code:not([class])) {
-    @apply bg-gray-900;
+    @apply bg-background;
   }
 
   :deep(.codeblock) {

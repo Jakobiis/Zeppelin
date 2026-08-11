@@ -3,6 +3,7 @@
 @import "./splash.css";
 
 @import "tailwindcss";
+@import "./theme.css";
 @import "vue-material-design-icons/styles.css";
 
 @import "./content.css";
@@ -16,8 +17,4 @@
 
 body {
   overflow-y: scroll;
-
-  @apply bg-gray-900;
-  @apply text-gray-300;
-  @apply text-base;
 }
