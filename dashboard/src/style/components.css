@@ -36,3 +36,73 @@
 .sr-only-when-not-focused:not(:focus-within) {
   @apply sr-only;
 }
+
+/* Buttons: short + wide + pill-shaped, instead of the tall/barely-rounded default that comes from stacking raw
+   px/py/rounded utilities ad hoc. Each variant is self-contained (Tailwind v4's @apply can't compose a shared
+   custom class the way v3's could) — combine with .btn-sm for a smaller size if needed. */
+.btn-primary,
+.btn-secondary,
+.btn-destructive {
+  @apply inline-flex items-center justify-center;
+  @apply px-6 py-1.5;
+  @apply rounded-full;
+  @apply text-sm font-medium;
+  @apply transition-colors;
+  @apply disabled:opacity-50 disabled:pointer-events-none;
+}
+
+.btn-sm {
+  @apply px-3 py-1;
+  @apply text-xs;
+}
+
+.btn-primary {
+  @apply bg-primary text-primary-foreground;
+
+  &:hover {
+    @apply bg-primary/90;
+  }
+}
+
+.btn-secondary {
+  @apply bg-secondary text-secondary-foreground;
+
+  &:hover {
+    @apply bg-secondary/80;
+  }
+}
+
+.btn-destructive {
+  @apply bg-destructive text-destructive-foreground;
+
+  &:hover {
+    @apply bg-destructive/90;
+  }
+}
+
+/* Checkbox: a custom checked/unchecked appearance (native default checkboxes barely register a visible state
+   change against a dark theme) — still a real <input type="checkbox"> under the hood for accessibility/keyboard
+   support, just repainted. */
+.checkbox {
+  appearance: none;
+  @apply w-5 h-5 shrink-0;
+  @apply rounded-md border-2 border-border bg-input;
+  @apply cursor-pointer align-middle;
+  @apply transition-colors;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 0.7rem;
+
+  &:hover {
+    @apply border-ring;
+  }
+
+  &:checked {
+    @apply bg-primary border-primary;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8.5l3.2 3.2L13 4.5'/%3E%3C/svg%3E");
+  }
+
+  &:focus-visible {
+    @apply outline outline-2 outline-ring outline-offset-2;
+  }
+}

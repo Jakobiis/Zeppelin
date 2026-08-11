@@ -48,8 +48,11 @@ export interface StaffState {
 export interface ThinDocsPlugin {
   name: string;
   info: {
-    name: string;
+    type?: string;
+    prettyName?: string;
     description?: string;
+    usageGuide?: string;
+    configurationGuide?: string;
   };
 }
 
@@ -58,12 +61,6 @@ export interface DocsPlugin extends ThinDocsPlugin {
   slashCommands: any[];
   defaultOptions: any;
   configSchema?: string;
-  info: {
-    name: string;
-    description?: string;
-    usageGuide?: string;
-    configurationGuide?: string;
-  };
 }
 
 export interface DocsState {

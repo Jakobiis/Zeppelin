@@ -1,8 +1,8 @@
 <template>
   <div>
     <div v-if="loading">Loading...</div>
-    <div v-else>
-      <div v-if="errors.length" class="bg-card border border-border py-2 px-3 rounded-lg shadow-md mb-4">
+    <div v-else class="bg-card border border-border rounded-lg shadow-md p-6">
+      <div v-if="errors.length" class="bg-muted border border-border py-2 px-3 rounded-lg shadow-md mb-4">
         <div class="font-semibold text-destructive">Errors:</div>
         <pre v-for="(error, i) in errors" :key="i" class="text-sm whitespace-pre-wrap">{{ error }}</pre>
       </div>
@@ -16,12 +16,7 @@
         @update:model-value="(val) => (value[key] = val)"
       />
 
-      <button
-        type="button"
-        class="bg-primary text-primary-foreground px-5 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50"
-        :disabled="saving"
-        @click="save"
-      >
+      <button type="button" class="btn-primary" :disabled="saving" @click="save">
         <span v-if="saved">Saved!</span>
         <span v-else-if="saving">Saving...</span>
         <span v-else>Save</span>

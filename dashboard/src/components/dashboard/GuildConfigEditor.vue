@@ -3,25 +3,25 @@
     Loading...
   </div>
   <div v-else>
-    <div v-if="errors.length" class="bg-card py-2 px-3 rounded-lg shadow-md mb-4">
-      <div class="font-semibold">Errors:</div>
+    <div v-if="errors.length" class="bg-card border border-border py-2 px-3 rounded-lg shadow-md mb-4">
+      <div class="font-semibold text-destructive">Errors:</div>
       <pre v-for="error in errors">{{ error }}</pre>
     </div>
 
-    <div class="flex items-center flex-wrap">
+    <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4 flex items-center flex-wrap">
       <h1 class="flex-full md:flex-auto">Config for {{ guild.name }}</h1>
-      <button v-if="mode === 'yaml' && !saving" class="flex-none bg-primary text-primary-foreground px-5 py-2 rounded hover:bg-primary/90" v-on:click="save">
+      <button v-if="mode === 'yaml' && !saving" class="flex-none btn-primary" v-on:click="save">
         <span v-if="saved">Saved!</span>
         <span v-else>Save</span>
       </button>
-      <div v-if="mode === 'yaml' && saving" class="flex-none bg-secondary text-secondary-foreground px-5 py-2 rounded">
+      <div v-if="mode === 'yaml' && saving" class="flex-none btn-secondary">
         Saving...
       </div>
     </div>
 
     <Tabs class="mt-4">
       <Tab :active="mode === 'yaml'"><a href="javascript:void(0)" v-on:click="mode = 'yaml'">Raw YAML</a></Tab>
-      <Tab :active="mode === 'welcome_message'"><a href="javascript:void(0)" v-on:click="mode = 'welcome_message'">Welcome Message (beta form)</a></Tab>
+      <Tab :active="mode === 'interface'"><a href="javascript:void(0)" v-on:click="mode = 'interface'">Interface</a></Tab>
     </Tabs>
 
     <v-ace-editor v-show="mode === 'yaml'" class="rounded-lg shadow-lg border border-border"
@@ -39,12 +39,34 @@
                   height: editorHeight + 'px',
                 }" />
 
-    <div v-if="mode === 'welcome_message'">
-      <p class="text-sm text-muted-foreground mb-4">
-        A structured form is available for a growing set of plugins — everything else still goes through the raw
-        YAML editor above. Saving here updates the same underlying config as the YAML editor.
-      </p>
-      <PluginConfigForm :guild-id="String($route.params.guildId)" plugin-name="welcome_message" />
+    <div v-if="mode === 'interface'" class="flex flex-wrap lg:flex-nowrap items-start gap-6 mt-4">
+      <nav class="w-full lg:w-56 flex-none border border-border rounded-lg bg-card shadow-md p-3">
+        <ul class="list-none space-y-1">
+          <li v-for="plugin in formPlugins" :key="plugin.name">
+            <a href="javascript:void(0)"
+               class="block px-3 py-1.5 rounded-md text-sm"
+               :class="selectedPlugin === plugin.name ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent hover:text-accent-foreground'"
+               v-on:click="selectedPlugin = plugin.name">
+              {{ plugin.info.prettyName || plugin.name }}
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="flex-auto min-w-0">
+        <p class="text-sm text-muted-foreground mb-4">
+          Structured forms are available for plugins as the renderer learns to handle more of their config shape —
+          anything it doesn't understand yet falls back to a raw JSON field. Saving here updates the same
+          underlying config as the YAML editor above.
+        </p>
+        <PluginConfigForm
+          v-if="selectedPlugin"
+          :key="selectedPlugin"
+          :guild-id="String($route.params.guildId)"
+          :plugin-name="selectedPlugin"
+        />
+        <div v-else class="text-muted-foreground">Select a plugin from the sidebar.</div>
+      </div>
     </div>
   </div>
 </template>
@@ -52,7 +74,7 @@
 <script lang="ts">
   import {mapState} from "vuex";
   import {ApiError} from "../../api";
-  import { GuildState } from "../../store/types";
+  import { DocsState, GuildState } from "../../store/types";
 
   import { VAceEditor } from "vue3-ace-editor";
 
@@ -94,6 +116,12 @@
 
       await this.$store.dispatch("guilds/loadConfig", this.$route.params.guildId);
       this.editableConfig = this.config || "";
+
+      // Fetch the full plugin list so we know what to offer in the Interface tab's sidebar — the same registry
+      // the docs pages use, reused here instead of hardcoding a plugin name.
+      await this.$store.dispatch("docs/loadAllPlugins");
+      this.selectedPlugin = this.formPlugins[0]?.name ?? null;
+
       this.loading = false;
     },
     beforeRouteLeave(to, from, next) {
@@ -120,6 +148,7 @@
         editorHeight: 600,
         savedTimeout: null,
         mode: "yaml",
+        selectedPlugin: null,
       };
     },
     computed: {
@@ -129,6 +158,15 @@
         },
         config(guilds: GuildState) {
           return guilds.configs[this.$route.params.guildId];
+        },
+      }),
+      ...mapState("docs", {
+        formPlugins(docs: DocsState) {
+          return [...docs.allPlugins].sort((a, b) => {
+            const aName = (a.info.prettyName || a.name).toLowerCase();
+            const bName = (b.info.prettyName || b.name).toLowerCase();
+            return aName < bName ? -1 : aName > bName ? 1 : 0;
+          });
         },
       }),
     },
