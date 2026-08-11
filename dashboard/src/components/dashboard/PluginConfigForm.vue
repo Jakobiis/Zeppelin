@@ -11,7 +11,7 @@
         <PluginConfigField
           v-for="(propSchema, key) in configSchema?.properties ?? {}"
           :key="key"
-          :class="isWide(propSchema) ? 'col-span-full' : ''"
+          :class="isWide(propSchema, String(key)) ? 'col-span-full' : ''"
           :schema="propSchema"
           :field-key="String(key)"
           :label="prettifyKey(String(key))"
@@ -43,7 +43,7 @@
 import { computed, onMounted, provide, reactive, ref } from "vue";
 import { ApiError, get, post } from "../../api";
 import PluginConfigField from "./PluginConfigField.vue";
-import { isWide, prettifyKey } from "./pluginConfigSchema";
+import { dereferenceSchema, isWide, prettifyKey } from "./pluginConfigSchema";
 
 const props = defineProps<{
   guildId: string;
@@ -66,7 +66,9 @@ const overridesSchema = computed(() => schema.value?.properties?.overrides ?? nu
 
 onMounted(async () => {
   const result = await get(`guilds/${props.guildId}/config-schema/${props.pluginName}`);
-  schema.value = result.schema;
+  // Inlines any $ref (zod hoists repeated/recursive sub-schemas, e.g. override criteria's all/any/not) so
+  // nothing downstream has to know $ref exists.
+  schema.value = dereferenceSchema(result.schema, result.schema?.$defs ?? {});
   Object.assign(value, result.value);
   loading.value = false;
 });

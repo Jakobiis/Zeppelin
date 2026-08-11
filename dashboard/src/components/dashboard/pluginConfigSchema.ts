@@ -2,6 +2,45 @@
 // PluginConfigField (recursive per-field rendering) — kept in one place so the "is this field simple enough to
 // sit in a packed grid cell, or does it need the full row" decision can't drift between the two.
 
+// zod's toJSONSchema hoists any schema that's referenced more than once (e.g. the recursive all/any/not fields
+// on override criteria, or any sub-schema two plugin config fields happen to share the same zod instance for)
+// into `$defs`, replacing every occurrence with `{ $ref: "#/$defs/name" }`. Called once, right after the schema
+// is fetched, to fully inline those refs so nothing downstream needs to know $ref exists. Genuinely cyclic refs
+// (the all/any/not case, which recurse into themselves) are capped at one level deep — the second occurrence of
+// the same ref along a given path becomes `{}` (renders as a raw-JSON fallback) instead of recursing forever.
+export function dereferenceSchema(node: any, defs: Record<string, any>, seen: Set<string> = new Set()): any {
+  if (node == null || typeof node !== "object") return node;
+
+  if (typeof node.$ref === "string") {
+    const name = node.$ref.split("/").pop()!;
+    if (seen.has(name) || !defs[name]) return {};
+    const { $ref, ...rest } = node;
+    return { ...rest, ...dereferenceSchema(defs[name], defs, new Set([...seen, name])) };
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((item) => dereferenceSchema(item, defs, seen));
+  }
+
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "properties" && value && typeof value === "object") {
+      const props: Record<string, any> = {};
+      for (const [propKey, propSchema] of Object.entries(value)) {
+        props[propKey] = dereferenceSchema(propSchema, defs, seen);
+      }
+      result[key] = props;
+    } else if (key === "items" || key === "additionalProperties") {
+      result[key] = dereferenceSchema(value, defs, seen);
+    } else if ((key === "anyOf" || key === "oneOf" || key === "allOf") && Array.isArray(value)) {
+      result[key] = value.map((v) => dereferenceSchema(v, defs, seen));
+    } else if (key !== "$defs") {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 // A nullable field is represented in JSON Schema as an `anyOf` with exactly one `{type: "null"}` branch (how
 // zod's toJSONSchema exports `.nullable()`, including when nullable wraps a multi-branch union) — unwrap that
 // into a `{ nullable, inner }` pair callers work with instead.
@@ -39,8 +78,11 @@ export function isSimple(s: any): boolean {
 }
 
 // The inverse — used to decide whether a field spans the full grid row (objects/arrays/records/unions need the
-// room) or can sit packed side-by-side with other simple fields (booleans/strings/numbers).
-export function isWide(s: any): boolean {
+// room) or can sit packed side-by-side with other simple fields (booleans/strings/numbers). A role/channel/emoji
+// picker is technically "simple" by type but needs more horizontal room than a packed column gives it (the emoji
+// picker's grid in particular gets cramped and can spill into neighboring columns), so those go wide too.
+export function isWide(s: any, fieldKey?: string): boolean {
+  if (fieldKey && detectSpecialFieldKind(fieldKey, s)) return true;
   return !isSimple(s);
 }
 

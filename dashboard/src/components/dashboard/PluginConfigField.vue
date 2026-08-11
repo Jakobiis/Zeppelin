@@ -98,7 +98,7 @@
         <PluginConfigField
           v-for="(propSchema, key) in innerSchema.properties"
           :key="key"
-          :class="isWide(propSchema) ? 'col-span-full' : ''"
+          :class="isWide(propSchema, String(key)) ? 'col-span-full' : ''"
           :schema="propSchema"
           :field-key="String(key)"
           :label="prettifyKey(String(key))"
@@ -403,8 +403,12 @@ const itemsAreSimple = computed(() => isSimple(innerSchema.value?.items));
 
 // Array items are only identified by index, which shifts on removal — track a stable synthetic id per item
 // (in step with add/remove) so each item's collapse state doesn't jump to a different item after a removal.
+// This computation runs for every field instance regardless of kind (a field only knows its own kind once its
+// computeds evaluate), so it must tolerate a non-array modelValue — most fields have one.
 let arrayItemUidCounter = 0;
-const arrayItemUids = ref<number[]>((props.modelValue ?? []).map(() => ++arrayItemUidCounter));
+const arrayItemUids = ref<number[]>(
+  Array.isArray(props.modelValue) ? props.modelValue.map(() => ++arrayItemUidCounter) : [],
+);
 const collapsedItemUids = ref<Set<number>>(new Set(arrayItemUids.value));
 
 function isItemCollapsed(index: number): boolean {

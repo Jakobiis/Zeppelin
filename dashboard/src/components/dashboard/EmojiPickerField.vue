@@ -1,6 +1,6 @@
 <template>
-  <div>
-    <div class="flex items-center gap-2">
+  <div class="w-full">
+    <div class="flex items-center gap-2 mb-2">
       <span v-if="previewUrl" class="inline-flex w-6 h-6 shrink-0 items-center justify-center">
         <img :src="previewUrl" alt="" class="max-w-full max-h-full" />
       </span>
@@ -9,16 +9,13 @@
       <input
         type="text"
         class="flex-1 bg-input border border-border rounded-md px-2 py-1"
-        placeholder="Type an emoji, or pick a server emoji"
+        placeholder="Type a unicode emoji, or pick a server emoji below"
         :value="modelValue ?? ''"
         @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value || null)"
       />
-      <button type="button" class="btn-sm btn-secondary shrink-0" @click="open = !open">
-        {{ open ? "Close" : "Pick" }}
-      </button>
     </div>
 
-    <div v-if="open" class="mt-2 border border-border rounded-lg p-2 max-h-48 overflow-y-auto">
+    <div class="border border-border rounded-lg p-2 max-h-40 overflow-y-auto">
       <p v-if="loadError" class="text-xs text-destructive">Couldn't load this server's emoji from Discord.</p>
       <p v-else-if="loading" class="text-xs text-muted-foreground">Loading…</p>
       <p v-else-if="!emojis.length" class="text-xs text-muted-foreground">This server has no custom emoji.</p>
@@ -28,6 +25,7 @@
           :key="emoji.id"
           type="button"
           class="w-8 h-8 flex items-center justify-center rounded-md hover:bg-accent"
+          :class="{ 'bg-accent': isSelected(emoji) }"
           :title="emoji.name"
           @click="choose(emoji)"
         >
@@ -39,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { DiscordEmoji, emojiImageUrl, emojiMarkdown, getGuildEmojis } from "./discordGuildData";
 
 const props = defineProps<{
@@ -51,16 +49,11 @@ const emit = defineEmits<{
   (e: "update:modelValue", value: string | null): void;
 }>();
 
-const open = ref(false);
 const emojis = ref<DiscordEmoji[]>([]);
-const loading = ref(false);
+const loading = ref(true);
 const loadError = ref(false);
-let loaded = false;
 
-async function ensureLoaded() {
-  if (loaded) return;
-  loaded = true;
-  loading.value = true;
+onMounted(async () => {
   try {
     emojis.value = await getGuildEmojis(props.guildId);
   } catch {
@@ -68,15 +61,14 @@ async function ensureLoaded() {
   } finally {
     loading.value = false;
   }
-}
-
-watch(open, (isOpen) => {
-  if (isOpen) void ensureLoaded();
 });
 
 function choose(emoji: DiscordEmoji) {
   emit("update:modelValue", emojiMarkdown(emoji));
-  open.value = false;
+}
+
+function isSelected(emoji: DiscordEmoji): boolean {
+  return props.modelValue === emojiMarkdown(emoji);
 }
 
 // Shows a live preview when the current value is a custom emoji mention (<:name:id> / <a:name:id>) — plain
