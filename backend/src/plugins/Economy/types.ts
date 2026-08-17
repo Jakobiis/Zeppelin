@@ -99,9 +99,9 @@ export const zEconomyPvpGame = z
     message: "max_bet must be greater than or equal to min_bet",
   });
 
-// A "hol" (Higher or Lower) game: a number from 1-13 is drawn and the player guesses whether the next draw will
-// be higher, lower, or the same. A correct guess multiplies the running total and starts another round (new
-// number, new odds); the player can cash out after any correct guess, or keep pushing their luck until they
+// A "hol" (Higher or Lower) game: a number from 1-range_max is drawn and the player guesses whether the next
+// draw will be higher, lower, or the same. A correct guess multiplies the running total and starts another round
+// (new number, new odds); the player can cash out after any correct guess, or keep pushing their luck until they
 // guess wrong and lose the bet outright. Each round's per-choice multiplier is derived from that choice's true
 // odds at the current number (rarer guesses pay more), then clamped to [min_multiplier, max_multiplier] so no
 // guess is ever trivial or absurd. Played with `!play <game> <amount>`.
@@ -113,6 +113,10 @@ export const zEconomyHolGame = z
     max_bet: z.number().int().positive(),
     min_multiplier: z.number().min(1),
     max_multiplier: z.number().min(1),
+    // Numbers are drawn from 1-range_max. Higher means "Higher"/"Lower" guesses stay closer to a coinflip for
+    // longer (only really lopsided near the ends of the range), instead of a small range where most numbers are
+    // an easy guess in one direction.
+    range_max: z.number().int().min(4).max(1000).default(13),
     // Caps the net amount a single cash-out can add to the balance, regardless of how many rounds were
     // chained — round multipliers compound, so without a cap a long streak could balloon unbounded.
     max_payout: z.number().int().positive().nullable().default(null),

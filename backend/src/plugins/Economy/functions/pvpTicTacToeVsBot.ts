@@ -19,7 +19,7 @@ type Cell = "X" | "O" | null;
 
 // Chance the bot skips its win/block check on a given move and just plays positionally instead — without this,
 // the heuristic below never misses a win or a block, so a player could at best force a draw and never actually win.
-const MISTAKE_CHANCE = 0.12;
+const MISTAKE_CHANCE = 0.08;
 
 function checkWinner(board: Cell[]): "X" | "O" | null {
   for (const [a, b, c] of WIN_LINES) {

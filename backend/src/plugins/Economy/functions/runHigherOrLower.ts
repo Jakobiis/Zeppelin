@@ -19,19 +19,15 @@ import { parseAmountInput } from "./parseAmountInput.js";
 import { applyGameHold, getSpendableBalance } from "./pendingBalance.js";
 import { EconomyPluginType, zEconomyHolGame } from "../types.js";
 
-const ROUND_TIMEOUT = 5 * MINUTES;
-
-// Draws are independent each round (not depleted like an actual deck) — "Same" therefore always has 1/13 odds,
-// no matter how many rounds have already passed.
-const RANGE_MAX = 13;
+const ROUND_TIMEOUT = 10 * MINUTES;
 
 type Choice = "higher" | "lower" | "same";
 
 const CHOICE_LABEL: Record<Choice, string> = { higher: "Higher", lower: "Lower", same: "Same" };
 const CHOICE_EMOJI: Record<Choice, string> = { higher: "⬆️", lower: "⬇️", same: "🎯" };
 
-function rollNumber(): number {
-  return 1 + Math.floor(Math.random() * RANGE_MAX);
+function rollNumber(rangeMax: number): number {
+  return 1 + Math.floor(Math.random() * rangeMax);
 }
 
 // The "fair" multiplier for a choice is 1/probability (a break-even payout given its true odds), clamped into
@@ -42,13 +38,15 @@ function computeMultiplier(probability: number, min: number, max: number): numbe
   return Math.min(max, Math.max(min, 1 / probability));
 }
 
-function roundMultipliers(current: number, min: number, max: number): Record<Choice, number | null> {
-  const higherCount = RANGE_MAX - current;
+// Draws are independent each round (not depleted like an actual deck) — "Same" therefore always has 1/rangeMax
+// odds, no matter how many rounds have already passed.
+function roundMultipliers(current: number, rangeMax: number, min: number, max: number): Record<Choice, number | null> {
+  const higherCount = rangeMax - current;
   const lowerCount = current - 1;
   return {
-    higher: computeMultiplier(higherCount / RANGE_MAX, min, max),
-    lower: computeMultiplier(lowerCount / RANGE_MAX, min, max),
-    same: computeMultiplier(1 / RANGE_MAX, min, max),
+    higher: computeMultiplier(higherCount / rangeMax, min, max),
+    lower: computeMultiplier(lowerCount / rangeMax, min, max),
+    same: computeMultiplier(1 / rangeMax, min, max),
   };
 }
 
@@ -105,7 +103,7 @@ export async function runHigherOrLower(
     pluginData.state.lastPlayedAt.set(cooldownKey, Date.now());
   }
 
-  let currentNumber = rollNumber();
+  let currentNumber = rollNumber(game.range_max);
   let totalMultiplier = 1;
   let roundIndex = 0;
 
@@ -116,7 +114,7 @@ export async function runHigherOrLower(
   };
 
   const buildDescription = (extra?: string): string => {
-    const multipliers = roundMultipliers(currentNumber, game.min_multiplier, game.max_multiplier);
+    const multipliers = roundMultipliers(currentNumber, game.range_max, game.min_multiplier, game.max_multiplier);
     const buttonLines = (Object.keys(CHOICE_LABEL) as Choice[])
       .map((choice) => {
         const mult = multipliers[choice];
@@ -127,11 +125,11 @@ export async function runHigherOrLower(
 
     const progressLine =
       roundIndex > 0
-        ? `Current multiplier: **${totalMultiplier.toFixed(2)}x** (cash out for ${emojiPrefix}**${formatAmount(potentialPayout(totalMultiplier))}**)\n`
+        ? `Current multiplier: **${totalMultiplier.toFixed(2)}x** (compounds across rounds — cash out for ${emojiPrefix}**${formatAmount(potentialPayout(totalMultiplier))}**)\n`
         : "";
 
     return (
-      `Round ${roundIndex + 1} — the number is **${currentNumber}** (1-${RANGE_MAX})\n` +
+      `Round ${roundIndex + 1} — the number is **${currentNumber}** (1-${game.range_max})\n` +
       `${progressLine}${buttonLines}` +
       (extra ? `\n\n${extra}` : "")
     );
@@ -145,7 +143,7 @@ export async function runHigherOrLower(
       .setDescription(buildDescription(extra));
 
   const buildButtons = (disabled = false): ActionRowBuilder<ButtonBuilder> => {
-    const multipliers = roundMultipliers(currentNumber, game.min_multiplier, game.max_multiplier);
+    const multipliers = roundMultipliers(currentNumber, game.range_max, game.min_multiplier, game.max_multiplier);
     const buttons = (Object.keys(CHOICE_LABEL) as Choice[]).map((choice) =>
       new ButtonBuilder()
         .setStyle(ButtonStyle.Primary)
@@ -168,13 +166,20 @@ export async function runHigherOrLower(
 
   let finished = false;
 
+  // Sets `finished` and stops the collector together, in that order, as the very first thing this does — a
+  // caller that stopped the collector first and only set `finished` afterward left a window where discord.js's
+  // synchronous `collector.stop()` -> `emit("end", ...)` could re-enter this same settlement logic from the
+  // "end" handler below before `finished` was true, running a second (wrong) settlement on top of the first —
+  // e.g. a loss immediately overwritten by the "end" handler's timeout-refund/auto-cashout path.
   const settle = async (
     outcome: GameHistoryOutcome,
     payout: number,
     interaction: MessageComponentInteraction | null,
     resultText: string,
   ): Promise<void> => {
+    if (finished) return;
     finished = true;
+    collector.stop();
 
     if (payout > 0) {
       const settleLock = await pluginData.locks.acquire(economyUserLock({ id: userId }));
@@ -234,7 +239,6 @@ export async function runHigherOrLower(
         await interaction.deferUpdate().catch(noop);
         return;
       }
-      collector.stop();
       const payout = potentialPayout(totalMultiplier);
       await settle(
         "win",
@@ -245,21 +249,20 @@ export async function runHigherOrLower(
       return;
     }
 
-    const multipliers = roundMultipliers(currentNumber, game.min_multiplier, game.max_multiplier);
+    const multipliers = roundMultipliers(currentNumber, game.range_max, game.min_multiplier, game.max_multiplier);
     const chosenMultiplier = multipliers[action];
     if (chosenMultiplier == null) {
       await interaction.deferUpdate().catch(noop);
       return;
     }
 
-    const drawnNumber = rollNumber();
+    const drawnNumber = rollNumber(game.range_max);
     const correct =
       (action === "higher" && drawnNumber > currentNumber) ||
       (action === "lower" && drawnNumber < currentNumber) ||
       (action === "same" && drawnNumber === currentNumber);
 
     if (!correct) {
-      collector.stop();
       currentNumber = drawnNumber;
       await settle("loss", 0, interaction, `❌ The number was **${drawnNumber}** — you lost your bet.`);
       return;
@@ -272,8 +275,11 @@ export async function runHigherOrLower(
     await interaction.update({ embeds: [buildEmbed()], components: [buildButtons()] }).catch(noop);
   });
 
-  collector.on("end", async (_collected, reason) => {
-    if (finished || reason === "stopped") return;
+  collector.on("end", async () => {
+    // `finished` alone disambiguates a genuine timeout from settle()'s own collector.stop() triggering this same
+    // "end" event — settle() sets it before stopping the collector, so if it's already true, this run already
+    // has a real outcome and this is just that stop() call's echo.
+    if (finished) return;
 
     if (roundIndex === 0) {
       // Never made a guess — refund the bet in full rather than treating inactivity as a loss.

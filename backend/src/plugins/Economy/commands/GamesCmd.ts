@@ -52,7 +52,7 @@ export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
       }
 
       if (game.type === "hol") {
-        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — guess higher/lower/same on a 1-13 draw, chain multipliers **${game.min_multiplier}x**-**${game.max_multiplier}x** per round, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
+        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — guess higher/lower/same on a 1-${game.range_max} draw, chain multipliers **${game.min_multiplier}x**-**${game.max_multiplier}x** per round, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
       }
 
       const winPercent = Math.round(game.win_chance * 100);
