@@ -30,23 +30,44 @@ function rollNumber(rangeMax: number): number {
   return 1 + Math.floor(Math.random() * rangeMax);
 }
 
+// How many correct guesses it takes for the per-round ceiling to reach the configured max_multiplier — before
+// that, the ceiling ramps up linearly from min_multiplier instead of being available immediately on round 1.
+// Without this, the very first guess of a round already gets full access to max_multiplier merely by landing on
+// a number near either edge of the range, which doesn't feel earned this early.
+const RAMP_ROUNDS = 5;
+
+// The ceiling a round's multiplier is allowed to reach, given how many correct guesses have already happened
+// this game (0 on the very first guess). Reaches the full configured max_multiplier once RAMP_ROUNDS correct
+// guesses in a row have happened, and stays there for any round after that.
+function effectiveMaxMultiplier(roundIndex: number, min: number, max: number): number {
+  const progress = Math.min(1, (roundIndex + 1) / RAMP_ROUNDS);
+  return min + (max - min) * progress;
+}
+
 // The "fair" multiplier for a choice is 1/probability (a break-even payout given its true odds), clamped into
-// the configured range so an easy guess is never trivial and a rare guess never pays out absurdly. Returns null
-// for an impossible choice (0% odds) — the caller disables that button entirely.
-function computeMultiplier(probability: number, min: number, max: number): number | null {
+// [min, effectiveMax] so an easy guess is never trivial and a rare guess never pays out more than this round is
+// allowed to. Returns null for an impossible choice (0% odds) — the caller disables that button entirely.
+function computeMultiplier(probability: number, min: number, effectiveMax: number): number | null {
   if (probability <= 0) return null;
-  return Math.min(max, Math.max(min, 1 / probability));
+  return Math.min(effectiveMax, Math.max(min, 1 / probability));
 }
 
 // Draws are independent each round (not depleted like an actual deck) — "Same" therefore always has 1/rangeMax
 // odds, no matter how many rounds have already passed.
-function roundMultipliers(current: number, rangeMax: number, min: number, max: number): Record<Choice, number | null> {
+function roundMultipliers(
+  current: number,
+  rangeMax: number,
+  roundIndex: number,
+  min: number,
+  max: number,
+): Record<Choice, number | null> {
+  const effectiveMax = effectiveMaxMultiplier(roundIndex, min, max);
   const higherCount = rangeMax - current;
   const lowerCount = current - 1;
   return {
-    higher: computeMultiplier(higherCount / rangeMax, min, max),
-    lower: computeMultiplier(lowerCount / rangeMax, min, max),
-    same: computeMultiplier(1 / rangeMax, min, max),
+    higher: computeMultiplier(higherCount / rangeMax, min, effectiveMax),
+    lower: computeMultiplier(lowerCount / rangeMax, min, effectiveMax),
+    same: computeMultiplier(1 / rangeMax, min, effectiveMax),
   };
 }
 
@@ -104,7 +125,10 @@ export async function runHigherOrLower(
   }
 
   let currentNumber = rollNumber(game.range_max);
-  let totalMultiplier = 1;
+  // The multiplier a cash-out would pay right now — set (not compounded) to whichever choice was just guessed
+  // correctly, so it never exceeds max_multiplier no matter how many rounds have been won in a row. Surviving
+  // more rounds raises the *ceiling* this can reach (via the ramp above), not the value itself.
+  let currentMultiplier = 1;
   let roundIndex = 0;
 
   const potentialPayout = (multiplier: number): number => {
@@ -114,7 +138,7 @@ export async function runHigherOrLower(
   };
 
   const buildDescription = (extra?: string): string => {
-    const multipliers = roundMultipliers(currentNumber, game.range_max, game.min_multiplier, game.max_multiplier);
+    const multipliers = roundMultipliers(currentNumber, game.range_max, roundIndex, game.min_multiplier, game.max_multiplier);
     const buttonLines = (Object.keys(CHOICE_LABEL) as Choice[])
       .map((choice) => {
         const mult = multipliers[choice];
@@ -125,11 +149,14 @@ export async function runHigherOrLower(
 
     const progressLine =
       roundIndex > 0
-        ? `Current multiplier: **${totalMultiplier.toFixed(2)}x** (compounds across rounds — cash out for ${emojiPrefix}**${formatAmount(potentialPayout(totalMultiplier))}**)\n`
+        ? `Current multiplier: **${currentMultiplier.toFixed(2)}x** (cash out for ${emojiPrefix}**${formatAmount(potentialPayout(currentMultiplier))}**)\n`
         : "";
 
+    // Deliberately doesn't say what the range is — combined with a specific number, that makes it obvious how
+    // close to an edge you are (e.g. "23 (1-25)" all but announces Lower is the safe bet). The multipliers
+    // already communicate the odds; spelling out the range on top of that is redundant and too easy to read.
     return (
-      `Round ${roundIndex + 1} — the number is **${currentNumber}** (1-${game.range_max})\n` +
+      `Round ${roundIndex + 1} — the number is **${currentNumber}**\n` +
       `${progressLine}${buttonLines}` +
       (extra ? `\n\n${extra}` : "")
     );
@@ -143,7 +170,7 @@ export async function runHigherOrLower(
       .setDescription(buildDescription(extra));
 
   const buildButtons = (disabled = false): ActionRowBuilder<ButtonBuilder> => {
-    const multipliers = roundMultipliers(currentNumber, game.range_max, game.min_multiplier, game.max_multiplier);
+    const multipliers = roundMultipliers(currentNumber, game.range_max, roundIndex, game.min_multiplier, game.max_multiplier);
     const buttons = (Object.keys(CHOICE_LABEL) as Choice[]).map((choice) =>
       new ButtonBuilder()
         .setStyle(ButtonStyle.Primary)
@@ -239,17 +266,17 @@ export async function runHigherOrLower(
         await interaction.deferUpdate().catch(noop);
         return;
       }
-      const payout = potentialPayout(totalMultiplier);
+      const payout = potentialPayout(currentMultiplier);
       await settle(
         "win",
         payout,
         interaction,
-        `💰 Cashed out at **${totalMultiplier.toFixed(2)}x**! +${emojiPrefix}**${formatAmount(payout - bet)}** ${config.currency_name}`,
+        `💰 Cashed out at **${currentMultiplier.toFixed(2)}x**! +${emojiPrefix}**${formatAmount(payout - bet)}** ${config.currency_name}`,
       );
       return;
     }
 
-    const multipliers = roundMultipliers(currentNumber, game.range_max, game.min_multiplier, game.max_multiplier);
+    const multipliers = roundMultipliers(currentNumber, game.range_max, roundIndex, game.min_multiplier, game.max_multiplier);
     const chosenMultiplier = multipliers[action];
     if (chosenMultiplier == null) {
       await interaction.deferUpdate().catch(noop);
@@ -268,7 +295,7 @@ export async function runHigherOrLower(
       return;
     }
 
-    totalMultiplier *= chosenMultiplier;
+    currentMultiplier = chosenMultiplier;
     roundIndex += 1;
     currentNumber = drawnNumber;
 
@@ -288,12 +315,12 @@ export async function runHigherOrLower(
     }
 
     // Auto cash-out at the current multiplier rather than losing an already-earned streak to inactivity.
-    const payout = potentialPayout(totalMultiplier);
+    const payout = potentialPayout(currentMultiplier);
     await settle(
       "win",
       payout,
       null,
-      `⌛ Timed out — automatically cashed out at **${totalMultiplier.toFixed(2)}x**.`,
+      `⌛ Timed out — automatically cashed out at **${currentMultiplier.toFixed(2)}x**.`,
     );
   });
 }
