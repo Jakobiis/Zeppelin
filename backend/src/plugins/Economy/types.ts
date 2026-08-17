@@ -100,11 +100,13 @@ export const zEconomyPvpGame = z
   });
 
 // A "hol" (Higher or Lower) game: a number from 1-range_max is drawn and the player guesses whether the next
-// draw will be higher, lower, or the same. A correct guess multiplies the running total and starts another round
-// (new number, new odds); the player can cash out after any correct guess, or keep pushing their luck until they
-// guess wrong and lose the bet outright. Each round's per-choice multiplier is derived from that choice's true
-// odds at the current number (rarer guesses pay more), then clamped to [min_multiplier, max_multiplier] so no
-// guess is ever trivial or absurd. Played with `!play <game> <amount>`.
+// draw will be higher, lower, or the same. A correct guess sets the cash-out multiplier to that guess's own
+// odds-based value (not a running product — winning several rounds in a row doesn't stack) and starts another
+// round; the player can cash out after any correct guess, or keep pushing their luck until they guess wrong and
+// lose the bet outright. Each round's per-choice multiplier is derived from that choice's true odds at the
+// current number (rarer guesses pay more), clamped to [min_multiplier, max_multiplier] so no guess is ever
+// trivial or absurd — surviving more rounds raises how close to max_multiplier that clamp is allowed to reach
+// (see ramp_rounds) rather than raising the payout itself. Played with `!play <game> <amount>`.
 export const zEconomyHolGame = z
   .strictObject({
     type: z.literal("hol"),
@@ -117,8 +119,11 @@ export const zEconomyHolGame = z
     // longer (only really lopsided near the ends of the range), instead of a small range where most numbers are
     // an easy guess in one direction.
     range_max: z.number().int().min(4).max(1000).default(13),
-    // Caps the net amount a single cash-out can add to the balance, regardless of how many rounds were
-    // chained — round multipliers compound, so without a cap a long streak could balloon unbounded.
+    // How many correct guesses in a row it takes for a round's multiplier ceiling to reach the full
+    // max_multiplier — round 1 is capped near min_multiplier, ramping linearly up to max_multiplier by this
+    // round. Lower = reaches max_multiplier sooner (easier); higher = takes longer to earn the full payout range.
+    ramp_rounds: z.number().int().positive().default(5),
+    // Caps the net amount a single cash-out can add to the balance.
     max_payout: z.number().int().positive().nullable().default(null),
   })
   .refine((game) => game.max_bet >= game.min_bet, {

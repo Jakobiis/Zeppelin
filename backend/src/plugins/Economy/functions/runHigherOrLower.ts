@@ -30,17 +30,11 @@ function rollNumber(rangeMax: number): number {
   return 1 + Math.floor(Math.random() * rangeMax);
 }
 
-// How many correct guesses it takes for the per-round ceiling to reach the configured max_multiplier — before
-// that, the ceiling ramps up linearly from min_multiplier instead of being available immediately on round 1.
-// Without this, the very first guess of a round already gets full access to max_multiplier merely by landing on
-// a number near either edge of the range, which doesn't feel earned this early.
-const RAMP_ROUNDS = 5;
-
 // The ceiling a round's multiplier is allowed to reach, given how many correct guesses have already happened
-// this game (0 on the very first guess). Reaches the full configured max_multiplier once RAMP_ROUNDS correct
-// guesses in a row have happened, and stays there for any round after that.
-function effectiveMaxMultiplier(roundIndex: number, min: number, max: number): number {
-  const progress = Math.min(1, (roundIndex + 1) / RAMP_ROUNDS);
+// this game (0 on the very first guess). Reaches the full configured max_multiplier once game.ramp_rounds
+// correct guesses in a row have happened, and stays there for any round after that.
+function effectiveMaxMultiplier(roundIndex: number, rampRounds: number, min: number, max: number): number {
+  const progress = Math.min(1, (roundIndex + 1) / rampRounds);
   return min + (max - min) * progress;
 }
 
@@ -58,10 +52,11 @@ function roundMultipliers(
   current: number,
   rangeMax: number,
   roundIndex: number,
+  rampRounds: number,
   min: number,
   max: number,
 ): Record<Choice, number | null> {
-  const effectiveMax = effectiveMaxMultiplier(roundIndex, min, max);
+  const effectiveMax = effectiveMaxMultiplier(roundIndex, rampRounds, min, max);
   const higherCount = rangeMax - current;
   const lowerCount = current - 1;
   return {
@@ -138,7 +133,7 @@ export async function runHigherOrLower(
   };
 
   const buildDescription = (extra?: string): string => {
-    const multipliers = roundMultipliers(currentNumber, game.range_max, roundIndex, game.min_multiplier, game.max_multiplier);
+    const multipliers = roundMultipliers(currentNumber, game.range_max, roundIndex, game.ramp_rounds, game.min_multiplier, game.max_multiplier);
     const buttonLines = (Object.keys(CHOICE_LABEL) as Choice[])
       .map((choice) => {
         const mult = multipliers[choice];
@@ -170,7 +165,7 @@ export async function runHigherOrLower(
       .setDescription(buildDescription(extra));
 
   const buildButtons = (disabled = false): ActionRowBuilder<ButtonBuilder> => {
-    const multipliers = roundMultipliers(currentNumber, game.range_max, roundIndex, game.min_multiplier, game.max_multiplier);
+    const multipliers = roundMultipliers(currentNumber, game.range_max, roundIndex, game.ramp_rounds, game.min_multiplier, game.max_multiplier);
     const buttons = (Object.keys(CHOICE_LABEL) as Choice[]).map((choice) =>
       new ButtonBuilder()
         .setStyle(ButtonStyle.Primary)
@@ -276,7 +271,7 @@ export async function runHigherOrLower(
       return;
     }
 
-    const multipliers = roundMultipliers(currentNumber, game.range_max, roundIndex, game.min_multiplier, game.max_multiplier);
+    const multipliers = roundMultipliers(currentNumber, game.range_max, roundIndex, game.ramp_rounds, game.min_multiplier, game.max_multiplier);
     const chosenMultiplier = multipliers[action];
     if (chosenMultiplier == null) {
       await interaction.deferUpdate().catch(noop);
