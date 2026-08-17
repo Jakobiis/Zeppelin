@@ -72,9 +72,43 @@ export async function tradeCoins(
 
     const sellRate = trade.coins_per_point_sell ?? trade.coins_per_point;
     const pointsGained = Math.floor(amount / sellRate + RATE_EPSILON);
+    if (pointsGained <= 0) {
+      const coinsNeeded = Math.ceil(sellRate - RATE_EPSILON);
+      return {
+        type: "error",
+        message: `You need at least ${coinsNeeded} ${config.currency_name} to sell for 1 point`,
+      };
+    }
+
+    // The points counter may have its own max_value (e.g. an activity/leaderboard counter capped at 1000) —
+    // changeCounterValue silently clamps to that ceiling rather than erroring, so compare before/after to see
+    // how many points actually landed instead of trusting `pointsGained`.
+    const pointsBefore = await pluginData.state.counters.getCounterValue(trade.points_counter_name, null, userId);
 
     await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, -amount);
     await pluginData.state.counters.changeCounterValue(trade.points_counter_name, null, userId, pointsGained);
+
+    const pointsAfter = await pluginData.state.counters.getCounterValue(trade.points_counter_name, null, userId);
+    const actualPointsGained = pointsAfter - pointsBefore;
+
+    if (actualPointsGained < pointsGained) {
+      if (actualPointsGained <= 0) {
+        // Nothing converted — refund the coins and don't report a trade at all.
+        await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, amount);
+        return { type: "error", message: "Your points balance is already at its maximum — nothing to trade for." };
+      }
+
+      // Only charge for the coins that actually converted to points, so the max_value cap can't silently eat
+      // coins for points the user never actually received — refund the rest.
+      const actualCoinsSpent = Math.ceil(actualPointsGained * sellRate - RATE_EPSILON);
+      const refund = amount - actualCoinsSpent;
+      if (refund > 0) {
+        await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, refund);
+      }
+
+      const { spendable: cappedNewBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
+      return { type: "result", direction, spent: actualCoinsSpent, received: actualPointsGained, newBalance: cappedNewBalance };
+    }
 
     // Excludes any unrelated active hold (e.g. from a recent gift), so the displayed balance only counts
     // coins the user can actually spend.

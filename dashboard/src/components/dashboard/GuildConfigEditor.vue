@@ -1,27 +1,27 @@
 <template>
-  <div v-if="loading">
-    Loading...
+  <div v-if="loading" class="flex items-center justify-center py-24 text-muted-foreground text-sm">
+    Loading…
   </div>
   <div v-else>
-    <div v-if="errors.length" class="bg-card border border-border py-2 px-3 rounded-lg shadow-md mb-4">
-      <div class="font-semibold text-destructive">Errors:</div>
-      <pre v-for="error in errors">{{ error }}</pre>
+    <div v-if="errors.length" class="bg-card border border-destructive/40 border-l-4 border-l-destructive py-3 px-4 rounded-lg shadow-md mb-4">
+      <div class="font-semibold text-destructive mb-1">Errors</div>
+      <pre v-for="error in errors" class="text-sm whitespace-pre-wrap font-mono text-foreground/90">{{ error }}</pre>
     </div>
 
     <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4 flex items-center flex-wrap">
       <h1 class="flex-full md:flex-auto">Config for {{ guild.name }}</h1>
-      <button v-if="mode === 'yaml' && !saving" class="flex-none btn-primary" v-on:click="save">
+      <button v-if="!saving" class="flex-none btn-primary" v-on:click="save">
         <span v-if="saved">Saved!</span>
         <span v-else>Save</span>
       </button>
-      <div v-if="mode === 'yaml' && saving" class="flex-none btn-secondary">
+      <div v-else class="flex-none btn-secondary">
         Saving...
       </div>
     </div>
 
     <Tabs class="mt-4">
-      <Tab :active="mode === 'yaml'"><a href="javascript:void(0)" v-on:click="mode = 'yaml'">Raw YAML</a></Tab>
-      <Tab :active="mode === 'interface'"><a href="javascript:void(0)" v-on:click="mode = 'interface'">Interface</a></Tab>
+      <Tab :active="mode === 'yaml'"><a href="javascript:void(0)" v-on:click="setMode('yaml')">Raw YAML</a></Tab>
+      <Tab :active="mode === 'interface'"><a href="javascript:void(0)" v-on:click="setMode('interface')">Interface</a></Tab>
     </Tabs>
 
     <v-ace-editor v-show="mode === 'yaml'" class="rounded-lg shadow-lg border border-border"
@@ -41,12 +41,14 @@
 
     <div v-if="mode === 'interface'" class="flex flex-wrap lg:flex-nowrap items-start gap-6 mt-4">
       <nav class="w-full lg:w-56 flex-none border border-border rounded-lg bg-card shadow-md p-3">
-        <ul class="list-none space-y-1">
+        <ul class="list-none space-y-0.5">
           <li v-for="plugin in formPlugins" :key="plugin.name">
             <a href="javascript:void(0)"
-               class="block px-3 py-1.5 rounded-md text-sm"
-               :class="selectedPlugin === plugin.name ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent hover:text-accent-foreground'"
-               v-on:click="selectedPlugin = plugin.name">
+               class="block px-3 py-1.5 rounded-md text-sm border-l-2 transition-colors duration-150"
+               :class="selectedPlugin === plugin.name
+                 ? 'bg-accent text-accent-foreground font-medium border-primary'
+                 : 'text-foreground border-transparent hover:bg-accent hover:text-accent-foreground'"
+               v-on:click="selectPlugin(plugin.name)">
               {{ plugin.info.prettyName || plugin.name }}
             </a>
           </li>
@@ -56,24 +58,31 @@
       <div class="flex-auto min-w-0">
         <p class="text-sm text-muted-foreground mb-4">
           Structured forms are available for plugins as the renderer learns to handle more of their config shape —
-          anything it doesn't understand yet falls back to a raw JSON field. Saving here updates the same
-          underlying config as the YAML editor above.
+          anything it doesn't understand yet falls back to a raw JSON field. This is the same underlying config as
+          the Raw YAML tab — switching back and forth (or saving) keeps them in sync.
         </p>
+        <div v-if="pluginLoading" class="bg-card border border-border rounded-lg shadow-md p-6 text-muted-foreground text-sm">
+          Loading…
+        </div>
         <PluginConfigForm
-          v-if="selectedPlugin"
-          :key="selectedPlugin"
+          v-else-if="selectedPlugin && pluginSchema && pluginValue"
           :guild-id="String($route.params.guildId)"
-          :plugin-name="selectedPlugin"
+          :schema="pluginSchema"
+          :model-value="pluginValue"
+          @update:model-value="pluginValue = $event"
         />
-        <div v-else class="text-muted-foreground">Select a plugin from the sidebar.</div>
+        <div v-else class="bg-card border border-border rounded-lg shadow-md p-6 text-muted-foreground text-sm">
+          Select a plugin from the sidebar.
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script lang="ts">
+  import yaml from "js-yaml";
   import {mapState} from "vuex";
-  import {ApiError} from "../../api";
+  import {ApiError, get} from "../../api";
   import { DocsState, GuildState } from "../../store/types";
 
   import { VAceEditor } from "vue3-ace-editor";
@@ -86,6 +95,7 @@
   import Tab from "../Tab.vue";
   import Tabs from "../Tabs.vue";
   import PluginConfigForm from "./PluginConfigForm.vue";
+  import { dereferenceSchema, fillDefaults } from "./pluginConfigSchema";
 
   let editorKeybindListener;
   let windowResizeListener;
@@ -149,6 +159,14 @@
         savedTimeout: null,
         mode: "yaml",
         selectedPlugin: null,
+        // Per-plugin dereferenced schema, fetched once and cached — schemas don't change based on user edits.
+        pluginSchemas: {},
+        // { config, overrides } for the currently selected plugin, derived live from editableConfig whenever the
+        // Interface tab becomes active. This is the single piece of state PluginConfigForm edits; it's folded
+        // back into editableConfig on save or whenever switching away, so the YAML and Interface tabs never
+        // drift out of sync with each other.
+        pluginValue: null,
+        pluginLoading: false,
       };
     },
     computed: {
@@ -169,8 +187,79 @@
           });
         },
       }),
+      pluginSchema() {
+        return this.selectedPlugin ? this.pluginSchemas[this.selectedPlugin] ?? null : null;
+      },
     },
     methods: {
+      // Fetches+dereferences a plugin's config-schema once and caches it; the schema itself never changes based
+      // on user edits, only the value does.
+      async ensurePluginSchema(pluginName) {
+        if (!this.pluginSchemas[pluginName]) {
+          const result = await get(`guilds/${this.$route.params.guildId}/config-schema/${pluginName}`);
+          const schema = dereferenceSchema(result.schema, result.schema?.$defs ?? {});
+          this.pluginSchemas = { ...this.pluginSchemas, [pluginName]: schema };
+        }
+        return this.pluginSchemas[pluginName];
+      },
+      // Parses the *current* editableConfig text and pulls out this plugin's raw config/overrides, filling in
+      // any defaults the raw YAML didn't spell out — this is what makes switching into the Interface tab reflect
+      // whatever's currently in the YAML editor, hand-edited or not, rather than a stale server fetch.
+      derivePluginValueFromYaml(pluginName, schema) {
+        let parsed;
+        try {
+          parsed = yaml.load(this.editableConfig || "") || {};
+        } catch {
+          parsed = {};
+        }
+        const pluginNode = parsed?.plugins?.[pluginName] ?? {};
+        const configSchema = schema?.properties?.config ?? null;
+        const overridesSchema = schema?.properties?.overrides ?? null;
+        return {
+          config: fillDefaults(configSchema, pluginNode.config ?? {}),
+          overrides: fillDefaults(overridesSchema, pluginNode.overrides ?? []),
+        };
+      },
+      // Folds the live Interface-tab value back into editableConfig's YAML text — called whenever we're about to
+      // leave the Interface tab (switching tabs, switching plugins, or saving) so nothing typed there is lost.
+      syncPluginValueIntoYaml() {
+        if (!this.selectedPlugin || !this.pluginValue) return;
+        let parsed;
+        try {
+          parsed = yaml.load(this.editableConfig || "") || {};
+        } catch {
+          // Raw YAML is currently invalid (mid hand-edit) — there's nothing sensible to merge into, so leave it
+          // alone rather than clobbering whatever the user was typing.
+          return;
+        }
+        parsed.plugins = parsed.plugins || {};
+        parsed.plugins[this.selectedPlugin] = parsed.plugins[this.selectedPlugin] || {};
+        parsed.plugins[this.selectedPlugin].config = this.pluginValue.config;
+        if (this.pluginValue.overrides && this.pluginValue.overrides.length) {
+          parsed.plugins[this.selectedPlugin].overrides = this.pluginValue.overrides;
+        } else {
+          delete parsed.plugins[this.selectedPlugin].overrides;
+        }
+        this.editableConfig = yaml.dump(parsed);
+      },
+      async loadPluginIntoInterface(pluginName) {
+        this.pluginLoading = true;
+        const schema = await this.ensurePluginSchema(pluginName);
+        this.pluginValue = this.derivePluginValueFromYaml(pluginName, schema);
+        this.pluginLoading = false;
+      },
+      async selectPlugin(pluginName) {
+        if (pluginName === this.selectedPlugin) return;
+        if (this.mode === "interface") this.syncPluginValueIntoYaml();
+        this.selectedPlugin = pluginName;
+        if (this.mode === "interface") await this.loadPluginIntoInterface(pluginName);
+      },
+      async setMode(newMode) {
+        if (newMode === this.mode) return;
+        if (this.mode === "interface") this.syncPluginValueIntoYaml();
+        this.mode = newMode;
+        if (newMode === "interface" && this.selectedPlugin) await this.loadPluginIntoInterface(this.selectedPlugin);
+      },
       editorInit() {
         // Add Ctrl+S/Cmd+S save shortcut
         const isMac = /mac/i.test(navigator.platform);
@@ -237,6 +326,11 @@
       },
       async save() {
         if (this.saving) return;
+
+        // Whichever tab is currently active, saving always goes through the same raw-YAML endpoint below — so
+        // if the Interface tab has unsaved edits, fold them into editableConfig first (this is also what makes
+        // Ctrl+S work while the Interface tab is active, without a separate keybinding for it).
+        if (this.mode === "interface") this.syncPluginValueIntoYaml();
 
         this.saved = false;
         this.saving = true;

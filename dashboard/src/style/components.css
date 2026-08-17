@@ -91,6 +91,115 @@
   }
 }
 
+/* Text/number/textarea/select inputs used throughout the plugin config interface — one shared look (incl. a
+   real hover + focus-ring state, which the raw bg-input/border-border utilities scattered around before this
+   had neither of) instead of every field re-typing the same utility string with no interaction feedback. */
+.field-input {
+  @apply w-full bg-input border border-border rounded-md px-2.5 py-1.5;
+  @apply text-sm text-foreground;
+  @apply transition-[border-color,box-shadow] duration-150;
+
+  &::placeholder {
+    @apply text-muted-foreground;
+  }
+
+  &:hover {
+    @apply border-ring/50;
+  }
+
+  &:focus {
+    @apply outline-none border-ring ring-2 ring-ring/25;
+  }
+
+  &:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+}
+
+textarea.field-input {
+  @apply font-mono leading-relaxed;
+}
+
+/* Combine with .field-input on a <select> to swap its native OS arrow (inconsistent against a dark theme) for a
+   themed one, the same "repaint but stay native" approach as .checkbox below. */
+.select-arrow {
+  appearance: none;
+  @apply pr-8;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23888888' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  background-size: 0.65rem;
+}
+
+/* A dashed "empty slot" affordance for add-new actions (add a field/entry/item) — reads as an open slot waiting
+   to be filled rather than a normal action button, and stays visually calm in lists where it repeats often. */
+.btn-add {
+  @apply inline-flex items-center justify-center gap-1;
+  @apply px-3 py-1.5;
+  @apply rounded-lg border border-dashed border-border;
+  @apply text-xs font-medium text-muted-foreground;
+  @apply bg-transparent;
+  @apply transition-colors duration-150;
+  @apply cursor-pointer;
+
+  &:hover {
+    @apply border-ring/60 text-foreground bg-accent/40;
+  }
+}
+
+/* A quieter alternative to .btn-destructive for routine per-row removals (array items, record entries, override
+   criteria) — a whole list of solid red pills reads as noisy/alarming for an action this common, so this stays
+   neutral until hovered/focused. */
+.btn-remove {
+  @apply inline-flex items-center justify-center;
+  @apply px-2.5 py-1;
+  @apply rounded-lg;
+  @apply text-xs font-medium text-muted-foreground;
+  @apply transition-colors duration-150;
+  @apply cursor-pointer;
+
+  &:hover,
+  &:focus-visible {
+    @apply bg-destructive/10 text-destructive;
+  }
+}
+
+/* Chevron icon for collapse/expand toggles — a crisp vector instead of the "▸" glyph, which renders with
+   inconsistent weight/baseline across fonts and doesn't animate smoothly. */
+.chevron-icon {
+  @apply w-3.5 h-3.5 shrink-0;
+  @apply text-muted-foreground;
+  @apply transition-transform duration-150;
+}
+
+/* Nesting container for an object/array/record's child fields — a tinted, right-rounded panel instead of a bare
+   indent line, so nested structure reads as a distinct group at a glance instead of everything just shifting
+   right by the same amount regardless of depth. */
+.field-panel {
+  @apply mt-2 pl-4 pr-3 py-3;
+  @apply border-l-2 border-border;
+  @apply bg-muted/25 rounded-r-lg;
+}
+
+/* Collapsible card for a single array item / record entry — subtle elevation over the surrounding panel, with
+   its own hover state so a long list of entries doesn't read as a flat wall of identical boxes. */
+.item-card {
+  @apply border border-border rounded-lg bg-card/70;
+  @apply transition-colors duration-150;
+
+  &:hover {
+    @apply border-ring/40;
+  }
+}
+
+.item-card-header {
+  @apply flex items-center gap-2 px-3 py-2;
+}
+
+.item-card-body {
+  @apply px-3 pb-3;
+}
+
 /* Checkbox: a custom checked/unchecked appearance (native default checkboxes barely register a visible state
    change against a dark theme) — still a real <input type="checkbox"> under the hood for accessibility/keyboard
    support, just repainted. */

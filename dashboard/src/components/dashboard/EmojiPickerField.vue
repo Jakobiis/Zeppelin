@@ -8,14 +8,14 @@
 
       <input
         type="text"
-        class="flex-1 bg-input border border-border rounded-md px-2 py-1"
+        class="field-input flex-1"
         placeholder="Type a unicode emoji, or pick a server emoji below"
         :value="modelValue ?? ''"
         @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value || null)"
       />
     </div>
 
-    <div class="border border-border rounded-lg p-2 max-h-40 overflow-y-auto">
+    <div class="border border-border rounded-lg bg-muted/25 p-2 max-h-40 overflow-y-auto">
       <p v-if="loadError" class="text-xs text-destructive">Couldn't load this server's emoji from Discord.</p>
       <p v-else-if="loading" class="text-xs text-muted-foreground">Loading…</p>
       <p v-else-if="!emojis.length" class="text-xs text-muted-foreground">This server has no custom emoji.</p>
@@ -24,8 +24,8 @@
           v-for="emoji in emojis"
           :key="emoji.id"
           type="button"
-          class="w-8 h-8 flex items-center justify-center rounded-md hover:bg-accent"
-          :class="{ 'bg-accent': isSelected(emoji) }"
+          class="w-8 h-8 flex items-center justify-center rounded-md transition-colors duration-150 hover:bg-accent cursor-pointer"
+          :class="isSelected(emoji) ? 'bg-accent ring-1 ring-ring/50' : ''"
           :title="emoji.name"
           @click="choose(emoji)"
         >

@@ -1,7 +1,7 @@
 <template>
   <select
     v-if="!loadError"
-    class="w-full bg-input border border-border rounded-md px-2 py-1"
+    class="field-input select-arrow"
     :disabled="loading"
     :value="modelValue ?? ''"
     @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value || null)"
@@ -14,7 +14,7 @@
     <p class="text-xs text-destructive mb-1">Couldn't load {{ entityType }}s from Discord — enter an ID manually.</p>
     <input
       type="text"
-      class="w-full bg-input border border-border rounded-md px-2 py-1 font-mono text-sm"
+      class="field-input font-mono text-sm"
       :value="modelValue ?? ''"
       @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value || null)"
     />

@@ -1,105 +1,78 @@
 <template>
-  <div>
-    <div v-if="loading">Loading...</div>
-    <div v-else class="bg-card border border-border rounded-lg shadow-md p-6">
-      <div v-if="errors.length" class="bg-muted border border-border py-2 px-3 rounded-lg shadow-md mb-4">
-        <div class="font-semibold text-destructive">Errors:</div>
-        <pre v-for="(error, i) in errors" :key="i" class="text-sm whitespace-pre-wrap">{{ error }}</pre>
-      </div>
+  <div class="bg-card border border-border rounded-lg shadow-md p-6">
+    <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Configuration</h2>
 
-      <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-3 items-start mb-6">
-        <PluginConfigField
-          v-for="(propSchema, key) in configSchema?.properties ?? {}"
-          :key="key"
-          :class="isWide(propSchema, String(key)) ? 'col-span-full' : ''"
-          :schema="propSchema"
-          :field-key="String(key)"
-          :label="prettifyKey(String(key))"
-          :model-value="value.config[key]"
-          @update:model-value="(val) => (value.config[key] = val)"
-        />
-      </div>
+    <div v-if="visibleConfigKeys.length" class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
+      <PluginConfigField
+        v-for="key in visibleConfigKeys"
+        :key="key"
+        :class="isWide(configSchema.properties[key], key) ? 'col-span-full' : ''"
+        :schema="configSchema.properties[key]"
+        :field-key="key"
+        :label="prettifyKey(key)"
+        :model-value="modelValue.config[key]"
+        @update:model-value="(val) => updateConfigKey(key, val)"
+      />
+    </div>
+    <p v-else class="text-sm text-muted-foreground italic">Nothing configurable here yet.</p>
 
-      <div v-if="overridesSchema" class="border-t border-border pt-4 mb-4">
-        <PluginConfigField
-          :schema="overridesSchema"
-          field-key="overrides"
-          label="Overrides"
-          :model-value="value.overrides"
-          @update:model-value="(val) => (value.overrides = val)"
-        />
-      </div>
+    <select
+      v-if="hiddenConfigKeys.length"
+      class="btn-add select-arrow"
+      :class="visibleConfigKeys.length ? 'mt-3' : 'mt-2'"
+      value=""
+      @change="addConfigField(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''"
+    >
+      <option value="" disabled>+ Add field…</option>
+      <option v-for="key in hiddenConfigKeys" :key="key" :value="key">{{ prettifyKey(key) }}</option>
+    </select>
 
-      <button type="button" class="btn-primary" :disabled="saving" @click="save">
-        <span v-if="saved">Saved!</span>
-        <span v-else-if="saving">Saving...</span>
-        <span v-else>Save</span>
-      </button>
+    <div v-if="overridesSchema" class="border-t border-border pt-5 mt-6">
+      <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Overrides</h2>
+      <PluginConfigField
+        :schema="overridesSchema"
+        field-key="overrides"
+        no-header
+        :model-value="modelValue.overrides"
+        @update:model-value="(val) => $emit('update:modelValue', { ...modelValue, overrides: val })"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, provide, reactive, ref } from "vue";
-import { ApiError, get, post } from "../../api";
+import { computed, provide } from "vue";
 import PluginConfigField from "./PluginConfigField.vue";
-import { dereferenceSchema, isWide, prettifyKey } from "./pluginConfigSchema";
+import { defaultForSchema, getObjectFieldKeys, isWide, prettifyKey } from "./pluginConfigSchema";
 
 const props = defineProps<{
   guildId: string;
-  pluginName: string;
+  // Already-dereferenced { properties: { config, overrides } } schema for this plugin.
+  schema: any;
+  modelValue: { config: Record<string, any>; overrides: any[] };
+}>();
+
+const emit = defineEmits<{
+  (e: "update:modelValue", value: { config: Record<string, any>; overrides: any[] }): void;
 }>();
 
 provide("pluginConfigGuildId", props.guildId);
 
-const loading = ref(true);
-const saving = ref(false);
-const saved = ref(false);
-const errors = ref<string[]>([]);
-const schema = ref<any>(null);
-// Holds { config: {...plugin config fields}, overrides: [...] } — matches the shape the backend serves so the
-// two sections below can bind straight into it without any reshaping.
-const value = reactive<{ config: Record<string, any>; overrides: any[] }>({ config: {}, overrides: [] });
+const configSchema = computed(() => props.schema?.properties?.config ?? null);
+const overridesSchema = computed(() => props.schema?.properties?.overrides ?? null);
 
-const configSchema = computed(() => schema.value?.properties?.config ?? null);
-const overridesSchema = computed(() => schema.value?.properties?.overrides ?? null);
+// Same "only show what's required or already set" treatment as nested objects get inside PluginConfigField —
+// applied here too so a plugin's top-level config doesn't list rarely-used optional fields it doesn't need to.
+const configFieldKeys = computed(() => getObjectFieldKeys(configSchema.value, props.modelValue.config));
+const visibleConfigKeys = computed(() => configFieldKeys.value.visible);
+const hiddenConfigKeys = computed(() => configFieldKeys.value.hidden);
 
-onMounted(async () => {
-  const result = await get(`guilds/${props.guildId}/config-schema/${props.pluginName}`);
-  // Inlines any $ref (zod hoists repeated/recursive sub-schemas, e.g. override criteria's all/any/not) so
-  // nothing downstream has to know $ref exists.
-  schema.value = dereferenceSchema(result.schema, result.schema?.$defs ?? {});
-  Object.assign(value, result.value);
-  loading.value = false;
-});
+function updateConfigKey(key: string, value: any) {
+  emit("update:modelValue", { ...props.modelValue, config: { ...props.modelValue.config, [key]: value } });
+}
 
-let savedTimeout: ReturnType<typeof setTimeout> | null = null;
-
-async function save() {
-  if (saving.value) return;
-
-  saving.value = true;
-  saved.value = false;
-  errors.value = [];
-
-  if (savedTimeout) {
-    clearTimeout(savedTimeout);
-  }
-
-  try {
-    await post(`guilds/${props.guildId}/config-schema/${props.pluginName}`, {
-      value: { config: { ...value.config }, overrides: value.overrides },
-    });
-    saving.value = false;
-    saved.value = true;
-    savedTimeout = setTimeout(() => (saved.value = false), 3000);
-  } catch (e) {
-    saving.value = false;
-    if (e instanceof ApiError && (e.status === 400 || e.status === 422)) {
-      errors.value = e.body.errors || ["Error while saving config"];
-      return;
-    }
-    throw e;
-  }
+function addConfigField(key: string) {
+  if (!key) return;
+  updateConfigKey(key, defaultForSchema(configSchema.value?.properties?.[key]));
 }
 </script>

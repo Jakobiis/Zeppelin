@@ -4,11 +4,13 @@
       <button
         v-if="showChevron"
         type="button"
-        class="text-muted-foreground hover:text-foreground shrink-0 w-4"
+        class="text-muted-foreground hover:text-foreground shrink-0 w-4 cursor-pointer"
         :aria-label="collapsed ? 'Expand' : 'Collapse'"
         @click="collapsed = !collapsed"
       >
-        <span class="inline-block transition-transform duration-150" :class="{ 'rotate-90': !collapsed }">▸</span>
+        <svg class="chevron-icon" :class="{ 'rotate-90': !collapsed }" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 4l4 4-4 4" />
+        </svg>
       </button>
 
       <input
@@ -38,10 +40,12 @@
     </div>
     <p v-if="description" class="text-sm text-muted-foreground mt-0.5">{{ description }}</p>
 
-    <div v-if="nullable && !isSet" class="text-sm text-muted-foreground italic mt-1">Not set (using default)</div>
+    <div v-if="nullable && !isSet" class="text-sm text-muted-foreground italic mt-1.5">Not set — using default</div>
 
     <template v-else>
-      <!-- boolean (only rendered here when it couldn't be shown inline in the header above, e.g. no label) -->
+      <!-- boolean (only rendered here when it couldn't be shown inline in the header above, e.g. no label) —
+           the showInlineBoolean branch is a no-op template so a boolean kind never falls through to the raw-JSON
+           fallback below just because its checkbox was already drawn in the header. -->
       <input
         v-if="kind === 'boolean' && !showInlineBoolean"
         type="checkbox"
@@ -49,6 +53,7 @@
         :checked="!!modelValue"
         @change="emitUpdate(($event.target as HTMLInputElement).checked)"
       />
+      <template v-else-if="kind === 'boolean'"></template>
 
       <!-- role / channel picker -->
       <RoleChannelPickerField
@@ -73,7 +78,7 @@
       <input
         v-else-if="kind === 'string'"
         type="text"
-        class="w-full bg-input border border-border rounded-md px-2 py-1 mt-1"
+        class="field-input mt-1"
         :placeholder="modelValue == null ? 'Not set' : ''"
         :value="modelValue ?? ''"
         @input="emitUpdate(($event.target as HTMLInputElement).value)"
@@ -83,37 +88,51 @@
       <input
         v-else-if="kind === 'number'"
         type="number"
-        class="w-full bg-input border border-border rounded-md px-2 py-1 mt-1"
+        class="field-input mt-1"
         :placeholder="modelValue == null ? 'Not set' : ''"
         :value="modelValue ?? ''"
         @input="emitUpdate(numberOrNull(($event.target as HTMLInputElement).value))"
       />
 
-      <!-- nested static object: grid so related fields sit side by side instead of one long column -->
-      <div
-        v-else-if="kind === 'object'"
-        v-show="!collapsed"
-        class="pl-4 border-l border-border mt-2 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-3 items-start"
-      >
-        <PluginConfigField
-          v-for="(propSchema, key) in innerSchema.properties"
-          :key="key"
-          :class="[isWide(propSchema, String(key)) ? 'col-span-full' : '', String(key) === 'config' ? 'border-t border-border pt-3' : '']"
-          :schema="propSchema"
-          :field-key="String(key)"
-          :label="prettifyKey(String(key))"
-          :model-value="(modelValue ?? {})[key]"
-          @update:model-value="(val) => updateObjectKey(String(key), val)"
-        />
+      <!-- nested static object: grid so related fields sit side by side instead of one long column. Only
+           required fields and optional fields that already hold a value take up space here — the rest are
+           reachable through "+ Add field" below so an object with mostly-unused optional properties (like an
+           override's criteria) doesn't have to list all of them just to let you set one. -->
+      <div v-else-if="kind === 'object'" v-show="!collapsed" class="field-panel">
+        <div
+          v-if="visibleObjectKeys.length"
+          class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-3 items-start"
+        >
+          <PluginConfigField
+            v-for="key in visibleObjectKeys"
+            :key="key"
+            :class="[isWide(innerSchema.properties[key], key) ? 'col-span-full' : '', key === 'config' ? 'border-t border-border pt-3' : '']"
+            :schema="innerSchema.properties[key]"
+            :field-key="key"
+            :label="prettifyKey(key)"
+            :model-value="(modelValue ?? {})[key]"
+            @update:model-value="(val) => updateObjectKey(key, val)"
+          />
+        </div>
+        <select
+          v-if="hiddenObjectKeys.length"
+          class="btn-add select-arrow"
+          :class="visibleObjectKeys.length ? 'mt-3' : ''"
+          value=""
+          @change="addObjectField(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''"
+        >
+          <option value="" disabled>+ Add field…</option>
+          <option v-for="key in hiddenObjectKeys" :key="key" :value="key">{{ prettifyKey(key) }}</option>
+        </select>
       </div>
 
       <!-- dynamic record (arbitrary string keys -> a shared value schema) -->
-      <div v-else-if="kind === 'record'" v-show="!collapsed" class="pl-4 border-l border-border mt-2 space-y-2">
+      <div v-else-if="kind === 'record'" v-show="!collapsed" class="field-panel space-y-2">
         <div v-for="entry in recordEntries" :key="entry.uid">
           <div v-if="recordValueIsSimple" class="flex items-center gap-2">
             <input
               type="text"
-              class="w-40 shrink-0 bg-input border border-border rounded-md px-2 py-1 font-mono text-sm"
+              class="field-input w-40 shrink-0 font-mono text-sm"
               :value="entry.key"
               placeholder="key"
               @change="renameRecordKey(entry.key, ($event.target as HTMLInputElement).value)"
@@ -125,27 +144,29 @@
               :model-value="(modelValue ?? {})[entry.key]"
               @update:model-value="(val) => updateObjectKey(entry.key, val)"
             />
-            <button type="button" class="btn-sm btn-destructive shrink-0" @click="removeRecordKey(entry.key)">Remove</button>
+            <button type="button" class="btn-remove shrink-0" @click="removeRecordKey(entry.key)">Remove</button>
           </div>
-          <div v-else class="border border-border rounded-lg p-2">
-            <div class="flex items-center gap-2">
+          <div v-else class="item-card">
+            <div class="item-card-header">
               <button
                 type="button"
-                class="text-muted-foreground hover:text-foreground shrink-0 w-4"
+                class="text-muted-foreground hover:text-foreground shrink-0 w-4 cursor-pointer"
                 @click="toggleEntryCollapsed(entry.key)"
               >
-                <span class="inline-block transition-transform duration-150" :class="{ 'rotate-90': !isEntryCollapsed(entry.key) }">▸</span>
+                <svg class="chevron-icon" :class="{ 'rotate-90': !isEntryCollapsed(entry.key) }" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 4l4 4-4 4" />
+                </svg>
               </button>
               <input
                 type="text"
-                class="flex-1 bg-input border border-border rounded-md px-2 py-1 font-mono text-sm"
+                class="field-input flex-1 font-mono text-sm"
                 :value="entry.key"
                 placeholder="key"
                 @change="renameRecordKey(entry.key, ($event.target as HTMLInputElement).value)"
               />
-              <button type="button" class="btn-sm btn-destructive shrink-0" @click="removeRecordKey(entry.key)">Remove</button>
+              <button type="button" class="btn-remove shrink-0" @click="removeRecordKey(entry.key)">Remove</button>
             </div>
-            <div v-show="!isEntryCollapsed(entry.key)" class="mt-2">
+            <div v-show="!isEntryCollapsed(entry.key)" class="item-card-body">
               <PluginConfigField
                 no-header
                 :schema="innerSchema.additionalProperties"
@@ -155,11 +176,11 @@
             </div>
           </div>
         </div>
-        <button type="button" class="btn-sm btn-tertiary" @click="addRecordKey">+ Add entry</button>
+        <button type="button" class="btn-add" @click="addRecordKey">+ Add entry</button>
       </div>
 
       <!-- array -->
-      <div v-else-if="kind === 'array'" v-show="!collapsed" class="pl-4 border-l border-border mt-2 space-y-2">
+      <div v-else-if="kind === 'array'" v-show="!collapsed" class="field-panel space-y-2">
         <template v-for="(item, index) in modelValue ?? []" :key="arrayItemUids[index]">
           <!-- simple items: one compact row, value + remove, no card/header -->
           <div v-if="itemsAreSimple" class="flex items-center gap-2">
@@ -170,23 +191,25 @@
               :model-value="item"
               @update:model-value="(val) => updateArrayItem(index, val)"
             />
-            <button type="button" class="btn-sm btn-destructive shrink-0" @click="removeArrayItem(index)">Remove</button>
+            <button type="button" class="btn-remove shrink-0" @click="removeArrayItem(index)">Remove</button>
           </div>
           <!-- complex items: collapsible, no text header, just a chevron + remove -->
-          <div v-else class="border border-border rounded-lg p-2">
-            <div class="flex items-center gap-2">
+          <div v-else class="item-card">
+            <div class="item-card-header">
               <button
                 type="button"
-                class="text-muted-foreground hover:text-foreground shrink-0 w-4"
+                class="text-muted-foreground hover:text-foreground shrink-0 w-4 cursor-pointer"
                 @click="toggleItemCollapsed(index)"
               >
-                <span class="inline-block transition-transform duration-150" :class="{ 'rotate-90': !isItemCollapsed(index) }">▸</span>
+                <svg class="chevron-icon" :class="{ 'rotate-90': !isItemCollapsed(index) }" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 4l4 4-4 4" />
+                </svg>
               </button>
               <span v-if="itemSummary(item)" class="flex-1 text-sm text-muted-foreground truncate">{{ itemSummary(item) }}</span>
               <div v-else class="flex-1"></div>
-              <button type="button" class="btn-sm btn-destructive shrink-0" @click="removeArrayItem(index)">Remove</button>
+              <button type="button" class="btn-remove shrink-0" @click="removeArrayItem(index)">Remove</button>
             </div>
-            <div v-show="!isItemCollapsed(index)" class="mt-2">
+            <div v-show="!isItemCollapsed(index)" class="item-card-body">
               <PluginConfigField
                 no-header
                 :schema="innerSchema.items"
@@ -196,13 +219,13 @@
             </div>
           </div>
         </template>
-        <button type="button" class="btn-sm btn-tertiary" @click="addArrayItem">+ Add item</button>
+        <button type="button" class="btn-add" @click="addArrayItem">+ Add item</button>
       </div>
 
       <!-- "a single value, or a list of them" (e.g. override criteria like channel: string | string[]) —
            edited as a plain list either way; emits a bare value, an array, or null depending on how many items
            end up in it, to match whichever branch of the union that represents. -->
-      <div v-else-if="kind === 'union' && multiLeafSchema" class="pl-4 border-l border-border mt-2 space-y-2">
+      <div v-else-if="kind === 'union' && multiLeafSchema" class="field-panel space-y-2">
         <div v-for="(item, index) in multiList" :key="index" class="flex items-center gap-2">
           <PluginConfigField
             class="flex-1"
@@ -211,9 +234,9 @@
             :model-value="item"
             @update:model-value="(val) => updateMultiItem(index, val)"
           />
-          <button type="button" class="btn-sm btn-destructive shrink-0" @click="removeMultiItem(index)">Remove</button>
+          <button type="button" class="btn-remove shrink-0" @click="removeMultiItem(index)">Remove</button>
         </div>
-        <button type="button" class="btn-sm btn-tertiary" @click="addMultiItem">+ Add</button>
+        <button type="button" class="btn-add" @click="addMultiItem">+ Add</button>
       </div>
 
       <!-- union -->
@@ -247,7 +270,7 @@
         <!-- generic multi-branch union (e.g. a discriminated union of genuinely different shapes) -->
         <select
           v-else
-          class="bg-input border border-border rounded-md px-2 py-1 mb-2"
+          class="field-input select-arrow mb-2"
           :value="activeUnionBranchIndex"
           @change="switchUnionBranch(Number(($event.target as HTMLSelectElement).value))"
         >
@@ -266,7 +289,7 @@
       <div v-else>
         <p class="text-xs text-muted-foreground mb-1 mt-1">Complex field — edit as raw JSON.</p>
         <textarea
-          class="w-full bg-input border border-border rounded-md px-2 py-1 font-mono text-sm"
+          class="field-input"
           rows="3"
           :value="jsonText"
           @change="updateFromJsonText(($event.target as HTMLTextAreaElement).value)"
@@ -285,6 +308,7 @@ import {
   defaultForSchema,
   detectMultiLeafSchema,
   detectSpecialFieldKind,
+  getObjectFieldKeys,
   isSimple,
   isWide,
   prettifyKey,
@@ -350,6 +374,17 @@ function toggleNull(setValue: boolean) {
 
 function updateObjectKey(key: string, value: any) {
   emit("update:modelValue", { ...(props.modelValue ?? {}), [key]: value });
+}
+
+// --- nested static objects: which properties are worth showing right now (see getObjectFieldKeys) ---
+
+const objectFieldKeys = computed(() => getObjectFieldKeys(innerSchema.value, props.modelValue));
+const visibleObjectKeys = computed(() => objectFieldKeys.value.visible);
+const hiddenObjectKeys = computed(() => objectFieldKeys.value.hidden);
+
+function addObjectField(key: string) {
+  if (!key) return;
+  updateObjectKey(key, defaultForSchema(innerSchema.value?.properties?.[key]));
 }
 
 function numberOrNull(raw: string): number | null {

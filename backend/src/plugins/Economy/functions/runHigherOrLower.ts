@@ -290,7 +290,13 @@ export async function runHigherOrLower(
       return;
     }
 
-    currentMultiplier = chosenMultiplier;
+    // A correct guess's "fair" multiplier depends on that round's specific odds, which can be lower than a
+    // previous round's even though the ramp ceiling only ever goes up — e.g. round 1's guess was a longshot but
+    // round 2's happens to be closer to a coinflip. Taking the max means cashing out after another correct guess
+    // can never pay out less than stopping one round earlier would have, so surviving an extra round of risk is
+    // never penalized. Always within bounds since currentMultiplier was already <= the (non-decreasing) ramp
+    // ceiling for its own round, which is <= this round's ceiling.
+    currentMultiplier = Math.max(currentMultiplier, chosenMultiplier);
     roundIndex += 1;
     currentNumber = drawnNumber;
 

@@ -155,6 +155,65 @@ export function detectMultiLeafSchema(s: any): any | null {
   return leafBranch;
 }
 
+// Purely an implementation artifact of the override criteria schema's self-referential type (a getter that
+// returns itself, needed only to make TS infer the recursive type) — never a real, user-settable field. Filtered
+// out everywhere object properties are enumerated so it can never appear in the rendered form.
+const HIDDEN_PROPERTY_KEYS = new Set(["zzz_dummy_property_do_not_use"]);
+
+// Splits an object schema's properties into "visible" (always shown — required fields, or optional fields that
+// currently hold a real value) and "hidden" (optional fields that are unset, offered via a "+ Add field" picker
+// instead of being shown as a permanent "Not set" row). This is what keeps a field list — most importantly
+// overrides, where the vast majority of criteria are usually unused — from listing every possible property at
+// once: only what's required or already in use takes up space, everything else is a click away.
+export function getObjectFieldKeys(schema: any, value: any): { visible: string[]; hidden: string[] } {
+  const props = schema?.properties ?? {};
+  const required = new Set<string>(schema?.required ?? []);
+  const val = value ?? {};
+  const visible: string[] = [];
+  const hidden: string[] = [];
+  for (const key of Object.keys(props)) {
+    if (HIDDEN_PROPERTY_KEYS.has(key)) continue;
+    const isSet = val[key] !== null && val[key] !== undefined;
+    if (required.has(key) || isSet) visible.push(key);
+    else hidden.push(key);
+  }
+  return { visible, hidden };
+}
+
+// Recursively fills in values missing from `rawValue` using each field's own schema-level default — used when
+// deriving the Interface view's state from hand-edited raw YAML, so a field the user's text simply didn't
+// mention (because it's happy with the default) still shows that default instead of appearing blank/unset.
+// Fields with no declared default of their own are left as-is; the field's existing required/nullable rendering
+// already handles "genuinely missing" sensibly (a "Not set" placeholder, or hidden behind "+ Add field").
+export function fillDefaults(schema: any, rawValue: any): any {
+  if (schema == null) return rawValue;
+  const { inner } = unwrapNullable(schema);
+  const ownDefault = schema.default !== undefined ? schema.default : inner?.default;
+
+  if (rawValue === undefined) return ownDefault !== undefined ? ownDefault : rawValue;
+  if (rawValue === null) return null;
+
+  const kind = classifyKind(inner);
+  if (kind === "object" && inner.properties && typeof rawValue === "object" && !Array.isArray(rawValue)) {
+    const result: Record<string, any> = { ...rawValue };
+    for (const key of Object.keys(inner.properties)) {
+      result[key] = fillDefaults(inner.properties[key], rawValue[key]);
+    }
+    return result;
+  }
+  if (kind === "array" && Array.isArray(rawValue)) {
+    return rawValue.map((item) => fillDefaults(inner.items, item));
+  }
+  if (kind === "record" && typeof rawValue === "object" && !Array.isArray(rawValue)) {
+    const result: Record<string, any> = {};
+    for (const key of Object.keys(rawValue)) {
+      result[key] = fillDefaults(inner.additionalProperties, rawValue[key]);
+    }
+    return result;
+  }
+  return rawValue;
+}
+
 export type SpecialFieldKind = "role" | "channel" | "emoji";
 
 // Guesses whether a field's property key names a Discord role/channel/emoji ID (or a list of them) so it can be
