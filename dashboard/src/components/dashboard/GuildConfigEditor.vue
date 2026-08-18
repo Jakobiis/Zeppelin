@@ -114,7 +114,6 @@
   let editorKeybindListener;
   let windowResizeListener;
 
-  // Sentinel for the sidebar's "General" entry (prefix/embed_color/levels — the guild config's top-level,
   // non-plugin fields) so it can share the same selectedPlugin/sync machinery as a real plugin name would.
   const GENERAL = "__general__";
 
