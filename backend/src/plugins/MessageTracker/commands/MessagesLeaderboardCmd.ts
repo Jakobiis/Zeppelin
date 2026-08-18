@@ -39,8 +39,8 @@ export const MessagesLeaderboardCmd = guildPluginMessageCommand<MessageTrackerPl
 
   signature: {
     period: ct.string({ required: false }),
-    channel: ct.textChannel({ option: true, required: false }),
-    role: ct.role({ option: true, required: false }),
+    channel: ct.textChannel({ option: true, required: false, shortcut: "c" }),
+    role: ct.role({ option: true, required: false, shortcut: "r" }),
   },
 
   async run({ pluginData, message, args }) {
