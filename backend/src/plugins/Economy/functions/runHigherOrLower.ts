@@ -73,6 +73,8 @@ export async function runHigherOrLower(
   gameName: string,
   game: z.infer<typeof zEconomyHolGame>,
   amountArg: string,
+  existingMessage?: Message,
+  isRetry = false,
 ): Promise<void> {
   const config = pluginData.config.get();
   const userId = message.author.id;
@@ -81,8 +83,8 @@ export async function runHigherOrLower(
   const idBase = `hol:${message.id}`;
 
   const cooldownKey = `${gameName}:${userId}`;
-  const cooldownCheck = checkCooldown(pluginData, cooldownKey, game.cooldown);
-  if (cooldownCheck.onCooldown) {
+  const cooldownCheck = isRetry ? null : checkCooldown(pluginData, cooldownKey, game.cooldown);
+  if (cooldownCheck?.onCooldown) {
     void pluginData.state.common.sendErrorMessage(message, cooldownCheck.message);
     return;
   }
@@ -116,7 +118,7 @@ export async function runHigherOrLower(
     return;
   }
 
-  if (cooldownCheck.cooldownMs) {
+  if (cooldownCheck?.cooldownMs) {
     pluginData.state.lastPlayedAt.set(cooldownKey, Date.now());
   }
 
@@ -185,7 +187,10 @@ export async function runHigherOrLower(
     return new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
   };
 
-  const sentMessage = await message.channel.send({ embeds: [buildEmbed()], components: [buildButtons()] });
+  const sentMessage = existingMessage ?? (await message.channel.send({ embeds: [buildEmbed()], components: [buildButtons()] }));
+  if (existingMessage) {
+    await sentMessage.edit({ embeds: [buildEmbed()], components: [buildButtons()] });
+  }
 
   let finished = false;
 
@@ -202,6 +207,7 @@ export async function runHigherOrLower(
     payout: number,
     interaction: MessageComponentInteraction | null,
     resultText: (finalPayout: number) => string,
+    canRetry = false,
   ): Promise<void> => {
     if (finished) return;
     finished = true;
@@ -243,12 +249,44 @@ export async function runHigherOrLower(
     const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
     const description = `${resultText(finalPayout)}\nNew balance: ${emojiPrefix}**${formatAmount(newBalance)}** ${config.currency_name}`;
     const embed = buildEmbed(description);
-    const payload = { embeds: [embed], components: [buildButtons(true)] };
+    const components = [buildButtons(true)];
+    if (canRetry) {
+      components.push(
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder().setStyle(ButtonStyle.Primary).setLabel("Retry").setCustomId(`${idBase}:retry`),
+        ),
+      );
+    }
+    const payload = { embeds: [embed], components };
 
     if (interaction) {
       await interaction.update(payload).catch(noop);
     } else {
       await sentMessage.edit(payload).catch(noop);
+    }
+
+    if (canRetry) {
+      const retryCollector = sentMessage.createMessageComponentCollector({
+        time: ROUND_TIMEOUT,
+        filter: (retryInteraction) => retryInteraction.customId === `${idBase}:retry`,
+      });
+
+      retryCollector.on("collect", async (retryInteraction) => {
+        if (retryInteraction.user.id !== userId) {
+          await retryInteraction.reply({ content: "This isn't your game.", ephemeral: true }).catch(noop);
+          return;
+        }
+
+        retryCollector.stop();
+        await retryInteraction.deferUpdate().catch(noop);
+        await runHigherOrLower(pluginData, message, gameName, game, amountArg, sentMessage, true);
+      });
+
+      retryCollector.on("end", async () => {
+        if (!retryCollector.collected.size) {
+          await sentMessage.edit({ embeds: [embed], components: [buildButtons(true)] }).catch(noop);
+        }
+      });
     }
   };
 
@@ -298,7 +336,7 @@ export async function runHigherOrLower(
 
     if (!correct) {
       currentNumber = drawnNumber;
-      await settle("loss", 0, interaction, () => `❌ The number was **${drawnNumber}** — you lost your bet.`);
+      await settle("loss", 0, interaction, () => `❌ The number was **${drawnNumber}** — you lost your bet.`, true);
       return;
     }
 
@@ -323,7 +361,7 @@ export async function runHigherOrLower(
 
     if (roundIndex === 0) {
       // Never made a guess — refund the bet in full rather than treating inactivity as a loss.
-      await settle("push", bet, null, () => "⌛ Timed out before your first guess. Bet refunded.");
+      await settle("push", bet, null, () => "⌛ Timed out before your first guess. Bet refunded.", true);
       return;
     }
 
@@ -334,6 +372,7 @@ export async function runHigherOrLower(
       payout,
       null,
       () => `⌛ Timed out — automatically cashed out at **${currentMultiplier.toFixed(2)}x**.`,
+      true,
     );
   });
 }
