@@ -6,11 +6,13 @@ import {
   Message,
   MessageComponentInteraction,
   OmitPartialGroupDMChannel,
+  Role,
+  Snowflake,
 } from "discord.js";
 import moment from "moment-timezone";
 import { guildPluginMessageCommand } from "vety";
 import { commandTypeHelpers as ct } from "../../../commandTypes.js";
-import { MINUTES, noop } from "../../../utils.js";
+import { MINUTES, noop, resolveRoleId } from "../../../utils.js";
 import { getGuildEmbedColor } from "../../../utils/getGuildEmbedColor.js";
 import { refreshMembersIfNeeded } from "../../Utility/refreshMembers.js";
 import { MESSAGE_PERIOD_ARG_HINT, MessagePeriod, parseMessagePeriod } from "../functions/messagePeriods.js";
@@ -40,7 +42,9 @@ export const MessagesLeaderboardCmd = guildPluginMessageCommand<MessageTrackerPl
   signature: {
     period: ct.string({ required: false }),
     channel: ct.textChannel({ option: true, required: false, shortcut: "c" }),
-    role: ct.role({ option: true, required: false, shortcut: "r" }),
+    // Plain string rather than ct.role() so a role *name* (e.g. `regular`) works too, not just a mention/ID —
+    // pinging a role just to filter a leaderboard by it is undesirable, especially for owner/mod-only roles.
+    role: ct.string({ option: true, required: false, shortcut: "r" }),
   },
 
   async run({ pluginData, message, args }) {
@@ -55,6 +59,16 @@ export const MessagesLeaderboardCmd = guildPluginMessageCommand<MessageTrackerPl
         return;
       }
       period = parsed;
+    }
+
+    let role: Role | null = null;
+    if (args.role) {
+      const roleId = await resolveRoleId(pluginData.client, pluginData.guild.id, args.role);
+      role = roleId ? (pluginData.guild.roles.cache.get(roleId as Snowflake) ?? null) : null;
+      if (!role) {
+        void pluginData.state.common.sendErrorMessage(message, `Unknown role \`${args.role}\``);
+        return;
+      }
     }
 
     // Per-channel counts only start accumulating once a message is sent after this feature shipped, so a
@@ -75,9 +89,9 @@ export const MessagesLeaderboardCmd = guildPluginMessageCommand<MessageTrackerPl
     let entries: Array<{ userId: string; count: number }> | null = null;
     let totalCount: number;
 
-    if (args.role) {
+    if (role) {
       await refreshMembersIfNeeded(pluginData.guild);
-      const roleId = args.role.id;
+      const roleId = role.id;
       const candidateCount = await source.getTopCount();
       const candidates = await source.getTop(Math.min(candidateCount, ROLE_FILTER_SCAN_CAP), 0);
       entries = candidates.filter((entry) => pluginData.guild.members.cache.get(entry.userId)?.roles.cache.has(roleId));
@@ -96,7 +110,7 @@ export const MessagesLeaderboardCmd = guildPluginMessageCommand<MessageTrackerPl
     const title =
       PERIOD_TITLES[period] +
       (args.channel ? ` in #${args.channel.name}` : "") +
-      (args.role ? ` (@${args.role.name} only)` : "");
+      (role ? ` (@${role.name} only)` : "");
 
     let leaderboardMsg: OmitPartialGroupDMChannel<Message> | null = null;
     let currentPage = 1;
