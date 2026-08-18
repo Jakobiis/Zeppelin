@@ -3,6 +3,7 @@ import { GuildMessageTrackerCounts } from "../../data/GuildMessageTrackerCounts.
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { MessagesCmd } from "./commands/MessagesCmd.js";
 import { MessagesLeaderboardCmd } from "./commands/MessagesLeaderboardCmd.js";
+import { MessagesSetCmd } from "./commands/MessagesSetCmd.js";
 import { TrackMessageEvt } from "./events/TrackMessageEvt.js";
 import { MessageTrackerPluginType, zMessageTrackerConfig } from "./types.js";
 
@@ -16,6 +17,7 @@ export const MessageTrackerPlugin = guildPlugin<MessageTrackerPluginType>()({
   messageCommands: [
     MessagesCmd,
     MessagesLeaderboardCmd,
+    MessagesSetCmd,
   ],
 
   // prettier-ignore

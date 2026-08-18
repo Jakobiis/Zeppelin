@@ -134,17 +134,6 @@ textarea.field-input {
   @apply font-mono leading-relaxed;
 }
 
-/* Combine with .field-input on a <select> to swap its native OS arrow (inconsistent against a dark theme) for a
-   themed one, the same "repaint but stay native" approach as .checkbox below. */
-.select-arrow {
-  appearance: none;
-  @apply pr-8;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23888888' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.65rem center;
-  background-size: 0.65rem;
-}
-
 /* A dashed "empty slot" affordance for add-new actions (add a field/entry/item) — reads as an open slot waiting
    to be filled rather than a normal action button, and stays visually calm in lists where it repeats often. */
 .btn-add {

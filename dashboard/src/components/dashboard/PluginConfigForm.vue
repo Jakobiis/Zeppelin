@@ -15,16 +15,17 @@
     <p v-else-if="searchQuery" class="text-sm text-muted-foreground italic">No fields match "{{ searchQuery }}".</p>
     <p v-else class="text-sm text-muted-foreground italic">Nothing configurable here yet.</p>
 
-    <select
+    <ComboboxField
       v-if="hiddenConfigKeys.length"
-      class="btn-add select-arrow"
+      class="max-w-xs"
       :class="visibleConfigKeys.length ? 'mt-3' : 'mt-2'"
-      value=""
-      @change="addConfigField(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''"
-    >
-      <option value="" disabled>+ Add field…</option>
-      <option v-for="key in hiddenConfigKeys" :key="key" :value="key">{{ prettifyKey(key) }}</option>
-    </select>
+      input-class="btn-add"
+      reset-on-select
+      placeholder="+ Add field…"
+      :options="hiddenConfigFieldOptions"
+      :model-value="null"
+      @update:model-value="(key) => addConfigField(String(key))"
+    />
 
     <div v-if="overridesSchema" class="border-t border-border pt-5 mt-6">
       <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Overrides</h2>
@@ -41,6 +42,7 @@
 
 <script setup lang="ts">
 import { computed, inject, provide, type ComputedRef } from "vue";
+import ComboboxField from "./ComboboxField.vue";
 import PluginConfigField from "./PluginConfigField.vue";
 import { defaultForSchema, isWide, prettifyKey, schemaValueMatchesSearch, useOrderedObjectFieldKeys } from "./pluginConfigSchema";
 
@@ -89,4 +91,6 @@ function addConfigField(key: string) {
   if (!key) return;
   updateConfigKey(key, defaultForSchema(configSchema.value?.properties?.[key]));
 }
+
+const hiddenConfigFieldOptions = computed(() => hiddenConfigKeys.value.map((key) => ({ value: key, label: prettifyKey(key) })));
 </script>

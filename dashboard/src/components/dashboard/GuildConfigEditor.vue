@@ -28,7 +28,7 @@
                v-model:value="editableConfig"
                @init="editorInit"
                lang="yaml"
-               theme="tomorrow_night_blue"
+               theme="tomorrow_night"
                ref="aceEditor"
                :options="{
                   useSoftTabs: true,
@@ -43,14 +43,14 @@
       <input
         type="text"
         class="field-input"
-        placeholder="Search this plugin's fields, games, counters, overrides…"
+        placeholder="Search"
         v-model="interfaceSearchQuery"
       />
     </div>
 
     <div v-if="mode === 'interface'" class="flex flex-wrap lg:flex-nowrap items-start gap-6 mt-4">
       <nav class="w-full lg:w-56 flex-none border border-border rounded-lg bg-card shadow-md p-3">
-        <ul class="list-none space-y-0.5 mb-3 pb-3 border-b border-border">
+        <ul v-if="generalMatchesSearch" class="list-none space-y-0.5 mb-3 pb-3 border-b border-border">
           <li>
             <a href="javascript:void(0)"
                class="block px-3 py-1.5 rounded-md text-sm border-l-2 transition-colors duration-150"
@@ -63,7 +63,7 @@
           </li>
         </ul>
         <ul class="list-none space-y-0.5">
-          <li v-for="plugin in formPlugins" :key="plugin.name">
+          <li v-for="plugin in searchedFormPlugins" :key="plugin.name">
             <a href="javascript:void(0)"
                class="block px-3 py-1.5 rounded-md text-sm border-l-2 transition-colors duration-150"
                :class="selectedPlugin === plugin.name
@@ -74,6 +74,9 @@
             </a>
           </li>
         </ul>
+        <p v-if="interfaceSearchQuery && !generalMatchesSearch && !searchedFormPlugins.length" class="text-sm text-muted-foreground italic px-3 py-1.5">
+          No plugins match.
+        </p>
       </nav>
 
       <div class="flex-auto min-w-0">
@@ -113,7 +116,7 @@
   import "ace-builds/src-noconflict/ext-language_tools";
   import 'ace-builds/src-noconflict/ext-searchbox';
   import "ace-builds/src-noconflict/mode-yaml";
-  import "ace-builds/src-noconflict/theme-tomorrow_night_blue";
+  import "ace-builds/src-noconflict/theme-tomorrow_night";
 
   import Tab from "../Tab.vue";
   import Tabs from "../Tabs.vue";
@@ -247,6 +250,17 @@
       }),
       pluginSchema() {
         return this.selectedPlugin && this.selectedPlugin !== GENERAL ? this.pluginSchemas[this.selectedPlugin] ?? null : null;
+      },
+      // The search bar also filters the sidebar itself by plugin name, not just the currently-open plugin's
+      // fields — so e.g. typing "economy" finds the plugin even if you're not already looking at it.
+      generalMatchesSearch() {
+        const q = this.interfaceSearchQuery.trim().toLowerCase();
+        return !q || "general".includes(q);
+      },
+      searchedFormPlugins() {
+        const q = this.interfaceSearchQuery.trim().toLowerCase();
+        if (!q) return this.formPlugins;
+        return this.formPlugins.filter((plugin) => (plugin.info.prettyName || plugin.name).toLowerCase().includes(q));
       },
     },
     methods: {

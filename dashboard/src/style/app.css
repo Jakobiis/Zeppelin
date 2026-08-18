@@ -27,3 +27,22 @@
 body {
   overflow-y: scroll;
 }
+
+/* Tints the Ace "tomorrow_night" editor's background/gutter to match the dashboard's own blue-tinted palette
+   tokens, instead of the theme's stock neutral gray (#1D1F21/#25282c) or swapping to a whole different, far more
+   saturated built-in theme (tomorrow_night_blue) — this keeps the shift subtle and automatically consistent with
+   the rest of the app's palette. Only background colors are touched; the theme's syntax-highlighting colors are
+   left as-is. Ace injects its theme CSS at runtime, after this stylesheet loads, so these need !important to win. */
+.ace-tomorrow-night {
+  background-color: var(--color-background) !important;
+}
+.ace-tomorrow-night .ace_gutter {
+  background-color: var(--color-sidebar) !important;
+}
+.ace-tomorrow-night .ace_print-margin {
+  background-color: var(--color-border) !important;
+}
+.ace-tomorrow-night .ace_marker-layer .ace_active-line,
+.ace-tomorrow-night .ace_gutter-active-line {
+  background-color: var(--color-muted) !important;
+}

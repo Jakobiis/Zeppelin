@@ -122,16 +122,17 @@
             @update:model-value="(val) => updateObjectKey(key, val)"
           />
         </div>
-        <select
+        <ComboboxField
           v-if="hiddenObjectKeys.length"
-          class="btn-add select-arrow"
+          class="max-w-xs"
           :class="visibleObjectKeys.length ? 'mt-3' : ''"
-          value=""
-          @change="addObjectField(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''"
-        >
-          <option value="" disabled>+ Add field…</option>
-          <option v-for="key in hiddenObjectKeys" :key="key" :value="key">{{ prettifyKey(key) }}</option>
-        </select>
+          input-class="btn-add"
+          reset-on-select
+          placeholder="+ Add field…"
+          :options="hiddenObjectFieldOptions"
+          :model-value="null"
+          @update:model-value="(key) => addObjectField(String(key))"
+        />
       </div>
 
       <!-- dynamic record (arbitrary string keys -> a shared value schema) -->
@@ -321,14 +322,13 @@
         </template>
 
         <!-- generic multi-branch union (e.g. a discriminated union of genuinely different shapes) -->
-        <select
+        <ComboboxField
           v-else
-          class="field-input select-arrow mb-2"
-          :value="activeUnionBranchIndex"
-          @change="switchUnionBranch(Number(($event.target as HTMLSelectElement).value))"
-        >
-          <option v-for="(branch, i) in innerSchema.anyOf" :key="i" :value="i">{{ branchLabel(branch, i) }}</option>
-        </select>
+          class="max-w-xs mb-2"
+          :options="unionBranchOptions"
+          :model-value="activeUnionBranchIndex"
+          @update:model-value="(i) => switchUnionBranch(Number(i))"
+        />
 
         <PluginConfigField
           v-if="activeUnionBranchIndex !== null"
@@ -363,6 +363,7 @@
 <script setup lang="ts">
 import { computed, inject, ref, watch, type ComputedRef } from "vue";
 import ColorPickerField from "./ColorPickerField.vue";
+import ComboboxField from "./ComboboxField.vue";
 import { getCachedName } from "./discordGuildData";
 import EmojiPickerField from "./EmojiPickerField.vue";
 import MessagePreview from "./MessagePreview.vue";
@@ -480,6 +481,8 @@ function addObjectField(key: string) {
   if (!key) return;
   updateObjectKey(key, defaultForSchema(innerSchema.value?.properties?.[key]));
 }
+
+const hiddenObjectFieldOptions = computed(() => hiddenObjectKeys.value.map((key) => ({ value: key, label: prettifyKey(key) })));
 
 function numberOrNull(raw: string): number | null {
   if (raw === "") return null;
@@ -756,6 +759,8 @@ function branchLabel(branch: any, index: number): string {
   }
   return `Option ${index + 1}`;
 }
+
+const unionBranchOptions = computed(() => (innerSchema.value?.anyOf ?? []).map((branch: any, i: number) => ({ value: i, label: branchLabel(branch, i) })));
 
 // A common, safe-to-simplify shape: "a flat value, or an object with more detail" (e.g. a plain number vs. a
 // {min, max} range). These get a 2-button toggle with an explanatory note instead of a generic dropdown.

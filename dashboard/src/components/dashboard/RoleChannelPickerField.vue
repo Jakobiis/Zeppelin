@@ -1,15 +1,11 @@
 <template>
-  <select
+  <ComboboxField
     v-if="!loadError"
-    class="field-input select-arrow"
-    :disabled="loading"
-    :value="modelValue ?? ''"
-    @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value || null)"
-  >
-    <option value="">{{ loading ? "Loading…" : `— Select a ${entityType} —` }}</option>
-    <option v-if="currentUnknown" :value="modelValue">Unknown {{ entityType }} ({{ modelValue }})</option>
-    <option v-for="item in items" :key="item.id" :value="item.id">{{ optionLabel(item) }}</option>
-  </select>
+    :options="options"
+    :model-value="modelValue"
+    :placeholder="loading ? 'Loading…' : `— Select a ${entityType} —`"
+    @update:model-value="(val) => $emit('update:modelValue', val == null ? null : String(val))"
+  />
   <div v-else>
     <p class="text-xs text-destructive mb-1">Couldn't load {{ entityType }}s from Discord — enter an ID manually.</p>
     <input
@@ -23,6 +19,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import ComboboxField, { ComboboxOption } from "./ComboboxField.vue";
 import { channelTypeLabel, DiscordChannel, DiscordRole, getGuildChannels, getGuildRoles } from "./discordGuildData";
 
 const props = defineProps<{
@@ -50,6 +47,14 @@ function optionLabel(item: DiscordRole | DiscordChannel): string {
   }
   return (item as DiscordRole).name;
 }
+
+const options = computed<ComboboxOption[]>(() => {
+  const mapped = items.value.map((item) => ({ value: item.id, label: optionLabel(item) }));
+  if (currentUnknown.value) {
+    mapped.unshift({ value: props.modelValue!, label: `Unknown ${props.entityType} (${props.modelValue})` });
+  }
+  return mapped;
+});
 
 onMounted(async () => {
   try {

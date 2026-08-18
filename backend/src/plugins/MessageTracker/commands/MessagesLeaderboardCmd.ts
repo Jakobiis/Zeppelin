@@ -12,6 +12,7 @@ import { guildPluginMessageCommand } from "vety";
 import { commandTypeHelpers as ct } from "../../../commandTypes.js";
 import { MINUTES, noop } from "../../../utils.js";
 import { getGuildEmbedColor } from "../../../utils/getGuildEmbedColor.js";
+import { MESSAGE_PERIOD_ARG_HINT, MessagePeriod, parseMessagePeriod } from "../functions/messagePeriods.js";
 import { MessageTrackerPluginType } from "../types.js";
 
 const PER_PAGE = 10;
@@ -19,22 +20,7 @@ const PAGINATION_TIMEOUT = 2 * MINUTES;
 
 const medals = ["🥇", "🥈", "🥉"];
 
-type Period = "daily" | "weekly" | "monthly" | "allTime";
-
-const PERIOD_ALIASES: Record<string, Period> = {
-  day: "daily",
-  daily: "daily",
-  today: "daily",
-  week: "weekly",
-  weekly: "weekly",
-  month: "monthly",
-  monthly: "monthly",
-  all: "allTime",
-  alltime: "allTime",
-  all_time: "allTime",
-};
-
-const PERIOD_TITLES: Record<Period, string> = {
+const PERIOD_TITLES: Record<MessagePeriod, string> = {
   daily: "Today's Message Leaderboard",
   weekly: "This Week's Message Leaderboard",
   monthly: "This Month's Message Leaderboard",
@@ -50,13 +36,17 @@ export const MessagesLeaderboardCmd = guildPluginMessageCommand<MessageTrackerPl
   },
 
   async run({ pluginData, message, args }) {
-    const period: Period = (args.period && PERIOD_ALIASES[args.period.toLowerCase()]) || "allTime";
-    if (args.period && !PERIOD_ALIASES[args.period.toLowerCase()]) {
-      void pluginData.state.common.sendErrorMessage(
-        message,
-        `Unknown period \`${args.period}\` — use \`today\`, \`week\`, \`month\`, or \`all\` (default).`,
-      );
-      return;
+    let period: MessagePeriod = "allTime";
+    if (args.period) {
+      const parsed = parseMessagePeriod(args.period);
+      if (!parsed) {
+        void pluginData.state.common.sendErrorMessage(
+          message,
+          `Unknown period \`${args.period}\` — use ${MESSAGE_PERIOD_ARG_HINT} (default).`,
+        );
+        return;
+      }
+      period = parsed;
     }
 
     const totalCount = await pluginData.state.counts.getTopCount(period);

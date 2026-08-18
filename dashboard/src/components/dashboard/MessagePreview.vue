@@ -150,6 +150,9 @@ function renderMarkdown(text: string): string {
   html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
   html = html.replace(/~~([^~]+)~~/g, "<del>$1</del>");
   html = html.replace(/^&gt;\s?(.*)$/gm, '<span class="block border-l-2 pl-2" style="border-color:#4e5058;color:#949ba4">$1</span>');
+  // Discord's "subtext" syntax — a line starting with "-# " renders as small, muted text (seen elsewhere in this
+  // codebase's own message composition, e.g. AFK's "-# You were AFK since ..." notices).
+  html = html.replace(/^-#\s?(.*)$/gm, '<span class="block text-xs" style="color:#949ba4">$1</span>');
   html = html.replace(/\n/g, "<br>");
   return html;
 }

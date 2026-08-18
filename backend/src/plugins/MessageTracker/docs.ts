@@ -6,5 +6,5 @@ export const messageTrackerPluginDocs: ZeppelinPluginDocs = {
   configSchema: zMessageTrackerConfig,
   type: "stable",
   description:
-    "Tracks how many messages each member sends (today, this week, this month, and all-time) and offers a leaderboard. Check your own (or someone else's) stats with `-messages`/`-m`, or see the leaderboard with `-messages leaderboard`/`-m lb` (add `today`/`week`/`month` to see a specific period instead of all-time).",
+    "Tracks how many messages each member sends (today, this week, this month, and all-time) and offers a leaderboard. Check your own (or someone else's) stats with `-messages`/`-m`, see the leaderboard with `-messages leaderboard`/`-m lb` (add `today`/`week`/`month` to see a specific period instead of all-time), or correct a member's count with `-messages set <member> <today/week/month/all> <amount>` (requires `can_manage`).",
 };

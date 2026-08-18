@@ -10,6 +10,9 @@ export const zMessageTrackerConfig = z.strictObject({
   // Shown in the footer of `-messages`/`-m`'s embed. Null omits the footer entirely.
   footer_text: zBoundedCharacters(0, 256).nullable().default("Jailbreak Changelogs"),
   can_view: z.boolean().default(false),
+  // Lets staff overwrite a member's tracked message counts (`-messages set`) — deliberately separate from
+  // can_view so granting "check your own/others' stats" doesn't also grant "rewrite anyone's stats".
+  can_manage: z.boolean().default(false),
 });
 
 export interface MessageTrackerPluginType extends BasePluginType {

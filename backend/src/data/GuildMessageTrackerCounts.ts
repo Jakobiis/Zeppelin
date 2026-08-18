@@ -11,6 +11,9 @@ export interface MessageCounts {
   allTime: number;
 }
 
+// 2^31-1 — matches Counters' MAX_COUNTER_VALUE, safely within the unsigned int columns these are stored in.
+const MAX_COUNT_VALUE = 2147483647;
+
 // The current daily/weekly (ISO, Monday-start)/monthly bucket keys, as stored in daily_date/weekly_start/
 // monthly_month — a row's count for a given period is only meaningful if its stored key still matches the
 // current one; otherwise that period has rolled over and the count is stale (see readCounts below).
@@ -83,6 +86,50 @@ export class GuildMessageTrackerCounts extends BaseGuildRepository {
         monthlyKey,
       ],
     );
+  }
+
+  /**
+   * Overwrites one period's count for userId to `amount` — for staff correcting a mistracked count. Also stamps
+   * that period's bucket key to the *current* one, since otherwise the value set here would immediately read
+   * back as stale (see readCounts) the moment the current day/week/month doesn't match whatever the row already
+   * had stored. The other three periods are left untouched (or, for a brand new row, start at 0/the current
+   * bucket key, same as if the user had simply never sent a message before).
+   */
+  async setCount(userId: string, period: "daily" | "weekly" | "monthly" | "allTime", amount: number): Promise<void> {
+    const value = Math.min(Math.max(Math.round(amount), 0), MAX_COUNT_VALUE);
+    const dailyKey = currentDailyKey();
+    const weeklyKey = currentWeeklyKey();
+    const monthlyKey = currentMonthlyKey();
+
+    const insertColumns = `
+      (guild_id, user_id, all_time_count, daily_count, daily_date, weekly_count, weekly_start, monthly_count, monthly_month)
+    `;
+
+    if (period === "allTime") {
+      await this.counts.query(
+        `INSERT INTO message_tracker_counts ${insertColumns} VALUES (?, ?, ?, 0, ?, 0, ?, 0, ?)
+         ON DUPLICATE KEY UPDATE all_time_count = ?`,
+        [this.guildId, userId, value, dailyKey, weeklyKey, monthlyKey, value],
+      );
+    } else if (period === "daily") {
+      await this.counts.query(
+        `INSERT INTO message_tracker_counts ${insertColumns} VALUES (?, ?, 0, ?, ?, 0, ?, 0, ?)
+         ON DUPLICATE KEY UPDATE daily_count = ?, daily_date = ?`,
+        [this.guildId, userId, value, dailyKey, weeklyKey, monthlyKey, value, dailyKey],
+      );
+    } else if (period === "weekly") {
+      await this.counts.query(
+        `INSERT INTO message_tracker_counts ${insertColumns} VALUES (?, ?, 0, 0, ?, ?, ?, 0, ?)
+         ON DUPLICATE KEY UPDATE weekly_count = ?, weekly_start = ?`,
+        [this.guildId, userId, dailyKey, value, weeklyKey, monthlyKey, value, weeklyKey],
+      );
+    } else {
+      await this.counts.query(
+        `INSERT INTO message_tracker_counts ${insertColumns} VALUES (?, ?, 0, 0, ?, 0, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE monthly_count = ?, monthly_month = ?`,
+        [this.guildId, userId, dailyKey, weeklyKey, value, monthlyKey, value, monthlyKey],
+      );
+    }
   }
 
   async getForUser(userId: string): Promise<MessageCounts> {

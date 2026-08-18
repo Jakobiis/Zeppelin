@@ -17,21 +17,23 @@
     <p v-else-if="searchQuery" class="text-sm text-muted-foreground italic">No fields match "{{ searchQuery }}".</p>
     <p v-else class="text-sm text-muted-foreground italic">Nothing configurable here yet.</p>
 
-    <select
+    <ComboboxField
       v-if="hiddenKeys.length"
-      class="btn-add select-arrow"
+      class="max-w-xs"
       :class="visibleKeys.length ? 'mt-3' : 'mt-2'"
-      value=""
-      @change="addField(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''"
-    >
-      <option value="" disabled>+ Add field…</option>
-      <option v-for="key in hiddenKeys" :key="key" :value="key">{{ prettifyKey(key) }}</option>
-    </select>
+      input-class="btn-add"
+      reset-on-select
+      placeholder="+ Add field…"
+      :options="hiddenFieldOptions"
+      :model-value="null"
+      @update:model-value="(key) => addField(String(key))"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, inject, type ComputedRef } from "vue";
+import ComboboxField from "./ComboboxField.vue";
 import PluginConfigField from "./PluginConfigField.vue";
 import { defaultForSchema, isWide, prettifyKey, schemaValueMatchesSearch, useOrderedObjectFieldKeys } from "./pluginConfigSchema";
 
@@ -72,4 +74,6 @@ function addField(key: string) {
   if (!key) return;
   updateKey(key, defaultForSchema(props.schema?.properties?.[key]));
 }
+
+const hiddenFieldOptions = computed(() => hiddenKeys.value.map((key) => ({ value: key, label: prettifyKey(key) })));
 </script>
