@@ -85,9 +85,11 @@ export function isSimple(s: any): boolean {
 // The inverse — used to decide whether a field spans the full grid row (objects/arrays/records/unions need the
 // room) or can sit packed side-by-side with other simple fields (booleans/strings/numbers). A role/channel/emoji
 // picker is technically "simple" by type but needs more horizontal room than a packed column gives it (the emoji
-// picker's grid in particular gets cramped and can spill into neighboring columns), so those go wide too.
+// picker's grid in particular gets cramped and can spill into neighboring columns), so those go wide too — a
+// color swatch + hex box is about as compact as a normal input though, so that one stays packed.
 export function isWide(s: any, fieldKey?: string): boolean {
-  if (fieldKey && detectSpecialFieldKind(fieldKey, s)) return true;
+  const special = fieldKey ? detectSpecialFieldKind(fieldKey, s) : null;
+  if (special && special !== "color") return true;
   return !isSimple(s);
 }
 
@@ -97,8 +99,13 @@ export function isWide(s: any, fieldKey?: string): boolean {
 // those defaults then get embedded at multiple places in the same value tree, js-yaml's dumper — seeing the same
 // reference twice — represents it with a YAML anchor/alias, which the backend's anti-YAML-bomb guard rejects
 // outright ("Object aliases are not allowed") on save. Cloning guarantees every fill gets its own independent copy.
+// Cached schemas live in Vue-reactive component state, so `value` (or something nested in it) is often a
+// reactive Proxy by the time it gets here — structuredClone throws on those ("Proxy object could not be
+// cloned"), so this goes through JSON instead, which reads straight through a Proxy's get traps to the
+// underlying plain value. Safe here specifically because schema defaults only ever contain JSON-safe data (they
+// came from a JSON HTTP response in the first place) — never Dates, Maps, undefined, etc. that JSON would mangle.
 function cloneDefault<T>(value: T): T {
-  return typeof value === "object" && value !== null ? structuredClone(value) : value;
+  return typeof value === "object" && value !== null ? JSON.parse(JSON.stringify(value)) : value;
 }
 
 // Best-effort default value for a schema node — used when switching a nullable field from unset to set, adding
@@ -180,9 +187,12 @@ export function summarizeObjectValue(
   return parts.join(" · ");
 }
 
-// Detects the common "a single T, or a list of T" pattern (e.g. override criteria like `channel: string |
-// string[]`) — a 2-branch union where one branch is a simple leaf type and the other is an array of that same
-// leaf type. Returns the leaf schema (used to render/default each item) or null if the shape doesn't match.
+// Detects the common "a single T, or a list of T" pattern — a 2-branch union where one branch is an array and
+// the other is that same array's item type on its own (e.g. override criteria like `channel: string | string[]`,
+// or a message's `embeds: EmbedInput | EmbedInput[]`). Returns the leaf schema (used to render/default each
+// item) or null if the shape doesn't match. T can be a plain scalar or a whole object — either way this is what
+// keeps something like "one embed, or several" from needing its own branch-picker dropdown (which would just
+// read as "List" vs. a jumble of the object's first few property names): it's just a normal add/remove list.
 export function detectMultiLeafSchema(s: any): any | null {
   const branches: any[] = s?.anyOf ?? [];
   if (branches.length !== 2) return null;
@@ -192,7 +202,7 @@ export function detectMultiLeafSchema(s: any): any | null {
   if (!arrBranch || !leafBranch) return null;
 
   const leafKind = classifyKind(unwrapNullable(leafBranch).inner);
-  if (leafKind !== "string" && leafKind !== "number") return null;
+  if (leafKind === "unsupported" || leafKind === "union") return null;
 
   const itemsKind = classifyKind(unwrapNullable(arrBranch.items).inner);
   if (itemsKind !== leafKind) return null;
@@ -227,6 +237,42 @@ export function getObjectFieldKeys(schema: any, value: any): { visible: string[]
     else hidden.push(key);
   }
   return { visible, hidden };
+}
+
+// Recursively checks whether a schema+value subtree contains anything matching `query` — a field's own
+// (prettified) key, a record entry's key, or a leaf's stringified value. Powers the interface-wide search bar:
+// a plugin's top-level fields and nested containers (objects/records/arrays) are filtered/auto-expanded based on
+// this, so searching "ttt" can surface one specific game buried inside a record without manually expanding down
+// to it first.
+export function schemaValueMatchesSearch(schema: any, value: any, query: string): boolean {
+  if (!query) return true;
+  const q = query.toLowerCase();
+
+  const { inner } = unwrapNullable(schema);
+  const kind = classifyKind(inner);
+
+  if (kind === "object" && inner.properties) {
+    return Object.keys(inner.properties).some((key) => {
+      if (HIDDEN_PROPERTY_KEYS.has(key) || inner.properties[key]?.const !== undefined) return false;
+      if (prettifyKey(key).toLowerCase().includes(q)) return true;
+      return schemaValueMatchesSearch(inner.properties[key], (value ?? {})[key], q);
+    });
+  }
+  if (kind === "record") {
+    const val = value ?? {};
+    return Object.keys(val).some((key) => {
+      if (key.toLowerCase().includes(q)) return true;
+      return schemaValueMatchesSearch(inner.additionalProperties, val[key], q);
+    });
+  }
+  if (kind === "array") {
+    const list = Array.isArray(value) ? value : [];
+    return list.some((item) => schemaValueMatchesSearch(inner.items, item, q));
+  }
+  if (kind === "string" || kind === "number") {
+    return value != null && String(value).toLowerCase().includes(q);
+  }
+  return false;
 }
 
 // Wraps getObjectFieldKeys with a stable display order for the "visible" side: that function alone only knows
@@ -292,17 +338,23 @@ export function fillDefaults(schema: any, rawValue: any): any {
   return rawValue;
 }
 
-export type SpecialFieldKind = "role" | "channel" | "emoji";
+export type SpecialFieldKind = "role" | "channel" | "emoji" | "color";
 
-// Guesses whether a field's property key names a Discord role/channel/emoji ID (or a list of them) so it can be
-// rendered with a picker instead of a raw ID text box. Deliberately keyed off the raw property name (not the
-// prettified label) since that's the more stable/reliable signal, and only fires for string fields (a single ID),
-// arrays of strings (a list of IDs), or the "single T or T[]" pattern above — anything else falls through to the
-// generic renderer.
+// Guesses whether a field's property key names a Discord role/channel/emoji ID (or a list of them), or a numeric
+// embed color, so it can be rendered with a picker instead of a raw ID/number box. Deliberately keyed off the
+// raw property name (not the prettified label) since that's the more stable/reliable signal.
 export function detectSpecialFieldKind(key: string | undefined, schema: any): SpecialFieldKind | null {
   if (!key) return null;
+  const k = key.toLowerCase();
 
   const { inner } = unwrapNullable(schema);
+
+  // Colors are a single plain number (not string-leaf-shaped like the id fields below), checked first since
+  // it's a completely different underlying value shape.
+  if (k.includes("color") && classifyKind(inner) === "number") return "color";
+
+  // Fires for string fields (a single ID), arrays of strings (a list of IDs), or the "single T or T[]" pattern —
+  // anything else falls through to the generic renderer.
   let leaf = inner;
   if (inner?.type === "array" && inner.items) {
     leaf = unwrapNullable(inner.items).inner;
@@ -314,7 +366,6 @@ export function detectSpecialFieldKind(key: string | undefined, schema: any): Sp
   }
   if (classifyKind(leaf) !== "string") return null;
 
-  const k = key.toLowerCase();
   if (k.includes("emoji")) return "emoji";
   if (k.includes("role")) return "role";
   if (k.includes("channel")) return "channel";

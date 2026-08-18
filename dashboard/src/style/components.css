@@ -1,3 +1,10 @@
+/* Wrapped in Tailwind's own `components` layer (theme, base, components, utilities) so a utility class placed
+   alongside one of these on the same element — e.g. a width override next to .field-input's own `w-full` —
+   correctly wins, matching normal Tailwind v4 convention. Unlayered CSS always outranks ANY layer regardless of
+   specificity or source order, so without this every one of these classes was silently un-overridable by any
+   Tailwind utility, even ones written later on the same element. */
+@layer components {
+
 .link {
   @apply text-primary;
   @apply underline;
@@ -240,3 +247,5 @@ textarea.field-input {
     @apply outline outline-2 outline-ring outline-offset-2;
   }
 }
+
+} /* @layer components */

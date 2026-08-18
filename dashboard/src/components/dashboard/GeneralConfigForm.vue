@@ -2,9 +2,9 @@
   <div class="bg-card border border-border rounded-lg shadow-md p-6">
     <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">General</h2>
 
-    <div v-if="visibleKeys.length" class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
+    <div v-if="searchedVisibleKeys.length" class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
       <PluginConfigField
-        v-for="key in visibleKeys"
+        v-for="key in searchedVisibleKeys"
         :key="key"
         :class="isWide(schema.properties[key], key) ? 'col-span-full' : ''"
         :schema="schema.properties[key]"
@@ -14,6 +14,7 @@
         @update:model-value="(val) => updateKey(key, val)"
       />
     </div>
+    <p v-else-if="searchQuery" class="text-sm text-muted-foreground italic">No fields match "{{ searchQuery }}".</p>
     <p v-else class="text-sm text-muted-foreground italic">Nothing configurable here yet.</p>
 
     <select
@@ -30,9 +31,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, inject, type ComputedRef } from "vue";
 import PluginConfigField from "./PluginConfigField.vue";
-import { defaultForSchema, isWide, prettifyKey, useOrderedObjectFieldKeys } from "./pluginConfigSchema";
+import { defaultForSchema, isWide, prettifyKey, schemaValueMatchesSearch, useOrderedObjectFieldKeys } from "./pluginConfigSchema";
 
 const props = defineProps<{
   // Already-fetched JSON Schema for the guild config's top-level, non-plugin fields (prefix, embed_color,
@@ -51,6 +52,17 @@ const { visible: visibleKeys, hidden: hiddenKeys } = useOrderedObjectFieldKeys(
   computed(() => props.schema),
   computed(() => props.modelValue),
 );
+
+const searchQuery = inject<ComputedRef<string>>("pluginConfigSearchQuery", computed(() => ""));
+const searchedVisibleKeys = computed(() => {
+  const q = searchQuery.value.trim();
+  if (!q) return visibleKeys.value;
+  return visibleKeys.value.filter(
+    (key) =>
+      prettifyKey(key).toLowerCase().includes(q.toLowerCase()) ||
+      schemaValueMatchesSearch(props.schema?.properties?.[key], props.modelValue[key], q),
+  );
+});
 
 function updateKey(key: string, value: any) {
   emit("update:modelValue", { ...props.modelValue, [key]: value });

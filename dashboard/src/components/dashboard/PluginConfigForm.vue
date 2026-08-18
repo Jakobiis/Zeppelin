@@ -1,8 +1,8 @@
 <template>
   <div class="bg-card border border-border rounded-lg shadow-md p-6">
-    <div v-if="visibleConfigKeys.length" class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
+    <div v-if="searchedVisibleConfigKeys.length" class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
       <PluginConfigField
-        v-for="key in visibleConfigKeys"
+        v-for="key in searchedVisibleConfigKeys"
         :key="key"
         :class="isWide(configSchema.properties[key], key) ? 'col-span-full' : ''"
         :schema="configSchema.properties[key]"
@@ -12,6 +12,7 @@
         @update:model-value="(val) => updateConfigKey(key, val)"
       />
     </div>
+    <p v-else-if="searchQuery" class="text-sm text-muted-foreground italic">No fields match "{{ searchQuery }}".</p>
     <p v-else class="text-sm text-muted-foreground italic">Nothing configurable here yet.</p>
 
     <select
@@ -39,9 +40,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, provide } from "vue";
+import { computed, inject, provide, type ComputedRef } from "vue";
 import PluginConfigField from "./PluginConfigField.vue";
-import { defaultForSchema, isWide, prettifyKey, useOrderedObjectFieldKeys } from "./pluginConfigSchema";
+import { defaultForSchema, isWide, prettifyKey, schemaValueMatchesSearch, useOrderedObjectFieldKeys } from "./pluginConfigSchema";
 
 const props = defineProps<{
   guildId: string;
@@ -65,6 +66,20 @@ const { visible: visibleConfigKeys, hidden: hiddenConfigKeys } = useOrderedObjec
   configSchema,
   computed(() => props.modelValue.config),
 );
+
+// Interface-wide search (see GuildConfigEditor's provide()) — further narrows the already-visible top-level
+// fields down to ones matching by name or by something inside them, so e.g. searching "ttt" surfaces the
+// "Games" field even though the match is a specific game buried inside its record.
+const searchQuery = inject<ComputedRef<string>>("pluginConfigSearchQuery", computed(() => ""));
+const searchedVisibleConfigKeys = computed(() => {
+  const q = searchQuery.value.trim();
+  if (!q) return visibleConfigKeys.value;
+  return visibleConfigKeys.value.filter(
+    (key) =>
+      prettifyKey(key).toLowerCase().includes(q.toLowerCase()) ||
+      schemaValueMatchesSearch(configSchema.value?.properties?.[key], props.modelValue.config[key], q),
+  );
+});
 
 function updateConfigKey(key: string, value: any) {
   emit("update:modelValue", { ...props.modelValue, config: { ...props.modelValue.config, [key]: value } });

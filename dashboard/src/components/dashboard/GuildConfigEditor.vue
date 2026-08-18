@@ -28,7 +28,7 @@
                v-model:value="editableConfig"
                @init="editorInit"
                lang="yaml"
-               theme="tomorrow_night"
+               theme="tomorrow_night_blue"
                ref="aceEditor"
                :options="{
                   useSoftTabs: true,
@@ -38,6 +38,15 @@
                   width: editorWidth + 'px',
                   height: editorHeight + 'px',
                 }" />
+
+    <div v-if="mode === 'interface'" class="mt-4">
+      <input
+        type="text"
+        class="field-input"
+        placeholder="Search this plugin's fields, games, counters, overrides…"
+        v-model="interfaceSearchQuery"
+      />
+    </div>
 
     <div v-if="mode === 'interface'" class="flex flex-wrap lg:flex-nowrap items-start gap-6 mt-4">
       <nav class="w-full lg:w-56 flex-none border border-border rounded-lg bg-card shadow-md p-3">
@@ -94,6 +103,7 @@
 
 <script lang="ts">
   import yaml from "js-yaml";
+  import { computed } from "vue";
   import {mapState} from "vuex";
   import {ApiError, get} from "../../api";
   import { DocsState, GuildState } from "../../store/types";
@@ -103,7 +113,7 @@
   import "ace-builds/src-noconflict/ext-language_tools";
   import 'ace-builds/src-noconflict/ext-searchbox';
   import "ace-builds/src-noconflict/mode-yaml";
-  import "ace-builds/src-noconflict/theme-tomorrow_night";
+  import "ace-builds/src-noconflict/theme-tomorrow_night_blue";
 
   import Tab from "../Tab.vue";
   import Tabs from "../Tabs.vue";
@@ -124,6 +134,14 @@
       Tabs,
       GeneralConfigForm,
       PluginConfigForm,
+    },
+    // Reactive provide (Options API needs an explicit computed() to keep it reactive for injecting descendants)
+    // so the search bar above the Interface tab can reach every PluginConfigField in the tree without threading
+    // it through as a prop at every level.
+    provide() {
+      return {
+        pluginConfigSearchQuery: computed(() => this.interfaceSearchQuery),
+      };
     },
     async mounted() {
       try {
@@ -148,9 +166,22 @@
       // Fetch the full plugin list so we know what to offer in the Interface tab's sidebar — the same registry
       // the docs pages use, reused here instead of hardcoding a plugin name.
       await this.$store.dispatch("docs/loadAllPlugins");
-      this.selectedPlugin = this.GENERAL;
+
+      // Restores which tab/plugin was open from the URL (see updateUrlQuery) so a shared link opens straight to
+      // the same spot instead of always landing on Raw YAML / General. Both are resolved before either is
+      // assigned so updateUrlQuery (called explicitly, not reactively — see selectPlugin/setMode) never runs
+      // with only one of the two updated yet, which would otherwise write a half-restored URL over the real one.
+      const queryPlugin = typeof this.$route.query.plugin === "string" ? this.$route.query.plugin : null;
+      const validPluginNames = new Set([this.GENERAL, ...this.formPlugins.map((p) => p.name)]);
+      this.selectedPlugin = queryPlugin && validPluginNames.has(queryPlugin) ? queryPlugin : this.GENERAL;
+      this.mode = this.$route.query.mode === "interface" ? "interface" : "yaml";
 
       this.loading = false;
+
+      if (this.mode === "interface") {
+        await this.loadSelectionIntoInterface(this.selectedPlugin);
+      }
+      this.updateUrlQuery();
     },
     beforeRouteLeave(to, from, next) {
       if (editorKeybindListener) {
@@ -178,6 +209,10 @@
         mode: "yaml",
         selectedPlugin: null,
         GENERAL,
+        // Interface-tab-wide search — filters/auto-expands the current plugin's whole field tree, not just one
+        // record/array at a time. Provided reactively to descendants (see provide() above) rather than passed
+        // down as a prop through every layer.
+        interfaceSearchQuery: "",
         // Per-plugin dereferenced schema, fetched once and cached — schemas don't change based on user edits.
         pluginSchemas: {},
         // { config, overrides } for the currently selected plugin, derived live from editableConfig whenever the
@@ -215,6 +250,23 @@
       },
     },
     methods: {
+      // Keeps the URL in sync with what's currently open (mode + selected plugin) so the page is shareable/
+      // bookmarkable at any point — called explicitly from selectPlugin/setMode (and once after mounted's own
+      // restore, as a no-op confirming it matches) rather than via a reactive watcher, since mode and
+      // selectedPlugin can each change independently and a watcher on either one would fire — and write a
+      // half-updated URL — before the other one's new value is in place.
+      updateUrlQuery() {
+        const query = { ...this.$route.query };
+        if (this.mode === "interface" && this.selectedPlugin) {
+          query.mode = "interface";
+          query.plugin = this.selectedPlugin;
+        } else {
+          delete query.mode;
+          delete query.plugin;
+        }
+        if (JSON.stringify(query) === JSON.stringify(this.$route.query)) return;
+        this.$router.replace({ query });
+      },
       // Fetches+dereferences a plugin's config-schema once and caches it; the schema itself never changes based
       // on user edits, only the value does.
       async ensurePluginSchema(pluginName) {
@@ -342,6 +394,7 @@
         if (this.mode === "interface") this.syncSelectionIntoYaml();
         this.selectedPlugin = pluginName;
         if (this.mode === "interface") await this.loadSelectionIntoInterface(pluginName);
+        this.updateUrlQuery();
       },
       async setMode(newMode) {
         if (newMode === this.mode) return;
@@ -358,6 +411,7 @@
           // something else (e.g. a page reload) forces a fresh render.
           this.$nextTick(() => this.fitEditorToWindow());
         }
+        this.updateUrlQuery();
       },
       editorInit() {
         // Add Ctrl+S/Cmd+S save shortcut

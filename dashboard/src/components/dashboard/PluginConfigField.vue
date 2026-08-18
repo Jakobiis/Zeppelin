@@ -74,6 +74,14 @@
         @update:model-value="emitUpdate"
       />
 
+      <!-- color picker -->
+      <ColorPickerField
+        v-else-if="kind === 'number' && specialKind === 'color'"
+        class="mt-1"
+        :model-value="modelValue"
+        @update:model-value="emitUpdate"
+      />
+
       <!-- string -->
       <input
         v-else-if="kind === 'string'"
@@ -136,16 +144,16 @@
           v-model="recordSearch"
         />
         <div v-for="entry in filteredRecordEntries" :key="entry.uid">
-          <div v-if="recordValueIsSimple" class="flex items-center gap-2">
+          <div v-if="recordValueIsSimple" class="flex items-center gap-2 max-w-[50%]">
             <input
               type="text"
-              class="field-input w-40 shrink-0 font-mono text-sm"
+              class="field-input w-48 shrink-0 font-mono text-sm"
               :value="entry.key"
               placeholder="key"
               @change="renameRecordKey(entry.key, ($event.target as HTMLInputElement).value)"
             />
             <PluginConfigField
-              class="flex-1"
+              class="flex-1 min-w-0"
               :schema="innerSchema.additionalProperties"
               :forced-special-kind="specialKind"
               :model-value="(modelValue ?? {})[entry.key]"
@@ -153,7 +161,7 @@
             />
             <button type="button" class="btn-remove shrink-0" @click="removeRecordKey(entry.key)">Remove</button>
           </div>
-          <div v-else class="item-card">
+          <div v-else class="item-card max-w-[50%]">
             <div class="item-card-header">
               <button
                 type="button"
@@ -166,7 +174,7 @@
               </button>
               <input
                 type="text"
-                class="field-input flex-1 font-mono text-sm"
+                class="field-input flex-1 min-w-0 font-mono text-sm"
                 :value="entry.key"
                 placeholder="key"
                 @change="renameRecordKey(entry.key, ($event.target as HTMLInputElement).value)"
@@ -183,7 +191,7 @@
             </div>
           </div>
         </div>
-        <p v-if="recordSearch && !filteredRecordEntries.length" class="text-sm text-muted-foreground italic">No matches.</p>
+        <p v-if="effectiveRecordSearch && !filteredRecordEntries.length" class="text-sm text-muted-foreground italic">No matches.</p>
         <button type="button" class="btn-add" @click="addRecordKey">+ Add entry</button>
       </div>
 
@@ -197,10 +205,11 @@
           v-model="arraySearch"
         />
         <template v-for="entry in filteredArrayEntries" :key="arrayItemUids[entry.index]">
-          <!-- simple items: one compact row, value + remove, no card/header -->
-          <div v-if="itemsAreSimple" class="flex items-center gap-2">
+          <!-- simple items: one compact row, value + remove, no card/header. Not width-capped for a special
+               picker (role/channel/emoji) — those benefit from the extra room — only for a plain scalar list. -->
+          <div v-if="itemsAreSimple" class="flex items-center gap-2" :class="specialKind ? '' : 'max-w-[50%]'">
             <PluginConfigField
-              class="flex-1"
+              class="flex-1 min-w-0"
               :schema="innerSchema.items"
               :forced-special-kind="specialKind"
               :model-value="entry.item"
@@ -234,23 +243,51 @@
             </div>
           </div>
         </template>
-        <p v-if="arraySearch && !filteredArrayEntries.length" class="text-sm text-muted-foreground italic">No matches.</p>
+        <p v-if="effectiveArraySearch && !filteredArrayEntries.length" class="text-sm text-muted-foreground italic">No matches.</p>
         <button type="button" class="btn-add" @click="addArrayItem">+ Add item</button>
       </div>
 
-      <!-- "a single value, or a list of them" (e.g. override criteria like channel: string | string[]) —
-           edited as a plain list either way; emits a bare value, an array, or null depending on how many items
-           end up in it, to match whichever branch of the union that represents. -->
+      <!-- "a single value, or a list of them" (e.g. override criteria like channel: string | string[], or a
+           message's embeds: EmbedInput | EmbedInput[]) — edited as a plain list either way; emits a bare value,
+           an array, or null depending on how many items end up in it, to match whichever branch of the union
+           that represents. Simple items (a leaf value) get one compact row like a plain array does; complex ones
+           (e.g. a whole embed) get the same collapsible item-card treatment array items get too. -->
       <div v-else-if="kind === 'union' && multiLeafSchema" class="field-panel space-y-2">
-        <div v-for="(item, index) in multiList" :key="index" class="flex items-center gap-2">
-          <PluginConfigField
-            class="flex-1"
-            :schema="multiLeafSchema"
-            :forced-special-kind="specialKind"
-            :model-value="item"
-            @update:model-value="(val) => updateMultiItem(index, val)"
-          />
-          <button type="button" class="btn-remove shrink-0" @click="removeMultiItem(index)">Remove</button>
+        <div v-for="(item, index) in multiList" :key="multiItemUids[index]">
+          <div v-if="multiLeafIsSimple" class="flex items-center gap-2">
+            <PluginConfigField
+              class="flex-1"
+              :schema="multiLeafSchema"
+              :forced-special-kind="specialKind"
+              :model-value="item"
+              @update:model-value="(val) => updateMultiItem(index, val)"
+            />
+            <button type="button" class="btn-remove shrink-0" @click="removeMultiItem(index)">Remove</button>
+          </div>
+          <div v-else class="item-card">
+            <div class="item-card-header">
+              <button
+                type="button"
+                class="text-muted-foreground hover:text-foreground shrink-0 w-4 cursor-pointer"
+                @click="toggleMultiItemCollapsed(index)"
+              >
+                <svg class="chevron-icon" :class="{ 'rotate-90': !isMultiItemCollapsed(index) }" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 4l4 4-4 4" />
+                </svg>
+              </button>
+              <span v-if="multiItemSummary(item)" class="flex-1 text-sm text-muted-foreground truncate">{{ multiItemSummary(item) }}</span>
+              <div v-else class="flex-1"></div>
+              <button type="button" class="btn-remove shrink-0" @click="removeMultiItem(index)">Remove</button>
+            </div>
+            <div v-show="!isMultiItemCollapsed(index)" class="item-card-body">
+              <PluginConfigField
+                no-header
+                :schema="multiLeafSchema"
+                :model-value="item"
+                @update:model-value="(val) => updateMultiItem(index, val)"
+              />
+            </div>
+          </div>
         </div>
         <button type="button" class="btn-add" @click="addMultiItem">+ Add</button>
       </div>
@@ -299,6 +336,13 @@
           :model-value="modelValue"
           @update:model-value="emitUpdate"
         />
+
+        <!-- Live Discord-message-style preview, kept in sync as the fields above are edited — only for fields
+             shaped like Zeppelin's message content (a plain string, or {content, tts, embeds}). -->
+        <template v-if="isMessageContentField">
+          <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mt-4 mb-2">Preview</p>
+          <MessagePreview :value="modelValue" />
+        </template>
       </div>
 
       <!-- fallback for anything not covered above (enums, tuples, etc.) -->
@@ -317,9 +361,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref, watch } from "vue";
+import { computed, inject, ref, watch, type ComputedRef } from "vue";
+import ColorPickerField from "./ColorPickerField.vue";
 import { getCachedName } from "./discordGuildData";
 import EmojiPickerField from "./EmojiPickerField.vue";
+import MessagePreview from "./MessagePreview.vue";
 import {
   classifyKind,
   defaultForSchema,
@@ -328,6 +374,7 @@ import {
   isSimple,
   isWide,
   prettifyKey,
+  schemaValueMatchesSearch,
   SpecialFieldKind,
   summarizeObjectValue,
   unwrapNullable,
@@ -371,8 +418,26 @@ const specialKind = computed(() => props.forcedSpecialKind ?? detectSpecialField
 
 const isCollapsible = computed(() => kind.value === "object" || kind.value === "array" || kind.value === "record");
 const showChevron = computed(() => isCollapsible.value && !props.noHeader);
-// Starts expanded when noHeader is set, since there'd otherwise be no chevron left to un-collapse it with.
+// Starts expanded when noHeader is set, there'd otherwise be no chevron left to un-collapse it with.
 const collapsed = ref(!props.noHeader);
+
+// Interface-wide search (see GuildConfigEditor's provide()) — whether this field's own label, or anything
+// inside it, matches the current query. Used both to filter which of a container's children get rendered at
+// all (see visibleObjectKeys below) and to auto-expand a container that contains a match but isn't already open.
+const searchQuery = inject<ComputedRef<string>>("pluginConfigSearchQuery", computed(() => ""));
+const matchesSearch = computed(() => {
+  const q = searchQuery.value.trim();
+  if (!q) return true;
+  if (props.label && props.label.toLowerCase().includes(q.toLowerCase())) return true;
+  return schemaValueMatchesSearch(props.schema, props.modelValue, q);
+});
+watch(
+  () => [searchQuery.value.trim(), matchesSearch.value, isCollapsible.value] as const,
+  ([q, matches, collapsible]) => {
+    if (q && matches && collapsible) collapsed.value = false;
+  },
+  { immediate: true },
+);
 
 // A labeled, non-nullable boolean renders its checkbox in the header row (next to the label) instead of on its
 // own line below — this is what lets a page full of toggles stay compact instead of every single one costing
@@ -395,10 +460,21 @@ function updateObjectKey(key: string, value: any) {
 
 // --- nested static objects: which properties are worth showing right now (see useOrderedObjectFieldKeys) ---
 
-const { visible: visibleObjectKeys, hidden: hiddenObjectKeys } = useOrderedObjectFieldKeys(
+const { visible: rawVisibleObjectKeys, hidden: hiddenObjectKeys } = useOrderedObjectFieldKeys(
   innerSchema,
   computed(() => props.modelValue),
 );
+
+// Further narrows to fields matching the interface-wide search, same as PluginConfigForm's top-level fields —
+// this is what lets searching surface one specific property several levels deep in a plugin's config tree.
+const visibleObjectKeys = computed(() => {
+  const q = searchQuery.value.trim();
+  if (!q) return rawVisibleObjectKeys.value;
+  return rawVisibleObjectKeys.value.filter((key) => {
+    if (prettifyKey(key).toLowerCase().includes(q.toLowerCase())) return true;
+    return schemaValueMatchesSearch(innerSchema.value?.properties?.[key], (props.modelValue ?? {})[key], q);
+  });
+});
 
 function addObjectField(key: string) {
   if (!key) return;
@@ -415,28 +491,22 @@ function numberOrNull(raw: string): number | null {
 
 const recordValueIsSimple = computed(() => isSimple(innerSchema.value?.additionalProperties));
 
-// Schema for a complex value's own properties, used only to match search text against a summary of its content
-// (see recordSearch below) — falls back to {} for value shapes that aren't a plain object (e.g. a union).
-const recordValuePropsSchema = computed(() => {
-  const valueSchema = innerSchema.value?.additionalProperties;
-  return valueSchema ? unwrapNullable(valueSchema).inner?.properties : undefined;
-});
-
 let recordKeyCounter = 0;
 const recordEntries = computed(() => Object.keys(props.modelValue ?? {}).map((key) => ({ key, uid: key })));
 
-// Filters entries by key (and, for complex values, a summary of their content) — records like a plugin's
-// "games" or "counters" can get long enough that scrolling to find one by hand is a chore. Only shown once
-// there's enough entries to matter (see template).
+// Filters entries by key or by anything inside a complex value — records like a plugin's "games" or "counters"
+// can get long enough that scrolling to find one by hand is a chore. The local box (only shown once there's
+// enough entries to matter — see template) takes precedence when typed in; otherwise this falls back to the
+// interface-wide search bar, so a global search that matched something inside this record also narrows it down
+// without needing to type the same query twice.
 const recordSearch = ref("");
+const effectiveRecordSearch = computed(() => recordSearch.value.trim() || searchQuery.value.trim());
 const filteredRecordEntries = computed(() => {
-  const q = recordSearch.value.trim().toLowerCase();
+  const q = effectiveRecordSearch.value.toLowerCase();
   if (!q) return recordEntries.value;
   return recordEntries.value.filter((entry) => {
     if (entry.key.toLowerCase().includes(q)) return true;
-    if (recordValueIsSimple.value) return false;
-    const summary = summarizeObjectValue((props.modelValue ?? {})[entry.key], recordValuePropsSchema.value);
-    return summary.toLowerCase().includes(q);
+    return schemaValueMatchesSearch(innerSchema.value?.additionalProperties, (props.modelValue ?? {})[entry.key], q);
   });
 });
 
@@ -516,19 +586,21 @@ function itemSummary(item: any): string {
   return summarizeObjectValue(item, arrayItemsPropsSchema.value, resolveSpecialLabel);
 }
 
-// Filters items by their summary text (or, for simple items with no summary, their raw value) — same rationale
-// as recordSearch above, for arrays like overrides that can get long. Keeps each item's original index (used by
-// update/remove/collapse below) alongside it, since filtering would otherwise shift indices out from under them.
+// Filters items by their content (or, for simple items, their raw value) — same rationale as recordSearch above,
+// for arrays like overrides that can get long. Falls back to the interface-wide search bar when the local box
+// (see recordSearch) is empty. Keeps each item's original index (used by update/remove/collapse below) alongside
+// it, since filtering would otherwise shift indices out from under them.
 const arraySearch = ref("");
+const effectiveArraySearch = computed(() => arraySearch.value.trim() || searchQuery.value.trim());
 const filteredArrayEntries = computed(() => {
   const list = Array.isArray(props.modelValue) ? props.modelValue : [];
-  const q = arraySearch.value.trim().toLowerCase();
+  const q = effectiveArraySearch.value.toLowerCase();
   return list
     .map((item: any, index: number) => ({ item, index }))
     .filter(({ item }) => {
       if (!q) return true;
-      const text = itemsAreSimple.value ? String(item ?? "") : itemSummary(item);
-      return text.toLowerCase().includes(q);
+      if (itemsAreSimple.value) return String(item ?? "").toLowerCase().includes(q);
+      return schemaValueMatchesSearch(innerSchema.value?.items, item, q);
     });
 });
 
@@ -585,6 +657,38 @@ function updateArrayItem(index: number, value: any) {
 
 // --- "single value or list" fields (see multiLeafSchema above) ---
 
+const multiLeafIsSimple = computed(() => isSimple(multiLeafSchema.value));
+
+// Schema for a complex leaf's own properties, used only to build the collapsed-item summary — same idea as
+// arrayItemsPropsSchema below, for the "single T or T[]" case instead of a plain array.
+const multiLeafPropsSchema = computed(() => {
+  const leaf = multiLeafSchema.value;
+  return leaf ? unwrapNullable(leaf).inner?.properties : undefined;
+});
+function multiItemSummary(item: any): string {
+  return summarizeObjectValue(item, multiLeafPropsSchema.value, resolveSpecialLabel);
+}
+
+// Same synthetic-id-per-item approach as arrayItemUids below (see its comment) — kept separate since a field
+// can only ever be one kind, so there's no risk of the two colliding.
+let multiItemUidCounter = 0;
+const multiItemUids = ref<number[]>(
+  Array.isArray(props.modelValue) ? props.modelValue.map(() => ++multiItemUidCounter) : props.modelValue != null ? [++multiItemUidCounter] : [],
+);
+const collapsedMultiItemUids = ref<Set<number>>(new Set(multiItemUids.value));
+function isMultiItemCollapsed(index: number): boolean {
+  const uid = multiItemUids.value[index];
+  return uid === undefined ? true : collapsedMultiItemUids.value.has(uid);
+}
+function toggleMultiItemCollapsed(index: number) {
+  const uid = multiItemUids.value[index];
+  if (uid === undefined) return;
+  const next = new Set(collapsedMultiItemUids.value);
+  if (next.has(uid)) next.delete(uid);
+  else next.add(uid);
+  collapsedMultiItemUids.value = next;
+}
+
 // Normalizes the current value (which could be null, a bare value, or an array, depending on which union
 // branch it currently matches) into a plain list for editing.
 const multiList = computed<any[]>(() => {
@@ -602,12 +706,21 @@ function emitMultiList(list: any[]) {
 }
 
 function addMultiItem() {
+  multiItemUids.value = [...multiItemUids.value, ++multiItemUidCounter];
   emitMultiList([...multiList.value, defaultForSchema(multiLeafSchema.value)]);
 }
 
 function removeMultiItem(index: number) {
   const list = [...multiList.value];
   list.splice(index, 1);
+  const uids = [...multiItemUids.value];
+  const [removedUid] = uids.splice(index, 1);
+  multiItemUids.value = uids;
+  if (removedUid !== undefined && collapsedMultiItemUids.value.has(removedUid)) {
+    const next = new Set(collapsedMultiItemUids.value);
+    next.delete(removedUid);
+    collapsedMultiItemUids.value = next;
+  }
   emitMultiList(list);
 }
 
@@ -628,10 +741,16 @@ function branchLabel(branch: any, index: number): string {
   if (discriminatorConst) {
     return prettifyKey(String(discriminatorConst.const));
   }
-  if (branch.type === "string" || branch.type === "number" || branch.type === "integer") return "Fixed value";
+  if (branch.type === "string") return "Plain text";
+  if (branch.type === "number" || branch.type === "integer") return "Fixed value";
   if (branch.type === "boolean") return "Yes/No";
   if (branch.type === "array") return "List";
   if (branch.type === "object" && branch.properties) {
+    // Zeppelin's message-content shape specifically — "Content / Tts / Embeds" (its first 3 property names,
+    // the generic fallback below) doesn't read as anything meaningful the way e.g. "Min / Max" does.
+    if ("content" in branch.properties && ("embeds" in branch.properties || "embed" in branch.properties)) {
+      return "Rich message";
+    }
     const keys = Object.keys(branch.properties).slice(0, 3);
     return keys.length ? keys.map(prettifyKey).join(" / ") : `Object ${index + 1}`;
   }
@@ -651,6 +770,15 @@ const objectBranchIndex = computed(() => {
 const isScalarOrObjectUnion = computed(() => {
   const branches: any[] = innerSchema.value?.anyOf ?? [];
   return branches.length === 2 && scalarBranchIndex.value !== -1 && objectBranchIndex.value !== -1;
+});
+
+// Recognizes Zeppelin's "message content" shape (a plain string, or { content?, tts?, embeds?/embed? }) by its
+// structure — reliable enough given how specific that combination of property names is — so a live preview can
+// be shown without needing every message-content field to be hardcoded by name/plugin.
+const isMessageContentField = computed(() => {
+  if (!isScalarOrObjectUnion.value) return false;
+  const objProps = innerSchema.value?.anyOf?.[objectBranchIndex.value]?.properties ?? {};
+  return "content" in objProps && ("embeds" in objProps || "embed" in objProps);
 });
 
 function guessBranchIndex(): number | null {
