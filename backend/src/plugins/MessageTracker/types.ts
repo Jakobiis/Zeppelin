@@ -1,0 +1,21 @@
+import { BasePluginType, pluginUtils } from "vety";
+import { z } from "zod";
+import { GuildMessageTrackerCounts } from "../../data/GuildMessageTrackerCounts.js";
+import { zBoundedCharacters, zSnowflake } from "../../utils.js";
+import { CommonPlugin } from "../Common/CommonPlugin.js";
+
+export const zMessageTrackerConfig = z.strictObject({
+  // Channels excluded from message counts entirely (e.g. a bot-commands channel you don't want inflating stats).
+  ignored_channel_ids: z.array(zSnowflake).default([]),
+  // Shown in the footer of `-messages`/`-m`'s embed. Null omits the footer entirely.
+  footer_text: zBoundedCharacters(0, 256).nullable().default("Jailbreak Changelogs"),
+  can_view: z.boolean().default(false),
+});
+
+export interface MessageTrackerPluginType extends BasePluginType {
+  configSchema: typeof zMessageTrackerConfig;
+  state: {
+    counts: GuildMessageTrackerCounts;
+    common: pluginUtils.PluginPublicInterface<typeof CommonPlugin>;
+  };
+}

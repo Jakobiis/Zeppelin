@@ -39,6 +39,8 @@ import { LogsPlugin } from "./Logs/LogsPlugin.js";
 import { logsPluginDocs } from "./Logs/docs.js";
 import { MessageSaverPlugin } from "./MessageSaver/MessageSaverPlugin.js";
 import { messageSaverPluginDocs } from "./MessageSaver/docs.js";
+import { MessageTrackerPlugin } from "./MessageTracker/MessageTrackerPlugin.js";
+import { messageTrackerPluginDocs } from "./MessageTracker/docs.js";
 import { ModActionsPlugin } from "./ModActions/ModActionsPlugin.js";
 import { modActionsPluginDocs } from "./ModActions/docs.js";
 import { MutesPlugin } from "./Mutes/MutesPlugin.js";
@@ -165,6 +167,10 @@ export const availableGuildPlugins: ZeppelinGuildPluginInfo[] = [
     plugin: MessageSaverPlugin,
     docs: messageSaverPluginDocs,
     autoload: true,
+  },
+  {
+    plugin: MessageTrackerPlugin,
+    docs: messageTrackerPluginDocs,
   },
   {
     plugin: ModActionsPlugin,
