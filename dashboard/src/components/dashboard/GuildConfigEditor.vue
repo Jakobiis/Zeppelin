@@ -95,6 +95,8 @@
           :guild-id="String($route.params.guildId)"
           :schema="pluginSchema"
           :model-value="pluginValue"
+          :plugin-title="selectedPluginInfo ? (selectedPluginInfo.prettyName || selectedPlugin) : selectedPlugin"
+          :plugin-description="selectedPluginInfo ? selectedPluginInfo.description : null"
           @update:model-value="pluginValue = $event"
         />
         <div v-else class="bg-card border border-border rounded-lg shadow-md p-6 text-muted-foreground text-sm">
@@ -251,6 +253,10 @@
       }),
       pluginSchema() {
         return this.selectedPlugin && this.selectedPlugin !== GENERAL ? this.pluginSchemas[this.selectedPlugin] ?? null : null;
+      },
+      selectedPluginInfo() {
+        if (!this.selectedPlugin || this.selectedPlugin === GENERAL) return null;
+        return this.formPlugins.find((p) => p.name === this.selectedPlugin)?.info ?? null;
       },
       // The search bar also filters the sidebar itself by plugin name, not just the currently-open plugin's
       // fields — so e.g. typing "economy" finds the plugin even if you're not already looking at it.

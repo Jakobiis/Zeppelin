@@ -2,6 +2,7 @@ import { GuildPluginData } from "vety";
 import { z } from "zod";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
 import { EconomyPluginType, zEconomyWagerGame } from "../types.js";
+import { applyCoinsBoost } from "./applyCoinsBoost.js";
 import { checkCooldown } from "./checkCooldown.js";
 import { logGameHistory } from "./gameHistory.js";
 import { rollNumberOrRange } from "./numberOrRange.js";
@@ -53,6 +54,7 @@ export async function playGame(
     if (win) {
       multiplier = rollNumberOrRange(game.win_multiplier);
       amountChanged = Math.floor(bet * (multiplier - 1));
+      amountChanged = await applyCoinsBoost(pluginData, userId, amountChanged);
       if (game.max_payout != null) {
         amountChanged = Math.min(amountChanged, game.max_payout);
       }

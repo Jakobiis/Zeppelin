@@ -1,11 +1,13 @@
 import { BasePluginType, pluginUtils } from "vety";
 import { z } from "zod";
 import { GuildEconomyGameHistory } from "../../data/GuildEconomyGameHistory.js";
+import { GuildEconomyShop } from "../../data/GuildEconomyShop.js";
 import { zBoundedCharacters, zBoundedRecord, zDelayString } from "../../utils.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { CountersPlugin } from "../Counters/CountersPlugin.js";
 
 const MAX_GAMES = 20;
+const MAX_SHOP_BOOSTS = 20;
 
 // Either a flat number (e.g. 2) or a {min, max} range that gets rolled randomly each time (e.g. {min: 1.5, max: 3}
 // = a fresh value between 1.5-3 picked per play). Used both for win_multiplier (wager games) and reward (reward
@@ -162,6 +164,46 @@ export const zEconomyGive = z.strictObject({
   hold_duration: zDelayString.nullable().default(null),
 });
 
+// Either a flat non-negative integer (e.g. 10) or a {min, max} range that gets rolled randomly (e.g. {min: 5,
+// max: 15}) — same idea as zNumberOrRange above but integer-only, for stock counts.
+export const zIntegerOrRange = z.union([
+  z.number().int().nonnegative(),
+  z
+    .strictObject({
+      min: z.number().int().nonnegative(),
+      max: z.number().int().nonnegative(),
+    })
+    .refine((range) => range.max >= range.min, {
+      message: "max must be greater than or equal to min",
+    }),
+]);
+
+// A purchasable temporary multiplier, bought with coins via `!shop buy`. Buying another boost of the same
+// boost_type replaces whatever's currently active (fresh multiplier + duration counted from now) rather than
+// stacking multiplicatively — see GuildEconomyShop.purchaseBoost.
+export const zShopBoost = z.strictObject({
+  label: zBoundedCharacters(0, 100).nullable().default(null),
+  emoji: z.string().nullable().default(null),
+  // What this boost multiplies while active: "coins" boosts net winnings from games/`!work` (see
+  // functions/applyCoinsBoost.ts); "activity" boosts counter gains from Automod's add_to_counter action (e.g. an
+  // `accumulate_activity` rule) — see Automod's actions/addToCounter.ts.
+  boost_type: z.enum(["coins", "activity"]),
+  multiplier: z.number().min(1),
+  duration: zDelayString,
+  price: z.number().int().positive(),
+  // Max stock available right now — null means unlimited (always purchasable, never tracked/decremented).
+  stock: zIntegerOrRange.nullable().default(null),
+  // How much stock is added back each restock_interval (rolled fresh per restock if given as a range, for a
+  // "sometimes more, sometimes less" refill). Only meaningful alongside restock_interval — without it, `stock`
+  // is a one-time batch that's gone for good once sold out.
+  restock_amount: zIntegerOrRange.nullable().default(null),
+  restock_interval: zDelayString.nullable().default(null),
+});
+
+export const zEconomyShop = z.strictObject({
+  boosts: zBoundedRecord(z.record(zBoundedCharacters(1, 32), zShopBoost), 0, MAX_SHOP_BOOSTS).default({}),
+});
+
 export const zEconomyTrade = z.strictObject({
   // The Counters plugin counter that represents "points" to trade to/from
   points_counter_name: zBoundedCharacters(1, 100),
@@ -194,6 +236,7 @@ export const zEconomyConfig = z.strictObject({
       },
       { message: "Game aliases must be unique and can't reuse another game's name or alias" },
     ),
+  shop: zEconomyShop.default({ boosts: {} }),
   can_view: z.boolean().default(false),
   can_play: z.boolean().default(false),
   can_trade: z.boolean().default(false),
@@ -201,6 +244,7 @@ export const zEconomyConfig = z.strictObject({
   // Lets staff look up another user's game history (see GameHistoryCmd) — not granted by any default override,
   // since it's an audit tool rather than a normal player-facing permission.
   can_manage: z.boolean().default(false),
+  can_shop: z.boolean().default(false),
 });
 
 export interface EconomyPluginType extends BasePluginType {
@@ -209,6 +253,7 @@ export interface EconomyPluginType extends BasePluginType {
     common: pluginUtils.PluginPublicInterface<typeof CommonPlugin>;
     counters: pluginUtils.PluginPublicInterface<typeof CountersPlugin>;
     gameHistory: GuildEconomyGameHistory;
+    shop: GuildEconomyShop;
     // Per (gameName, userId) last-played timestamp (ms) for game cooldowns. In-memory only — resets on restart,
     // which is fine for an anti-spam cooldown rather than something the economy's integrity depends on.
     lastPlayedAt: Map<string, number>;

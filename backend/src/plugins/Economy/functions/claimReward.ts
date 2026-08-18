@@ -2,6 +2,7 @@ import { GuildPluginData } from "vety";
 import { z } from "zod";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
 import { EconomyPluginType, zEconomyRewardGame } from "../types.js";
+import { applyCoinsBoost } from "./applyCoinsBoost.js";
 import { checkCooldown } from "./checkCooldown.js";
 import { logGameHistory } from "./gameHistory.js";
 import { rollNumberOrRange } from "./numberOrRange.js";
@@ -28,7 +29,10 @@ export async function claimReward(
   const lock = await pluginData.locks.acquire(economyUserLock({ id: userId }));
   try {
     const win = Math.random() < game.win_chance;
-    const amountChanged = win ? Math.floor(rollNumberOrRange(game.reward)) : 0;
+    let amountChanged = win ? Math.floor(rollNumberOrRange(game.reward)) : 0;
+    if (win) {
+      amountChanged = await applyCoinsBoost(pluginData, userId, amountChanged);
+    }
 
     if (amountChanged !== 0) {
       await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, amountChanged);

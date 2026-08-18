@@ -11,6 +11,7 @@ import { GuildPluginData } from "vety";
 import { z } from "zod";
 import { MINUTES, noop } from "../../../utils.js";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
+import { applyCoinsBoost } from "./applyCoinsBoost.js";
 import { formatCard, formatCards, handValue } from "./blackjackDeck.js";
 import {
   BlackjackHand,
@@ -110,13 +111,18 @@ export async function runBlackjack(
 
   const state = dealInitialState(bet);
 
-  const handResultText = (outcome: HandOutcome, hand: BlackjackHand): string => {
-    if (outcome === "win") return `Won +${emojiPrefix}${formatAmount(hand.bet)}`;
+  // Takes the actual payout rather than assuming a win's net is always exactly hand.bet (a fair 1:1 payout,
+  // true for an unboosted regular win but not once a shop coins-boost can inflate it beyond that).
+  const handResultText = (outcome: HandOutcome, hand: BlackjackHand, payout: number): string => {
+    if (outcome === "win") return `Won +${emojiPrefix}${formatAmount(payout - hand.bet)}`;
     if (outcome === "push") return "Push";
     return "Lost";
   };
 
-  const buildDescription = (opts: { revealDealer: boolean; results?: Array<{ outcome: HandOutcome }> }): string => {
+  const buildDescription = (opts: {
+    revealDealer: boolean;
+    results?: Array<{ outcome: HandOutcome; payout: number }>;
+  }): string => {
     const dealerTotal = handValue(state.dealerHand).total;
     const dealerText = opts.revealDealer
       ? `${formatCards(state.dealerHand)} (${dealerTotal})`
@@ -132,7 +138,7 @@ export async function runBlackjack(
 
       let statusText = "";
       if (opts.results) {
-        statusText = ` — ${handResultText(opts.results[i].outcome, hand)}`;
+        statusText = ` — ${handResultText(opts.results[i].outcome, hand, opts.results[i].payout)}`;
       } else if (hand.status === "bust") {
         statusText = " — Bust";
       } else if (hand.status === "stood") {
@@ -178,7 +184,9 @@ export async function runBlackjack(
       payout = bet;
       resultText = "Both you and the dealer got Blackjack — push!";
     } else if (initialOutcome === "player_blackjack") {
-      payout = bet + Math.floor(bet * game.blackjack_payout);
+      const rawNetWinnings = Math.floor(bet * game.blackjack_payout);
+      const boostedNetWinnings = await applyCoinsBoost(pluginData, userId, rawNetWinnings);
+      payout = bet + boostedNetWinnings;
       resultText = `Blackjack! You win ${emojiPrefix}**${formatAmount(payout - bet)}** ${config.currency_name}!`;
     } else {
       resultText = "Dealer has Blackjack — you lose.";
@@ -238,6 +246,12 @@ export async function runBlackjack(
     try {
       for (const hand of state.hands) {
         const result = settleHand(hand, dealerTotal);
+        // Only the net-winnings portion (payout beyond the returned stake) gets boosted — a push (payout ==
+        // hand.bet) or loss (payout == 0) has no winnings to boost.
+        if (result.payout > hand.bet) {
+          const boostedNet = await applyCoinsBoost(pluginData, userId, result.payout - hand.bet);
+          result.payout = hand.bet + boostedNet;
+        }
         if (result.payout > 0) {
           await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, result.payout);
         }

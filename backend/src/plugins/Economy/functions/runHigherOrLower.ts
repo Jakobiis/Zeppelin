@@ -11,6 +11,7 @@ import { GuildPluginData } from "vety";
 import { z } from "zod";
 import { MINUTES, noop } from "../../../utils.js";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
+import { applyCoinsBoost } from "./applyCoinsBoost.js";
 import { chargeBalance } from "./chargeBalance.js";
 import { checkCooldown } from "./checkCooldown.js";
 import { formatAmount } from "./formatAmount.js";
@@ -193,21 +194,31 @@ export async function runHigherOrLower(
   // synchronous `collector.stop()` -> `emit("end", ...)` could re-enter this same settlement logic from the
   // "end" handler below before `finished` was true, running a second (wrong) settlement on top of the first —
   // e.g. a loss immediately overwritten by the "end" handler's timeout-refund/auto-cashout path.
+  // resultText is a function (given the *final*, boost-applied payout) rather than a plain string, since the
+  // boost is only resolved inside settle() itself — building the text beforehand (as this used to) would bake in
+  // the pre-boost amount even though a boosted amount actually gets credited.
   const settle = async (
     outcome: GameHistoryOutcome,
     payout: number,
     interaction: MessageComponentInteraction | null,
-    resultText: string,
+    resultText: (finalPayout: number) => string,
   ): Promise<void> => {
     if (finished) return;
     finished = true;
     collector.stop();
 
+    let finalPayout = payout;
+
     if (payout > 0) {
       const settleLock = await pluginData.locks.acquire(economyUserLock({ id: userId }));
       try {
-        await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, payout);
-        const netWinnings = payout - bet;
+        if (outcome === "win") {
+          const netWinnings = payout - bet;
+          const boostedNet = await applyCoinsBoost(pluginData, userId, netWinnings);
+          finalPayout = bet + boostedNet;
+        }
+        await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, finalPayout);
+        const netWinnings = finalPayout - bet;
         if (netWinnings > 0) {
           await applyGameHold(pluginData, userId, netWinnings, game.hold);
         }
@@ -223,14 +234,14 @@ export async function runHigherOrLower(
       gameType: "hol",
       outcome,
       betAmount: bet,
-      amountChanged: payout - bet,
+      amountChanged: finalPayout - bet,
       balanceAfter: totalAfter,
     });
 
     // Displayed balance excludes anything just put on hold, so the embed doesn't show coins the player can't
     // actually spend yet.
     const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
-    const description = `${resultText}\nNew balance: ${emojiPrefix}**${formatAmount(newBalance)}** ${config.currency_name}`;
+    const description = `${resultText(finalPayout)}\nNew balance: ${emojiPrefix}**${formatAmount(newBalance)}** ${config.currency_name}`;
     const embed = buildEmbed(description);
     const payload = { embeds: [embed], components: [buildButtons(true)] };
 
@@ -266,7 +277,8 @@ export async function runHigherOrLower(
         "win",
         payout,
         interaction,
-        `💰 Cashed out at **${currentMultiplier.toFixed(2)}x**! +${emojiPrefix}**${formatAmount(payout - bet)}** ${config.currency_name}`,
+        (finalPayout) =>
+          `💰 Cashed out at **${currentMultiplier.toFixed(2)}x**! +${emojiPrefix}**${formatAmount(finalPayout - bet)}** ${config.currency_name}`,
       );
       return;
     }
@@ -286,7 +298,7 @@ export async function runHigherOrLower(
 
     if (!correct) {
       currentNumber = drawnNumber;
-      await settle("loss", 0, interaction, `❌ The number was **${drawnNumber}** — you lost your bet.`);
+      await settle("loss", 0, interaction, () => `❌ The number was **${drawnNumber}** — you lost your bet.`);
       return;
     }
 
@@ -311,7 +323,7 @@ export async function runHigherOrLower(
 
     if (roundIndex === 0) {
       // Never made a guess — refund the bet in full rather than treating inactivity as a loss.
-      await settle("push", bet, null, "⌛ Timed out before your first guess. Bet refunded.");
+      await settle("push", bet, null, () => "⌛ Timed out before your first guess. Bet refunded.");
       return;
     }
 
@@ -321,7 +333,7 @@ export async function runHigherOrLower(
       "win",
       payout,
       null,
-      `⌛ Timed out — automatically cashed out at **${currentMultiplier.toFixed(2)}x**.`,
+      () => `⌛ Timed out — automatically cashed out at **${currentMultiplier.toFixed(2)}x**.`,
     );
   });
 }

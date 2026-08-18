@@ -1,5 +1,12 @@
 <template>
   <div class="bg-card border border-border rounded-lg shadow-md p-6">
+    <div v-if="pluginTitle" class="mb-4 pb-4 border-b border-border">
+      <h1 class="text-lg font-semibold">{{ pluginTitle }}</h1>
+      <div v-if="pluginDescription" class="main-content text-sm text-muted-foreground mt-1">
+        <MarkdownBlock :content="pluginDescription" />
+      </div>
+    </div>
+
     <div v-if="searchedVisibleConfigKeys.length" class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
       <PluginConfigField
         v-for="key in searchedVisibleConfigKeys"
@@ -42,6 +49,7 @@
 
 <script setup lang="ts">
 import { computed, inject, provide, type ComputedRef } from "vue";
+import MarkdownBlock from "../docs/MarkdownBlock.vue";
 import ComboboxField from "./ComboboxField.vue";
 import PluginConfigField from "./PluginConfigField.vue";
 import { defaultForSchema, isWide, prettifyKey, schemaValueMatchesSearch, useOrderedObjectFieldKeys } from "./pluginConfigSchema";
@@ -51,6 +59,10 @@ const props = defineProps<{
   // Already-dereferenced { properties: { config, overrides } } schema for this plugin.
   schema: any;
   modelValue: { config: Record<string, any>; overrides: any[] };
+  // Plugin name + docs description (from the same registry the docs pages use), shown at the top of the card so
+  // the Interface tab doesn't require flipping to the docs page just to know what a plugin does.
+  pluginTitle?: string | null;
+  pluginDescription?: string | null;
 }>();
 
 const emit = defineEmits<{

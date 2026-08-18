@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { zNumberOrRange } from "../types.js";
+import { zIntegerOrRange, zNumberOrRange } from "../types.js";
 import { formatAmount } from "./formatAmount.js";
 
 type NumberOrRange = z.infer<typeof zNumberOrRange>;
+type IntegerOrRange = z.infer<typeof zIntegerOrRange>;
 
 /**
  * Resolves a configured number-or-range to an actual number for this play — flat values pass through unchanged,
@@ -14,6 +15,15 @@ export function rollNumberOrRange(value: NumberOrRange): number {
   }
 
   return value.min + Math.random() * (value.max - value.min);
+}
+
+/** Same as rollNumberOrRange, but for zIntegerOrRange — the range roll is inclusive of both min and max. */
+export function rollIntegerOrRange(value: IntegerOrRange): number {
+  if (typeof value === "number") {
+    return value;
+  }
+
+  return value.min + Math.floor(Math.random() * (value.max - value.min + 1));
 }
 
 export function formatWinMultiplier(value: NumberOrRange): string {

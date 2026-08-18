@@ -1,5 +1,7 @@
 import { PluginOverride, guildPlugin } from "vety";
 import { GuildEconomyGameHistory } from "../../data/GuildEconomyGameHistory.js";
+import { GuildEconomyShop } from "../../data/GuildEconomyShop.js";
+import { makePublicFn } from "../../pluginUtils.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { CountersPlugin } from "../Counters/CountersPlugin.js";
 import { BalanceCmd } from "./commands/BalanceCmd.js";
@@ -10,9 +12,13 @@ import { GiveCmd } from "./commands/GiveCmd.js";
 import { LeaderboardCmd } from "./commands/LeaderboardCmd.js";
 import { PlayCmd } from "./commands/PlayCmd.js";
 import { PvpToggleCmd } from "./commands/PvpToggleCmd.js";
+import { ShopBuyCmd } from "./commands/ShopBuyCmd.js";
+import { ShopCmd } from "./commands/ShopCmd.js";
+import { ShopStatusCmd } from "./commands/ShopStatusCmd.js";
 import { TradeBackCmd } from "./commands/TradeBackCmd.js";
 import { TradeCmd } from "./commands/TradeCmd.js";
 import { WorkCmd } from "./commands/WorkCmd.js";
+import { getActiveBoostMultiplier } from "./functions/getActiveBoostMultiplier.js";
 import { EconomyPluginType, zEconomyConfig } from "./types.js";
 
 const defaultOverrides: Array<PluginOverride<EconomyPluginType>> = [
@@ -28,6 +34,7 @@ const defaultOverrides: Array<PluginOverride<EconomyPluginType>> = [
       can_play: true,
       can_trade: true,
       can_give: true,
+      can_shop: true,
     },
   },
 ];
@@ -46,6 +53,15 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
 
   dependencies: () => [CountersPlugin, CommonPlugin],
 
+  // Exposed for other plugins to optionally consult (namely Automod's add_to_counter action, which looks this up
+  // dynamically rather than depending on Economy directly — see Automod/actions/addToCounter.ts) — Economy isn't
+  // installed on every server, so nothing should hard-depend on it just for boost lookups.
+  public(pluginData) {
+    return {
+      getActiveBoostMultiplier: makePublicFn(pluginData, getActiveBoostMultiplier),
+    };
+  },
+
   // prettier-ignore
   messageCommands: [
     BalanceCmd,
@@ -56,6 +72,9 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
     LeaderboardCmd,
     PlayCmd,
     PvpToggleCmd,
+    ShopCmd,
+    ShopBuyCmd,
+    ShopStatusCmd,
     TradeCmd,
     TradeBackCmd,
     WorkCmd,
@@ -63,6 +82,7 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
 
   beforeLoad(pluginData) {
     pluginData.state.lastPlayedAt = new Map();
+    pluginData.state.shop = GuildEconomyShop.getGuildInstance(pluginData.guild.id);
   },
 
   beforeStart(pluginData) {
