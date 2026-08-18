@@ -32,7 +32,7 @@ export const MessagesLeaderboardCmd = guildPluginMessageCommand<MessageTrackerPl
   permission: "can_view",
 
   signature: {
-    period: ct.string({ option: true }),
+    period: ct.string({ required: false }),
   },
 
   async run({ pluginData, message, args }) {
