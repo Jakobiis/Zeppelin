@@ -128,7 +128,14 @@
 
       <!-- dynamic record (arbitrary string keys -> a shared value schema) -->
       <div v-else-if="kind === 'record'" v-show="!collapsed" class="field-panel space-y-2">
-        <div v-for="entry in recordEntries" :key="entry.uid">
+        <input
+          v-if="recordEntries.length > 3"
+          type="text"
+          class="field-input text-sm"
+          placeholder="Search…"
+          v-model="recordSearch"
+        />
+        <div v-for="entry in filteredRecordEntries" :key="entry.uid">
           <div v-if="recordValueIsSimple" class="flex items-center gap-2">
             <input
               type="text"
@@ -176,22 +183,30 @@
             </div>
           </div>
         </div>
+        <p v-if="recordSearch && !filteredRecordEntries.length" class="text-sm text-muted-foreground italic">No matches.</p>
         <button type="button" class="btn-add" @click="addRecordKey">+ Add entry</button>
       </div>
 
       <!-- array -->
       <div v-else-if="kind === 'array'" v-show="!collapsed" class="field-panel space-y-2">
-        <template v-for="(item, index) in modelValue ?? []" :key="arrayItemUids[index]">
+        <input
+          v-if="(modelValue ?? []).length > 3"
+          type="text"
+          class="field-input text-sm"
+          placeholder="Search…"
+          v-model="arraySearch"
+        />
+        <template v-for="entry in filteredArrayEntries" :key="arrayItemUids[entry.index]">
           <!-- simple items: one compact row, value + remove, no card/header -->
           <div v-if="itemsAreSimple" class="flex items-center gap-2">
             <PluginConfigField
               class="flex-1"
               :schema="innerSchema.items"
               :forced-special-kind="specialKind"
-              :model-value="item"
-              @update:model-value="(val) => updateArrayItem(index, val)"
+              :model-value="entry.item"
+              @update:model-value="(val) => updateArrayItem(entry.index, val)"
             />
-            <button type="button" class="btn-remove shrink-0" @click="removeArrayItem(index)">Remove</button>
+            <button type="button" class="btn-remove shrink-0" @click="removeArrayItem(entry.index)">Remove</button>
           </div>
           <!-- complex items: collapsible, no text header, just a chevron + remove -->
           <div v-else class="item-card">
@@ -199,26 +214,27 @@
               <button
                 type="button"
                 class="text-muted-foreground hover:text-foreground shrink-0 w-4 cursor-pointer"
-                @click="toggleItemCollapsed(index)"
+                @click="toggleItemCollapsed(entry.index)"
               >
-                <svg class="chevron-icon" :class="{ 'rotate-90': !isItemCollapsed(index) }" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class="chevron-icon" :class="{ 'rotate-90': !isItemCollapsed(entry.index) }" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M6 4l4 4-4 4" />
                 </svg>
               </button>
-              <span v-if="itemSummary(item)" class="flex-1 text-sm text-muted-foreground truncate">{{ itemSummary(item) }}</span>
+              <span v-if="itemSummary(entry.item)" class="flex-1 text-sm text-muted-foreground truncate">{{ itemSummary(entry.item) }}</span>
               <div v-else class="flex-1"></div>
-              <button type="button" class="btn-remove shrink-0" @click="removeArrayItem(index)">Remove</button>
+              <button type="button" class="btn-remove shrink-0" @click="removeArrayItem(entry.index)">Remove</button>
             </div>
-            <div v-show="!isItemCollapsed(index)" class="item-card-body">
+            <div v-show="!isItemCollapsed(entry.index)" class="item-card-body">
               <PluginConfigField
                 no-header
                 :schema="innerSchema.items"
-                :model-value="item"
-                @update:model-value="(val) => updateArrayItem(index, val)"
+                :model-value="entry.item"
+                @update:model-value="(val) => updateArrayItem(entry.index, val)"
               />
             </div>
           </div>
         </template>
+        <p v-if="arraySearch && !filteredArrayEntries.length" class="text-sm text-muted-foreground italic">No matches.</p>
         <button type="button" class="btn-add" @click="addArrayItem">+ Add item</button>
       </div>
 
@@ -309,13 +325,13 @@ import {
   defaultForSchema,
   detectMultiLeafSchema,
   detectSpecialFieldKind,
-  getObjectFieldKeys,
   isSimple,
   isWide,
   prettifyKey,
   SpecialFieldKind,
   summarizeObjectValue,
   unwrapNullable,
+  useOrderedObjectFieldKeys,
 } from "./pluginConfigSchema";
 import RoleChannelPickerField from "./RoleChannelPickerField.vue";
 
@@ -377,11 +393,12 @@ function updateObjectKey(key: string, value: any) {
   emit("update:modelValue", { ...(props.modelValue ?? {}), [key]: value });
 }
 
-// --- nested static objects: which properties are worth showing right now (see getObjectFieldKeys) ---
+// --- nested static objects: which properties are worth showing right now (see useOrderedObjectFieldKeys) ---
 
-const objectFieldKeys = computed(() => getObjectFieldKeys(innerSchema.value, props.modelValue));
-const visibleObjectKeys = computed(() => objectFieldKeys.value.visible);
-const hiddenObjectKeys = computed(() => objectFieldKeys.value.hidden);
+const { visible: visibleObjectKeys, hidden: hiddenObjectKeys } = useOrderedObjectFieldKeys(
+  innerSchema,
+  computed(() => props.modelValue),
+);
 
 function addObjectField(key: string) {
   if (!key) return;
@@ -398,8 +415,30 @@ function numberOrNull(raw: string): number | null {
 
 const recordValueIsSimple = computed(() => isSimple(innerSchema.value?.additionalProperties));
 
+// Schema for a complex value's own properties, used only to match search text against a summary of its content
+// (see recordSearch below) — falls back to {} for value shapes that aren't a plain object (e.g. a union).
+const recordValuePropsSchema = computed(() => {
+  const valueSchema = innerSchema.value?.additionalProperties;
+  return valueSchema ? unwrapNullable(valueSchema).inner?.properties : undefined;
+});
+
 let recordKeyCounter = 0;
 const recordEntries = computed(() => Object.keys(props.modelValue ?? {}).map((key) => ({ key, uid: key })));
+
+// Filters entries by key (and, for complex values, a summary of their content) — records like a plugin's
+// "games" or "counters" can get long enough that scrolling to find one by hand is a chore. Only shown once
+// there's enough entries to matter (see template).
+const recordSearch = ref("");
+const filteredRecordEntries = computed(() => {
+  const q = recordSearch.value.trim().toLowerCase();
+  if (!q) return recordEntries.value;
+  return recordEntries.value.filter((entry) => {
+    if (entry.key.toLowerCase().includes(q)) return true;
+    if (recordValueIsSimple.value) return false;
+    const summary = summarizeObjectValue((props.modelValue ?? {})[entry.key], recordValuePropsSchema.value);
+    return summary.toLowerCase().includes(q);
+  });
+});
 
 // Starts with every existing entry collapsed, matching objects/arrays — newly added entries (below) are left
 // out of this set so they open expanded and ready to edit.
@@ -476,6 +515,22 @@ function resolveSpecialLabel(key: string, schema: any, rawValue: string): string
 function itemSummary(item: any): string {
   return summarizeObjectValue(item, arrayItemsPropsSchema.value, resolveSpecialLabel);
 }
+
+// Filters items by their summary text (or, for simple items with no summary, their raw value) — same rationale
+// as recordSearch above, for arrays like overrides that can get long. Keeps each item's original index (used by
+// update/remove/collapse below) alongside it, since filtering would otherwise shift indices out from under them.
+const arraySearch = ref("");
+const filteredArrayEntries = computed(() => {
+  const list = Array.isArray(props.modelValue) ? props.modelValue : [];
+  const q = arraySearch.value.trim().toLowerCase();
+  return list
+    .map((item: any, index: number) => ({ item, index }))
+    .filter(({ item }) => {
+      if (!q) return true;
+      const text = itemsAreSimple.value ? String(item ?? "") : itemSummary(item);
+      return text.toLowerCase().includes(q);
+    });
+});
 
 // Array items are only identified by index, which shifts on removal — track a stable synthetic id per item
 // (in step with add/remove) so each item's collapse state doesn't jump to a different item after a removal.
@@ -603,6 +658,20 @@ function guessBranchIndex(): number | null {
   if (!branches.length) return null;
 
   const val = props.modelValue;
+
+  if (val != null && typeof val === "object" && !Array.isArray(val)) {
+    // Discriminated-union branches (e.g. a game's wager/reward/blackjack/pvp/hol types) are every one of them a
+    // plain object, so a generic "which branch's *shape* matches this value" check below can't tell them apart
+    // — it'd always just hit whichever object branch comes first. Match on the actual discriminator value first
+    // (e.g. `type: "hol"`) so opening an existing entry shows the branch it's actually configured as, not
+    // whichever one happens to be listed first.
+    const discriminatedIndex = branches.findIndex((b) => {
+      const discriminatorKey = Object.keys(b?.properties ?? {}).find((k) => b.properties[k]?.const !== undefined);
+      return discriminatorKey != null && val[discriminatorKey] === b.properties[discriminatorKey].const;
+    });
+    if (discriminatedIndex !== -1) return discriminatedIndex;
+  }
+
   const matchesType = (branch: any): boolean => {
     if (branch.type === "string") return typeof val === "string";
     if (branch.type === "number" || branch.type === "integer") return typeof val === "number";

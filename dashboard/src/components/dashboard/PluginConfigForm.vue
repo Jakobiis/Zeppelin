@@ -41,7 +41,7 @@
 <script setup lang="ts">
 import { computed, provide } from "vue";
 import PluginConfigField from "./PluginConfigField.vue";
-import { defaultForSchema, getObjectFieldKeys, isWide, prettifyKey } from "./pluginConfigSchema";
+import { defaultForSchema, isWide, prettifyKey, useOrderedObjectFieldKeys } from "./pluginConfigSchema";
 
 const props = defineProps<{
   guildId: string;
@@ -61,9 +61,10 @@ const overridesSchema = computed(() => props.schema?.properties?.overrides ?? nu
 
 // Same "only show what's required or already set" treatment as nested objects get inside PluginConfigField —
 // applied here too so a plugin's top-level config doesn't list rarely-used optional fields it doesn't need to.
-const configFieldKeys = computed(() => getObjectFieldKeys(configSchema.value, props.modelValue.config));
-const visibleConfigKeys = computed(() => configFieldKeys.value.visible);
-const hiddenConfigKeys = computed(() => configFieldKeys.value.hidden);
+const { visible: visibleConfigKeys, hidden: hiddenConfigKeys } = useOrderedObjectFieldKeys(
+  configSchema,
+  computed(() => props.modelValue.config),
+);
 
 function updateConfigKey(key: string, value: any) {
   emit("update:modelValue", { ...props.modelValue, config: { ...props.modelValue.config, [key]: value } });

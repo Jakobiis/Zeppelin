@@ -1,6 +1,6 @@
 <template>
-  <div class="w-full">
-    <div class="flex items-center gap-2 mb-2">
+  <div class="w-full relative" ref="rootEl">
+    <div class="flex items-center gap-2">
       <span v-if="previewUrl" class="inline-flex w-6 h-6 shrink-0 items-center justify-center">
         <img :src="previewUrl" alt="" class="max-w-full max-h-full" />
       </span>
@@ -9,13 +9,17 @@
       <input
         type="text"
         class="field-input flex-1"
-        placeholder="Type a unicode emoji, or pick a server emoji below"
+        placeholder="Type a unicode emoji, or click to browse server emoji"
         :value="modelValue ?? ''"
+        @focus="open = true"
         @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value || null)"
       />
     </div>
 
-    <div class="border border-border rounded-lg bg-muted/25 p-2 max-h-40 overflow-y-auto">
+    <div
+      v-if="open"
+      class="absolute z-20 left-0 right-0 mt-1 border border-border rounded-lg bg-popover shadow-lg p-2 max-h-48 overflow-y-auto"
+    >
       <p v-if="loadError" class="text-xs text-destructive">Couldn't load this server's emoji from Discord.</p>
       <p v-else-if="loading" class="text-xs text-muted-foreground">Loading…</p>
       <p v-else-if="!emojis.length" class="text-xs text-muted-foreground">This server has no custom emoji.</p>
@@ -37,7 +41,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { DiscordEmoji, emojiImageUrl, emojiMarkdown, getGuildEmojis } from "./discordGuildData";
 
 const props = defineProps<{
@@ -53,7 +57,19 @@ const emojis = ref<DiscordEmoji[]>([]);
 const loading = ref(true);
 const loadError = ref(false);
 
+// The emoji grid is a popover, not always-on-screen — every emoji field on a form (there can be several) would
+// otherwise show its full emoji list at once, which is exactly the "raw"/cluttered look this replaces.
+const open = ref(false);
+const rootEl = ref<HTMLElement | null>(null);
+
+function onDocumentMouseDown(ev: MouseEvent) {
+  if (open.value && rootEl.value && !rootEl.value.contains(ev.target as Node)) {
+    open.value = false;
+  }
+}
+
 onMounted(async () => {
+  document.addEventListener("mousedown", onDocumentMouseDown);
   try {
     emojis.value = await getGuildEmojis(props.guildId);
   } catch {
@@ -63,8 +79,13 @@ onMounted(async () => {
   }
 });
 
+onBeforeUnmount(() => {
+  document.removeEventListener("mousedown", onDocumentMouseDown);
+});
+
 function choose(emoji: DiscordEmoji) {
   emit("update:modelValue", emojiMarkdown(emoji));
+  open.value = false;
 }
 
 function isSelected(emoji: DiscordEmoji): boolean {

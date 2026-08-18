@@ -1,6 +1,7 @@
 // Shared JSON-Schema classification helpers used by both PluginConfigForm (the root field list) and
 // PluginConfigField (recursive per-field rendering) — kept in one place so the "is this field simple enough to
 // sit in a packed grid cell, or does it need the full row" decision can't drift between the two.
+import { computed, ref, watch, type ComputedRef, type Ref } from "vue";
 
 // zod's toJSONSchema hoists any schema that's referenced more than once (e.g. the recursive all/any/not fields
 // on override criteria, or any sub-schema two plugin config fields happen to share the same zod instance for)
@@ -59,6 +60,10 @@ export function unwrapNullable(s: any): { nullable: boolean; inner: any } {
 // Classifies an (already nullable-unwrapped) schema node into the "kind" of control it should render as.
 export function classifyKind(s: any): string {
   if (!s) return "unsupported";
+  // A fixed literal (e.g. a discriminated union's `type: "wager"` tag) — otherwise indistinguishable from a
+  // plain string/number/boolean field, which would render it as an editable input for a value that can only
+  // ever be the one thing. Checked before those so the const takes priority.
+  if (s.const !== undefined) return "const";
   if (s.type === "boolean") return "boolean";
   if (s.type === "string" && !s.enum) return "string";
   if (s.type === "number" || s.type === "integer") return "number";
@@ -86,11 +91,22 @@ export function isWide(s: any, fieldKey?: string): boolean {
   return !isSimple(s);
 }
 
+// A schema's `default` is a single object living on the (cached) JSON Schema itself — returning it as-is would
+// hand out that exact same array/object reference every time the same schema node's default is used (e.g. every
+// record entry missing the same optional field, or several "+ Add" clicks against the same item schema). Since
+// those defaults then get embedded at multiple places in the same value tree, js-yaml's dumper — seeing the same
+// reference twice — represents it with a YAML anchor/alias, which the backend's anti-YAML-bomb guard rejects
+// outright ("Object aliases are not allowed") on save. Cloning guarantees every fill gets its own independent copy.
+function cloneDefault<T>(value: T): T {
+  return typeof value === "object" && value !== null ? structuredClone(value) : value;
+}
+
 // Best-effort default value for a schema node — used when switching a nullable field from unset to set, adding
 // a new array item, adding a new record entry, or switching a union's active branch.
 export function defaultForSchema(s: any): any {
   if (s == null) return null;
-  if (s.default !== undefined) return s.default;
+  if (s.const !== undefined) return s.const;
+  if (s.default !== undefined) return cloneDefault(s.default);
   if (s.anyOf) {
     const nonNull = s.anyOf.find((b: any) => b.type !== "null");
     return nonNull ? defaultForSchema(nonNull) : null;
@@ -99,7 +115,22 @@ export function defaultForSchema(s: any): any {
   if (s.type === "number" || s.type === "integer") return 0;
   if (s.type === "boolean") return false;
   if (s.type === "array") return [];
-  if (s.type === "object") return {};
+  if (s.type === "object") {
+    if (!s.properties) return {};
+    // Only pre-fills properties with an unambiguous value of their own (a const — most importantly a
+    // discriminated union's `type` tag — or an explicit schema default): a discriminated union branch (e.g. a
+    // newly-added or newly-switched-to "hol" game) needs its `type` actually set to that literal, or the
+    // backend's "no type = wager" back-compat fallback silently treats it as a wager game instead. Properties
+    // with no default of their own are left absent, same as everywhere else — they still need real user input,
+    // and synthesizing a placeholder like 0/"" for them would look like a real (and likely invalid) value.
+    const result: Record<string, any> = {};
+    for (const [key, propSchema] of Object.entries<any>(s.properties)) {
+      if (propSchema?.const !== undefined || propSchema?.default !== undefined) {
+        result[key] = defaultForSchema(propSchema);
+      }
+    }
+    return result;
+  }
   return null;
 }
 
@@ -187,11 +218,44 @@ export function getObjectFieldKeys(schema: any, value: any): { visible: string[]
   const hidden: string[] = [];
   for (const key of Object.keys(props)) {
     if (HIDDEN_PROPERTY_KEYS.has(key)) continue;
+    // A const (e.g. a discriminated union's `type: "wager"` tag) can only ever hold the one value the branch
+    // already implies — showing it as an editable field is at best redundant with whatever picked this branch
+    // (a union dropdown one level up) and at worst reads as a broken, un-editable-looking input.
+    if (props[key]?.const !== undefined) continue;
     const isSet = val[key] !== null && val[key] !== undefined;
     if (required.has(key) || isSet) visible.push(key);
     else hidden.push(key);
   }
   return { visible, hidden };
+}
+
+// Wraps getObjectFieldKeys with a stable display order for the "visible" side: that function alone only knows
+// schema-declaration order, so a newly-added optional field (via "+ Add field") would appear wherever its key
+// happens to sit in the schema instead of after the fields already showing — reading as the field landing in a
+// random, confusing spot in the card instead of at the bottom where the "+ Add field" control that added it
+// sits. This keeps each already-visible field's position stable and appends newly-visible ones at the end; a
+// field that gets unset (and possibly re-added later) starts fresh at the end again rather than trying to
+// remember its old spot.
+export function useOrderedObjectFieldKeys(
+  schema: Ref<any> | ComputedRef<any>,
+  value: Ref<any> | ComputedRef<any>,
+): { visible: ComputedRef<string[]>; hidden: ComputedRef<string[]> } {
+  const raw = computed(() => getObjectFieldKeys(schema.value, value.value));
+
+  const order = ref<string[]>([...raw.value.visible]);
+  watch(
+    () => raw.value.visible,
+    (nextVisible) => {
+      const stillVisible = order.value.filter((k) => nextVisible.includes(k));
+      const added = nextVisible.filter((k) => !stillVisible.includes(k));
+      order.value = [...stillVisible, ...added];
+    },
+  );
+
+  return {
+    visible: computed(() => order.value),
+    hidden: computed(() => raw.value.hidden),
+  };
 }
 
 // Recursively fills in values missing from `rawValue` using each field's own schema-level default — used when
@@ -204,7 +268,7 @@ export function fillDefaults(schema: any, rawValue: any): any {
   const { inner } = unwrapNullable(schema);
   const ownDefault = schema.default !== undefined ? schema.default : inner?.default;
 
-  if (rawValue === undefined) return ownDefault !== undefined ? ownDefault : rawValue;
+  if (rawValue === undefined) return ownDefault !== undefined ? cloneDefault(ownDefault) : rawValue;
   if (rawValue === null) return null;
 
   const kind = classifyKind(inner);

@@ -9,7 +9,7 @@
     </div>
 
     <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4 flex items-center flex-wrap">
-      <h1 class="flex-full md:flex-auto">Config for {{ guild.name }}</h1>
+      <h3 class="flex-full md:flex-auto">Config for {{ guild.name }}</h3>
       <button v-if="!saving" class="flex-none btn-primary" v-on:click="save">
         <span v-if="saved">Saved!</span>
         <span v-else>Save</span>

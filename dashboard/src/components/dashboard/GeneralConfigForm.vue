@@ -32,7 +32,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import PluginConfigField from "./PluginConfigField.vue";
-import { defaultForSchema, getObjectFieldKeys, isWide, prettifyKey } from "./pluginConfigSchema";
+import { defaultForSchema, isWide, prettifyKey, useOrderedObjectFieldKeys } from "./pluginConfigSchema";
 
 const props = defineProps<{
   // Already-fetched JSON Schema for the guild config's top-level, non-plugin fields (prefix, embed_color,
@@ -47,9 +47,10 @@ const emit = defineEmits<{
 
 // Same "only show what's required or already set" treatment plugin config forms get — with everything here
 // being optional, a fresh guild starts with just the "+ Add field" picker instead of three near-empty rows.
-const fieldKeys = computed(() => getObjectFieldKeys(props.schema, props.modelValue));
-const visibleKeys = computed(() => fieldKeys.value.visible);
-const hiddenKeys = computed(() => fieldKeys.value.hidden);
+const { visible: visibleKeys, hidden: hiddenKeys } = useOrderedObjectFieldKeys(
+  computed(() => props.schema),
+  computed(() => props.modelValue),
+);
 
 function updateKey(key: string, value: any) {
   emit("update:modelValue", { ...props.modelValue, [key]: value });

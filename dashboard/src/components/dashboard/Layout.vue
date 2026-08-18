@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard container mx-auto px-2 py-2 md:px-6 md:py-6">
+  <div class="dashboard w-full px-2 py-2 md:px-6 md:py-6">
     <Title title="Zeppelin - Dashboard" />
 
     <nav class="flex items-stretch flex-wrap pl-4 pr-2 py-1 border border-border rounded-lg bg-card shadow-xl mb-8">
