@@ -5,7 +5,7 @@ import { getGuildEmbedColor } from "../../../utils/getGuildEmbedColor.js";
 import { EconomyPluginType } from "../types.js";
 
 export const ShopStatusCmd = guildPluginMessageCommand<EconomyPluginType>()({
-  trigger: ["shop status", "shop boosts", "boosts"],
+  trigger: ["shop status", "shop boosts"],
   permission: "can_shop",
 
   signature: {},
@@ -33,7 +33,7 @@ export const ShopStatusCmd = guildPluginMessageCommand<EconomyPluginType>()({
       const remainingMs = boost.expiresAt.getTime() - Date.now();
       const boostConfig = config.shop.boosts[boost.boostKey];
       const label = boostConfig?.label ?? boost.boostKey;
-      lines.push(`**${label}**: ${boost.multiplier}x ${typeLabel} — ${humanizeDuration(Math.max(0, remainingMs))} left`);
+      lines.push(`**${label}**: ${boost.multiplier}x ${typeLabel} — ${humanizeDuration(Math.max(0, remainingMs), { round: true })} left`);
     }
 
     const embed = new EmbedBuilder().setColor(getGuildEmbedColor(pluginData)).setTitle("Active Boosts").setDescription(lines.join("\n"));

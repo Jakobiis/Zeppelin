@@ -11,7 +11,6 @@ import { GuildPluginData } from "vety";
 import { z } from "zod";
 import { MINUTES, noop } from "../../../utils.js";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
-import { applyCoinsBoost } from "./applyCoinsBoost.js";
 import { chargeBalance } from "./chargeBalance.js";
 import { checkCooldown } from "./checkCooldown.js";
 import { formatAmount } from "./formatAmount.js";
@@ -147,7 +146,7 @@ export async function runHigherOrLower(
 
     const progressLine =
       roundIndex > 0
-        ? `Current multiplier: **${currentMultiplier.toFixed(2)}x** (cash out for ${emojiPrefix}**${formatAmount(potentialPayout(currentMultiplier))}**)\n`
+        ? `Current multiplier: **${currentMultiplier.toFixed(3)}x** (cash out for ${emojiPrefix}**${formatAmount(potentialPayout(currentMultiplier))}**)\n`
         : "";
 
     // Deliberately doesn't say what the range is — combined with a specific number, that makes it obvious how
@@ -199,14 +198,13 @@ export async function runHigherOrLower(
   // synchronous `collector.stop()` -> `emit("end", ...)` could re-enter this same settlement logic from the
   // "end" handler below before `finished` was true, running a second (wrong) settlement on top of the first —
   // e.g. a loss immediately overwritten by the "end" handler's timeout-refund/auto-cashout path.
-  // resultText is a function (given the *final*, boost-applied payout) rather than a plain string, since the
-  // boost is only resolved inside settle() itself — building the text beforehand (as this used to) would bake in
-  // the pre-boost amount even though a boosted amount actually gets credited.
+  // resultText is a function (given the base and final payouts) rather than a plain string, since any active
+  // coin boost is only resolved inside settle() itself.
   const settle = async (
     outcome: GameHistoryOutcome,
     payout: number,
     interaction: MessageComponentInteraction | null,
-    resultText: (finalPayout: number) => string,
+    resultText: (finalPayout: number, basePayout: number, coinsBoostMultiplier: number | null) => string,
     canRetry = false,
   ): Promise<void> => {
     if (finished) return;
@@ -214,13 +212,16 @@ export async function runHigherOrLower(
     collector.stop();
 
     let finalPayout = payout;
+    let coinsBoostMultiplier: number | null = null;
 
     if (payout > 0) {
       const settleLock = await pluginData.locks.acquire(economyUserLock({ id: userId }));
       try {
         if (outcome === "win") {
           const netWinnings = payout - bet;
-          const boostedNet = await applyCoinsBoost(pluginData, userId, netWinnings);
+          const coinsBoost = await pluginData.state.shop.getActiveBoost(userId, "coins");
+          coinsBoostMultiplier = coinsBoost?.multiplier ?? null;
+          const boostedNet = coinsBoost ? Math.floor(netWinnings * coinsBoost.multiplier) : netWinnings;
           finalPayout = bet + boostedNet;
         }
         await pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, finalPayout);
@@ -247,7 +248,7 @@ export async function runHigherOrLower(
     // Displayed balance excludes anything just put on hold, so the embed doesn't show coins the player can't
     // actually spend yet.
     const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
-    const description = `${resultText(finalPayout)}\nNew balance: ${emojiPrefix}**${formatAmount(newBalance)}** ${config.currency_name}`;
+    const description = `${resultText(finalPayout, payout, coinsBoostMultiplier)}\nNew balance: ${emojiPrefix}**${formatAmount(newBalance)}** ${config.currency_name}`;
     const embed = buildEmbed(description);
     const components = [buildButtons(true)];
     if (canRetry) {
@@ -315,8 +316,17 @@ export async function runHigherOrLower(
         "win",
         payout,
         interaction,
-        (finalPayout) =>
-          `💰 Cashed out at **${currentMultiplier.toFixed(2)}x**! +${emojiPrefix}**${formatAmount(finalPayout - bet)}** ${config.currency_name}`,
+        (finalPayout, basePayout, coinsBoostMultiplier) => {
+          const baseWinnings = basePayout - bet;
+          const boostText =
+            coinsBoostMultiplier && coinsBoostMultiplier !== 1
+              ? `\nYour **${coinsBoostMultiplier.toFixed(2)}x** coin boost turned ${emojiPrefix}**${formatAmount(baseWinnings)}** winnings into ${emojiPrefix}**${formatAmount(finalPayout - bet)}**.`
+              : "";
+          return (
+            `💰 Cashed out at **${currentMultiplier.toFixed(3)}x** — base payout: ${emojiPrefix}**${formatAmount(basePayout)}** ${config.currency_name}.` +
+            `${boostText}\nTotal payout: ${emojiPrefix}**${formatAmount(finalPayout)}** ${config.currency_name}`
+          );
+        },
       );
       return;
     }
