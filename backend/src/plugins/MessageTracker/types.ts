@@ -13,6 +13,10 @@ export const zMessageTrackerConfig = z.strictObject({
   // Lets staff overwrite a member's tracked message counts (`-messages set`) — deliberately separate from
   // can_view so granting "check your own/others' stats" doesn't also grant "rewrite anyone's stats".
   can_manage: z.boolean().default(false),
+  // Lets staff run `-messages import` (paste stats copied from another bot, e.g. when migrating off it) —
+  // separate from can_manage since it's realistically only needed by a couple of people during a one-time
+  // migration, not part of regular moderation.
+  can_import: z.boolean().default(false),
 });
 
 export interface MessageTrackerPluginType extends BasePluginType {

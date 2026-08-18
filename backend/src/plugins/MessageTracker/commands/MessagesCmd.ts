@@ -18,10 +18,10 @@ export const MessagesCmd = guildPluginMessageCommand<MessageTrackerPluginType>()
     const counts = await pluginData.state.counts.getForUser(member.id);
 
     const description = [
-      `**Today**: ${counts.daily.toLocaleString()}`,
-      `**This Week**: ${counts.weekly.toLocaleString()}`,
-      `**This Month**: ${counts.monthly.toLocaleString()}`,
-      `**All Time**: ${counts.allTime.toLocaleString()}`,
+      `Today: **${counts.daily.toLocaleString()}**`,
+      `This Week: **${counts.weekly.toLocaleString()}**`,
+      `This Month: **${counts.monthly.toLocaleString()}**`,
+      `All Time: **${counts.allTime.toLocaleString()}**`,
     ].join("\n");
 
     const embed = new EmbedBuilder()

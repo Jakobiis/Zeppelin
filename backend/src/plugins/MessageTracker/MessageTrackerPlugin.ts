@@ -2,6 +2,7 @@ import { guildPlugin } from "vety";
 import { GuildMessageTrackerCounts } from "../../data/GuildMessageTrackerCounts.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { MessagesCmd } from "./commands/MessagesCmd.js";
+import { MessagesImportCmd } from "./commands/MessagesImportCmd.js";
 import { MessagesLeaderboardCmd } from "./commands/MessagesLeaderboardCmd.js";
 import { MessagesSetCmd } from "./commands/MessagesSetCmd.js";
 import { TrackMessageEvt } from "./events/TrackMessageEvt.js";
@@ -18,6 +19,7 @@ export const MessageTrackerPlugin = guildPlugin<MessageTrackerPluginType>()({
     MessagesCmd,
     MessagesLeaderboardCmd,
     MessagesSetCmd,
+    MessagesImportCmd,
   ],
 
   // prettier-ignore
