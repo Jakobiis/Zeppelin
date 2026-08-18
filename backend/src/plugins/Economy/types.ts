@@ -38,6 +38,10 @@ const zGameCommon = {
   emoji: z.string().nullable().default(null),
   cooldown: zDelayString.nullable().default(null),
   hold: zGameHold.nullable().default(null),
+  // Alternate keywords this game can also be played/looked up under, e.g. a game configured as `tictactoe` with
+  // aliases: [ttt] can be played with `!play ttt <amount>` just the same as `!play tictactoe <amount>`. Doesn't
+  // replace the config key itself — that's still the canonical name used for cooldowns/game history/etc.
+  aliases: z.array(zBoundedCharacters(1, 32)).max(10).default([]),
 };
 
 // A "wager" game: the player picks a bet amount (within min_bet-max_bet), win_chance decides whether they win,
@@ -175,7 +179,21 @@ export const zEconomyConfig = z.strictObject({
   counter_name: zBoundedCharacters(1, 100).default("coins"),
   trade: zEconomyTrade.nullable().default(null),
   give: zEconomyGive.default({ cooldown: null, fee: null, hold_duration: null }),
-  games: zBoundedRecord(z.record(zBoundedCharacters(1, 32), zEconomyGame), 0, MAX_GAMES).default({}),
+  games: zBoundedRecord(z.record(zBoundedCharacters(1, 32), zEconomyGame), 0, MAX_GAMES)
+    .default({})
+    .refine(
+      (games) => {
+        const seen = new Set(Object.keys(games));
+        for (const game of Object.values(games)) {
+          for (const alias of game.aliases) {
+            if (seen.has(alias)) return false;
+            seen.add(alias);
+          }
+        }
+        return true;
+      },
+      { message: "Game aliases must be unique and can't reuse another game's name or alias" },
+    ),
   can_view: z.boolean().default(false),
   can_play: z.boolean().default(false),
   can_trade: z.boolean().default(false),

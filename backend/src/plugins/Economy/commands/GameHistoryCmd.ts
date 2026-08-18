@@ -4,6 +4,7 @@ import { guildPluginMessageCommand } from "vety";
 import { commandTypeHelpers as ct } from "../../../commandTypes.js";
 import { humanizeDuration } from "../../../humanizeDuration.js";
 import { MINUTES, noop } from "../../../utils.js";
+import { findGameEntry } from "../functions/findGame.js";
 import { formatAmount } from "../functions/formatAmount.js";
 import { EconomyPluginType } from "../types.js";
 
@@ -36,22 +37,29 @@ export const GameHistoryCmd = guildPluginMessageCommand<EconomyPluginType>()({
   async run({ pluginData, message, args }) {
     const config = pluginData.config.get();
 
-    if (args.game && !config.games[args.game]) {
-      void pluginData.state.common.sendErrorMessage(message, `No game configured with the name \`${args.game}\``);
-      return;
+    // Resolves an alias to the canonical game name (the key game history is actually logged under) so filtering
+    // by an alias finds the same entries filtering by the real name would.
+    let gameName: string | null = null;
+    if (args.game) {
+      const entry = findGameEntry(config.games, args.game);
+      if (!entry) {
+        void pluginData.state.common.sendErrorMessage(message, `No game configured with the name \`${args.game}\``);
+        return;
+      }
+      gameName = entry[0];
     }
 
     const targetUser = args.user;
     const filter = {
       userId: targetUser.id,
-      gameName: args.game ?? null,
+      gameName,
       since: args.timeframe ? new Date(Date.now() - args.timeframe) : null,
     };
 
     const totalCount = await pluginData.state.gameHistory.getCount(filter);
     if (totalCount === 0) {
       void message.channel.send(
-        `No game history found for **${targetUser.username}**${args.game ? ` in \`${args.game}\`` : ""}${
+        `No game history found for **${targetUser.username}**${gameName ? ` in \`${gameName}\`` : ""}${
           args.timeframe ? ` in the last ${humanizeDuration(args.timeframe)}` : ""
         }.`,
       );
@@ -63,7 +71,7 @@ export const GameHistoryCmd = guildPluginMessageCommand<EconomyPluginType>()({
 
     const emojiPrefix = config.currency_emoji ? `${config.currency_emoji} ` : "";
 
-    const filterText = `Filters: ${args.game ? `\`${args.game}\`` : "all games"} · ${
+    const filterText = `Filters: ${gameName ? `\`${gameName}\`` : "all games"} · ${
       args.timeframe ? `last ${humanizeDuration(args.timeframe)}` : "all time"
     }`;
 

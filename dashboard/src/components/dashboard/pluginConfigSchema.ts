@@ -111,8 +111,21 @@ export function prettifyKey(key: string): string {
 // properties, in schema property order — used as the collapsed-state label for array items and record entries
 // so a collapsed override/rule/game doesn't just show a blank bar. Skips nested objects/arrays (like an
 // override's `config` block) since those don't summarize into a short string usefully.
-export function summarizeObjectValue(value: any, propsSchema: Record<string, any> | undefined): string {
+//
+// `resolveLabel`, if given, is consulted for every string leaf/array-item value (e.g. to turn a role/channel id
+// into its actual name) — returning null falls back to showing the raw value as-is.
+export function summarizeObjectValue(
+  value: any,
+  propsSchema: Record<string, any> | undefined,
+  resolveLabel?: (key: string, schema: any, rawValue: string) => string | null,
+): string {
   if (value == null || typeof value !== "object" || Array.isArray(value)) return "";
+
+  const label = (key: string, v: string): string => {
+    const resolved = resolveLabel?.(key, propsSchema?.[key], v) ?? null;
+    if (resolved) return resolved;
+    return v.length > 24 ? `${v.slice(0, 24)}…` : v;
+  };
 
   const parts: string[] = [];
   for (const key of Object.keys(propsSchema ?? {})) {
@@ -123,13 +136,14 @@ export function summarizeObjectValue(value: any, propsSchema: Record<string, any
 
     if (typeof v === "string") {
       if (v.trim() === "") continue;
-      parts.push(`${prettifyKey(key)}: ${v.length > 24 ? `${v.slice(0, 24)}…` : v}`);
+      parts.push(`${prettifyKey(key)}: ${label(key, v)}`);
     } else if (typeof v === "number") {
       parts.push(`${prettifyKey(key)}: ${v}`);
     } else if (typeof v === "boolean") {
       if (v) parts.push(prettifyKey(key));
     } else if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string" || typeof x === "number")) {
-      parts.push(`${prettifyKey(key)}: ${v.slice(0, 2).join(", ")}${v.length > 2 ? "…" : ""}`);
+      const shown = v.slice(0, 2).map((x) => (typeof x === "string" ? label(key, x) : x));
+      parts.push(`${prettifyKey(key)}: ${shown.join(", ")}${v.length > 2 ? "…" : ""}`);
     }
   }
   return parts.join(" · ");

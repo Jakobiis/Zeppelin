@@ -35,6 +35,9 @@ export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
       const emojiPrefix = game.emoji ? `${game.emoji} ` : "";
       const cooldownMs = game.cooldown ? convertDelayStringToMS(game.cooldown) : null;
       const cooldownText = cooldownMs ? `, cooldown ${humanizeDuration(cooldownMs)}` : "";
+      // Only games played via `!play <name>` can be reached through an alias — `!work` always claims from the
+      // fixed "work" key, so there's nothing to alias there.
+      const aliasesText = game.aliases.length ? ` (aka ${game.aliases.map((a) => `\`${a}\``).join(", ")})` : "";
 
       if (game.type === "reward") {
         const winText =
@@ -43,20 +46,20 @@ export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
       }
 
       if (game.type === "blackjack") {
-        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
+        return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}play ${gameName} <amount>\`) — standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
       }
 
       if (game.type === "pvp") {
         const variantName = PVP_VARIANT_NAMES[game.variant];
-        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} [@user] <amount>\`) — ${variantName} vs another player, or vs the bot if you omit @user, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
+        return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}play ${gameName} [@user] <amount>\`) — ${variantName} vs another player, or vs the bot if you omit @user, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
       }
 
       if (game.type === "hol") {
-        return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — guess higher/lower/same on a 1-${game.range_max} draw, chain multipliers **${game.min_multiplier}x**-**${game.max_multiplier}x** per round, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
+        return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}play ${gameName} <amount>\`) — guess higher/lower/same on a 1-${game.range_max} draw, chain multipliers **${game.min_multiplier}x**-**${game.max_multiplier}x** per round, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
       }
 
       const winPercent = Math.round(game.win_chance * 100);
-      return `${emojiPrefix}**${label}** (\`${prefix}play ${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
+      return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}play ${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
     });
 
     const embed = new EmbedBuilder()

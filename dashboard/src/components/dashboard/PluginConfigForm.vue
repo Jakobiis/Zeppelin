@@ -1,7 +1,5 @@
 <template>
   <div class="bg-card border border-border rounded-lg shadow-md p-6">
-    <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Configuration</h2>
-
     <div v-if="visibleConfigKeys.length" class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
       <PluginConfigField
         v-for="key in visibleConfigKeys"

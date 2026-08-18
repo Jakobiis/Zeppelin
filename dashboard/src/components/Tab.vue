@@ -1,5 +1,5 @@
 <template>
-  <li style="padding-bottom: 1px" :class="{active: active}">
+  <li :class="{active: active}">
     <slot></slot>
   </li>
 </template>
@@ -8,23 +8,25 @@
   @reference "../style/app.css";
 
   li {
-    padding-bottom: 1px;
+    @apply relative -mb-px;
+  }
 
-    &.active {
-      padding-bottom: 0;
-      @apply border-b;
-      @apply border-border;
-    }
+  li.active::after {
+    content: "";
+    @apply absolute left-3 right-3 -bottom-px h-0.5 rounded-full bg-primary;
   }
 
   :deep(a) {
     @apply block;
     @apply py-2;
     @apply px-4;
+    @apply text-sm font-medium;
     @apply text-muted-foreground;
+    @apply rounded-t-md;
+    @apply transition-colors duration-150;
 
     &:hover {
-      @apply text-foreground;
+      @apply text-foreground bg-accent/40;
     }
   }
 

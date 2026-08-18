@@ -2,6 +2,7 @@ import { EmbedBuilder } from "discord.js";
 import { guildPluginMessageCommand } from "vety";
 import { commandTypeHelpers as ct } from "../../../commandTypes.js";
 import { getGuildPrefix } from "../../../utils/getGuildPrefix.js";
+import { findGameEntry } from "../functions/findGame.js";
 import { formatAmount } from "../functions/formatAmount.js";
 import { parseAmountInput } from "../functions/parseAmountInput.js";
 import { getSpendableBalance } from "../functions/pendingBalance.js";
@@ -30,40 +31,41 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
 
   async run({ pluginData, message, args }) {
     const config = pluginData.config.get();
-    const game = config.games[args.game];
-    if (!game) {
+    const entry = findGameEntry(config.games, args.game);
+    if (!entry) {
       void pluginData.state.common.sendErrorMessage(message, `Unknown game: ${args.game}`);
       return;
     }
+    const [gameName, game] = entry;
 
     if (game.type === "pvp") {
       if (!args.user) {
-        await runPvpVsBot(pluginData, message, args.game, game, args.amount);
+        await runPvpVsBot(pluginData, message, gameName, game, args.amount);
         return;
       }
-      await runPvpGame(pluginData, message, args.game, game, args.user, args.amount);
+      await runPvpGame(pluginData, message, gameName, game, args.user, args.amount);
       return;
     }
 
     if (args.user) {
-      void pluginData.state.common.sendErrorMessage(message, `**${args.game}** isn't a PvP game.`);
+      void pluginData.state.common.sendErrorMessage(message, `**${gameName}** isn't a PvP game.`);
       return;
     }
 
     if (game.type === "blackjack") {
-      await runBlackjack(pluginData, message, args.game, game, args.amount);
+      await runBlackjack(pluginData, message, gameName, game, args.amount);
       return;
     }
 
     if (game.type === "hol") {
-      await runHigherOrLower(pluginData, message, args.game, game, args.amount);
+      await runHigherOrLower(pluginData, message, gameName, game, args.amount);
       return;
     }
 
     if (game.type !== "wager") {
       void pluginData.state.common.sendErrorMessage(
         message,
-        `**${args.game}** doesn't take bets — use \`${getGuildPrefix(pluginData)}work\` instead.`,
+        `**${gameName}** doesn't take bets — use \`${getGuildPrefix(pluginData)}work\` instead.`,
       );
       return;
     }
@@ -80,7 +82,7 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
       bet = Math.min(bet, game.max_bet);
     }
 
-    const result = await playGame(pluginData, args.game, game, message.author.id, bet);
+    const result = await playGame(pluginData, gameName, game, message.author.id, bet);
 
     if (result.type === "error") {
       void pluginData.state.common.sendErrorMessage(message, result.message);
@@ -88,7 +90,7 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
     }
 
     const emojiPrefix = config.currency_emoji ? `${config.currency_emoji} ` : "";
-    const label = game.label ?? args.game;
+    const label = game.label ?? gameName;
 
     const multiplierText = result.multiplier != null ? ` (**${result.multiplier.toFixed(2)}x**)` : "";
 

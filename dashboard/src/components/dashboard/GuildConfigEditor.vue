@@ -41,6 +41,18 @@
 
     <div v-if="mode === 'interface'" class="flex flex-wrap lg:flex-nowrap items-start gap-6 mt-4">
       <nav class="w-full lg:w-56 flex-none border border-border rounded-lg bg-card shadow-md p-3">
+        <ul class="list-none space-y-0.5 mb-3 pb-3 border-b border-border">
+          <li>
+            <a href="javascript:void(0)"
+               class="block px-3 py-1.5 rounded-md text-sm border-l-2 transition-colors duration-150"
+               :class="selectedPlugin === GENERAL
+                 ? 'bg-accent text-accent-foreground font-medium border-primary'
+                 : 'text-foreground border-transparent hover:bg-accent hover:text-accent-foreground'"
+               v-on:click="selectPlugin(GENERAL)">
+              General
+            </a>
+          </li>
+        </ul>
         <ul class="list-none space-y-0.5">
           <li v-for="plugin in formPlugins" :key="plugin.name">
             <a href="javascript:void(0)"
@@ -56,16 +68,17 @@
       </nav>
 
       <div class="flex-auto min-w-0">
-        <p class="text-sm text-muted-foreground mb-4">
-          Structured forms are available for plugins as the renderer learns to handle more of their config shape —
-          anything it doesn't understand yet falls back to a raw JSON field. This is the same underlying config as
-          the Raw YAML tab — switching back and forth (or saving) keeps them in sync.
-        </p>
         <div v-if="pluginLoading" class="bg-card border border-border rounded-lg shadow-md p-6 text-muted-foreground text-sm">
           Loading…
         </div>
+        <GeneralConfigForm
+          v-else-if="selectedPlugin === GENERAL && generalSchema && generalValue"
+          :schema="generalSchema"
+          :model-value="generalValue"
+          @update:model-value="generalValue = $event"
+        />
         <PluginConfigForm
-          v-else-if="selectedPlugin && pluginSchema && pluginValue"
+          v-else-if="selectedPlugin && selectedPlugin !== GENERAL && pluginSchema && pluginValue"
           :guild-id="String($route.params.guildId)"
           :schema="pluginSchema"
           :model-value="pluginValue"
@@ -94,17 +107,23 @@
 
   import Tab from "../Tab.vue";
   import Tabs from "../Tabs.vue";
+  import GeneralConfigForm from "./GeneralConfigForm.vue";
   import PluginConfigForm from "./PluginConfigForm.vue";
   import { dereferenceSchema, fillDefaults } from "./pluginConfigSchema";
 
   let editorKeybindListener;
   let windowResizeListener;
 
+  // Sentinel for the sidebar's "General" entry (prefix/embed_color/levels — the guild config's top-level,
+  // non-plugin fields) so it can share the same selectedPlugin/sync machinery as a real plugin name would.
+  const GENERAL = "__general__";
+
   export default {
     components: {
       VAceEditor,
       Tab,
       Tabs,
+      GeneralConfigForm,
       PluginConfigForm,
     },
     async mounted() {
@@ -130,7 +149,7 @@
       // Fetch the full plugin list so we know what to offer in the Interface tab's sidebar — the same registry
       // the docs pages use, reused here instead of hardcoding a plugin name.
       await this.$store.dispatch("docs/loadAllPlugins");
-      this.selectedPlugin = this.formPlugins[0]?.name ?? null;
+      this.selectedPlugin = this.GENERAL;
 
       this.loading = false;
     },
@@ -159,6 +178,7 @@
         savedTimeout: null,
         mode: "yaml",
         selectedPlugin: null,
+        GENERAL,
         // Per-plugin dereferenced schema, fetched once and cached — schemas don't change based on user edits.
         pluginSchemas: {},
         // { config, overrides } for the currently selected plugin, derived live from editableConfig whenever the
@@ -167,6 +187,10 @@
         // drift out of sync with each other.
         pluginValue: null,
         pluginLoading: false,
+        // Schema for the guild config's top-level, non-plugin fields (prefix/embed_color/levels), fetched once,
+        // and { prefix, embed_color, levels } derived live from editableConfig the same way pluginValue is.
+        generalSchema: null,
+        generalValue: null,
       };
     },
     computed: {
@@ -188,7 +212,7 @@
         },
       }),
       pluginSchema() {
-        return this.selectedPlugin ? this.pluginSchemas[this.selectedPlugin] ?? null : null;
+        return this.selectedPlugin && this.selectedPlugin !== GENERAL ? this.pluginSchemas[this.selectedPlugin] ?? null : null;
       },
     },
     methods: {
@@ -242,23 +266,99 @@
         }
         this.editableConfig = yaml.dump(parsed);
       },
+      // Fetches the schema for the guild config's top-level, non-plugin fields once and caches it.
+      async ensureGeneralSchema() {
+        if (!this.generalSchema) {
+          const result = await get(`guilds/${this.$route.params.guildId}/general-config-schema`);
+          this.generalSchema = result.schema;
+        }
+        return this.generalSchema;
+      },
+      // Same idea as derivePluginValueFromYaml, but for the top-level prefix/embed_color/levels keys instead of
+      // a plugin's nested config/overrides.
+      deriveGeneralValueFromYaml(schema) {
+        let parsed;
+        try {
+          parsed = yaml.load(this.editableConfig || "") || {};
+        } catch {
+          parsed = {};
+        }
+        return {
+          prefix: fillDefaults(schema?.properties?.prefix, parsed.prefix),
+          embed_color: fillDefaults(schema?.properties?.embed_color, parsed.embed_color),
+          levels: fillDefaults(schema?.properties?.levels, parsed.levels),
+        };
+      },
+      // Same idea as syncPluginValueIntoYaml, but for the top-level prefix/embed_color/levels keys.
+      syncGeneralValueIntoYaml() {
+        if (!this.generalValue) return;
+        let parsed;
+        try {
+          parsed = yaml.load(this.editableConfig || "") || {};
+        } catch {
+          return;
+        }
+        if (this.generalValue.prefix) {
+          parsed.prefix = this.generalValue.prefix;
+        } else {
+          delete parsed.prefix;
+        }
+        if (this.generalValue.embed_color != null) {
+          parsed.embed_color = this.generalValue.embed_color;
+        } else {
+          delete parsed.embed_color;
+        }
+        if (this.generalValue.levels && Object.keys(this.generalValue.levels).length) {
+          parsed.levels = this.generalValue.levels;
+        } else {
+          delete parsed.levels;
+        }
+        this.editableConfig = yaml.dump(parsed);
+      },
       async loadPluginIntoInterface(pluginName) {
         this.pluginLoading = true;
         const schema = await this.ensurePluginSchema(pluginName);
         this.pluginValue = this.derivePluginValueFromYaml(pluginName, schema);
         this.pluginLoading = false;
       },
+      async loadGeneralIntoInterface() {
+        this.pluginLoading = true;
+        const schema = await this.ensureGeneralSchema();
+        this.generalValue = this.deriveGeneralValueFromYaml(schema);
+        this.pluginLoading = false;
+      },
+      // Persists whatever's currently being edited in the Interface tab (general settings or a plugin's config)
+      // back into editableConfig — called whenever we're about to leave the Interface tab (switching tabs,
+      // switching selection, or saving) so nothing typed there is lost.
+      syncSelectionIntoYaml() {
+        if (this.selectedPlugin === GENERAL) this.syncGeneralValueIntoYaml();
+        else this.syncPluginValueIntoYaml();
+      },
+      async loadSelectionIntoInterface(pluginName) {
+        if (pluginName === GENERAL) await this.loadGeneralIntoInterface();
+        else await this.loadPluginIntoInterface(pluginName);
+      },
       async selectPlugin(pluginName) {
         if (pluginName === this.selectedPlugin) return;
-        if (this.mode === "interface") this.syncPluginValueIntoYaml();
+        if (this.mode === "interface") this.syncSelectionIntoYaml();
         this.selectedPlugin = pluginName;
-        if (this.mode === "interface") await this.loadPluginIntoInterface(pluginName);
+        if (this.mode === "interface") await this.loadSelectionIntoInterface(pluginName);
       },
       async setMode(newMode) {
         if (newMode === this.mode) return;
-        if (this.mode === "interface") this.syncPluginValueIntoYaml();
+        if (this.mode === "interface") this.syncSelectionIntoYaml();
         this.mode = newMode;
-        if (newMode === "interface" && this.selectedPlugin) await this.loadPluginIntoInterface(this.selectedPlugin);
+        if (newMode === "interface" && this.selectedPlugin) {
+          await this.loadSelectionIntoInterface(this.selectedPlugin);
+        }
+        if (newMode === "yaml") {
+          // The ace editor stays mounted (v-show, not v-if) while the Interface tab is active, so its value can
+          // get updated programmatically (via syncSelectionIntoYaml above) while its container has zero
+          // dimensions — ace's renderer only paints the lines that fit its last-known viewport size, so without
+          // this it keeps showing whatever it last rendered while visible instead of the new content until
+          // something else (e.g. a page reload) forces a fresh render.
+          this.$nextTick(() => this.fitEditorToWindow());
+        }
       },
       editorInit() {
         // Add Ctrl+S/Cmd+S save shortcut
@@ -330,7 +430,7 @@
         // Whichever tab is currently active, saving always goes through the same raw-YAML endpoint below — so
         // if the Interface tab has unsaved edits, fold them into editableConfig first (this is also what makes
         // Ctrl+S work while the Interface tab is active, without a separate keybinding for it).
-        if (this.mode === "interface") this.syncPluginValueIntoYaml();
+        if (this.mode === "interface") this.syncSelectionIntoYaml();
 
         this.saved = false;
         this.saving = true;

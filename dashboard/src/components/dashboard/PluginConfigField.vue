@@ -302,6 +302,7 @@
 
 <script setup lang="ts">
 import { computed, inject, ref, watch } from "vue";
+import { getCachedName } from "./discordGuildData";
 import EmojiPickerField from "./EmojiPickerField.vue";
 import {
   classifyKind,
@@ -453,8 +454,27 @@ const arrayItemsPropsSchema = computed(() => {
   return items ? unwrapNullable(items).inner?.properties : undefined;
 });
 
+// Resolves a role/channel id to its actual name for the collapsed-item summary (e.g. an override's "Channel:
+// 1286064050765299814" becoming "Channel: #general") — only once that guild's role/channel list has actually
+// been fetched (which happens as a side effect of the matching picker field mounting elsewhere in this same
+// form; see discordGuildData's reactive name cache). Falls back to the raw id until then. Emoji values aren't
+// bare ids (they're either a unicode emoji or a `<:name:id>` mention that already spells out the name), so
+// there's nothing to resolve for those.
+function resolveSpecialLabel(key: string, schema: any, rawValue: string): string | null {
+  if (!guildId) return null;
+  const kind = detectSpecialFieldKind(key, schema);
+  if (kind === "channel") {
+    const name = getCachedName("channel", guildId, rawValue);
+    return name ? `#${name}` : null;
+  }
+  if (kind === "role") {
+    return getCachedName("role", guildId, rawValue);
+  }
+  return null;
+}
+
 function itemSummary(item: any): string {
-  return summarizeObjectValue(item, arrayItemsPropsSchema.value);
+  return summarizeObjectValue(item, arrayItemsPropsSchema.value, resolveSpecialLabel);
 }
 
 // Array items are only identified by index, which shifts on removal — track a stable synthetic id per item
