@@ -32,7 +32,8 @@
                ref="aceEditor"
                :options="{
                   useSoftTabs: true,
-                  tabSize: 2
+                  tabSize: 2,
+                  showPrintMargin: false
                 }"
                 :style="{
                   width: editorWidth + 'px',

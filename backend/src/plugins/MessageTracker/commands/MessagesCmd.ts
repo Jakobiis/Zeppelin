@@ -17,16 +17,18 @@ export const MessagesCmd = guildPluginMessageCommand<MessageTrackerPluginType>()
     const member = args.member || message.member;
     const counts = await pluginData.state.counts.getForUser(member.id);
 
+    const description = [
+      `**Today**: ${counts.daily.toLocaleString()}`,
+      `**This Week**: ${counts.weekly.toLocaleString()}`,
+      `**This Month**: ${counts.monthly.toLocaleString()}`,
+      `**All Time**: ${counts.allTime.toLocaleString()}`,
+    ].join("\n");
+
     const embed = new EmbedBuilder()
       .setColor(getGuildEmbedColor(pluginData))
       .setAuthor({ name: `${renderUsername(member)}'s Messages`, iconURL: member.displayAvatarURL() })
       .setThumbnail(member.displayAvatarURL())
-      .addFields(
-        { name: "Today", value: counts.daily.toLocaleString(), inline: true },
-        { name: "This Week", value: counts.weekly.toLocaleString(), inline: true },
-        { name: "This Month", value: counts.monthly.toLocaleString(), inline: true },
-        { name: "All Time", value: counts.allTime.toLocaleString(), inline: true },
-      )
+      .setDescription(description)
       .setTimestamp();
 
     const config = await pluginData.config.getForMessage(message);
