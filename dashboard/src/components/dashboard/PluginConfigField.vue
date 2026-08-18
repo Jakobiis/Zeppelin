@@ -105,8 +105,9 @@
       <!-- nested static object: grid so related fields sit side by side instead of one long column. Only
            required fields and optional fields that already hold a value take up space here — the rest are
            reachable through "+ Add field" below so an object with mostly-unused optional properties (like an
-           override's criteria) doesn't have to list all of them just to let you set one. -->
-      <div v-else-if="kind === 'object'" v-show="!collapsed" class="field-panel">
+           override's criteria) doesn't have to list all of them just to let you set one. Always rendered (no
+           collapse) — see isCollapsible. -->
+      <div v-else-if="kind === 'object'" class="field-panel">
         <div
           v-if="visibleObjectKeys.length"
           class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-3 items-start"
@@ -417,7 +418,11 @@ const multiLeafSchema = computed(() => (kind.value === "union" ? detectMultiLeaf
 
 const specialKind = computed(() => props.forcedSpecialKind ?? detectSpecialFieldKind(props.fieldKey, props.schema));
 
-const isCollapsible = computed(() => kind.value === "object" || kind.value === "array" || kind.value === "record");
+// Plain objects (as opposed to arrays/records, which can hold many entries and genuinely benefit from
+// collapsing) are excluded here — they're small enough (a handful of fields) that a collapse chevron is just
+// one more click in the way, most annoyingly right after adding one via "+ Add field": you'd reveal it in the
+// list only to have to click again just to see what's inside it. Objects always render fully expanded instead.
+const isCollapsible = computed(() => kind.value === "array" || kind.value === "record");
 const showChevron = computed(() => isCollapsible.value && !props.noHeader);
 // Starts expanded when noHeader is set, there'd otherwise be no chevron left to un-collapse it with.
 const collapsed = ref(!props.noHeader);
