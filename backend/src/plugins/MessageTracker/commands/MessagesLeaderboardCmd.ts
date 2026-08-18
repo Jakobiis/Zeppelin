@@ -12,11 +12,17 @@ import { guildPluginMessageCommand } from "vety";
 import { commandTypeHelpers as ct } from "../../../commandTypes.js";
 import { MINUTES, noop } from "../../../utils.js";
 import { getGuildEmbedColor } from "../../../utils/getGuildEmbedColor.js";
+import { refreshMembersIfNeeded } from "../../Utility/refreshMembers.js";
 import { MESSAGE_PERIOD_ARG_HINT, MessagePeriod, parseMessagePeriod } from "../functions/messagePeriods.js";
 import { MessageTrackerPluginType } from "../types.js";
 
 const PER_PAGE = 10;
 const PAGINATION_TIMEOUT = 2 * MINUTES;
+
+// When filtering by role, there's no way to do the role check in SQL (role membership only exists on the live
+// Discord guild, not in the DB), so instead we pull up to this many top-ranked rows and filter them in memory.
+// Anyone ranked below this cutoff in the unfiltered leaderboard won't be considered, even if they have the role.
+const ROLE_FILTER_SCAN_CAP = 2000;
 
 const medals = ["🥇", "🥈", "🥉"];
 
@@ -33,6 +39,8 @@ export const MessagesLeaderboardCmd = guildPluginMessageCommand<MessageTrackerPl
 
   signature: {
     period: ct.string({ required: false }),
+    channel: ct.textChannel({ option: true, required: false }),
+    role: ct.role({ option: true, required: false }),
   },
 
   async run({ pluginData, message, args }) {
@@ -49,7 +57,35 @@ export const MessagesLeaderboardCmd = guildPluginMessageCommand<MessageTrackerPl
       period = parsed;
     }
 
-    const totalCount = await pluginData.state.counts.getTopCount(period);
+    // Per-channel counts only start accumulating once a message is sent after this feature shipped, so a
+    // channel filter on an otherwise-active channel can still legitimately come back empty.
+    const channelId = args.channel?.id ?? null;
+    const source = channelId
+      ? {
+          getTop: (limit: number, offset: number) => pluginData.state.channelCounts.getTop(channelId, period, limit, offset),
+          getTopCount: () => pluginData.state.channelCounts.getTopCount(channelId, period),
+        }
+      : {
+          getTop: (limit: number, offset: number) => pluginData.state.counts.getTop(period, limit, offset),
+          getTopCount: () => pluginData.state.counts.getTopCount(period),
+        };
+
+    // When filtering by role, we resolve the full (capped) filtered list up front and paginate over it in memory
+    // rather than re-querying the DB per page, since the DB has no notion of role membership to offset/limit by.
+    let entries: Array<{ userId: string; count: number }> | null = null;
+    let totalCount: number;
+
+    if (args.role) {
+      await refreshMembersIfNeeded(pluginData.guild);
+      const roleId = args.role.id;
+      const candidateCount = await source.getTopCount();
+      const candidates = await source.getTop(Math.min(candidateCount, ROLE_FILTER_SCAN_CAP), 0);
+      entries = candidates.filter((entry) => pluginData.guild.members.cache.get(entry.userId)?.roles.cache.has(roleId));
+      totalCount = entries.length;
+    } else {
+      totalCount = await source.getTopCount();
+    }
+
     if (totalCount === 0) {
       void message.channel.send("No message data yet.");
       return;
@@ -57,12 +93,17 @@ export const MessagesLeaderboardCmd = guildPluginMessageCommand<MessageTrackerPl
 
     const lastPage = Math.max(1, Math.ceil(totalCount / PER_PAGE));
 
+    const title =
+      PERIOD_TITLES[period] +
+      (args.channel ? ` in #${args.channel.name}` : "") +
+      (args.role ? ` (@${args.role.name} only)` : "");
+
     let leaderboardMsg: OmitPartialGroupDMChannel<Message> | null = null;
     let currentPage = 1;
 
     const buildEmbed = async (page: number) => {
       const offset = (page - 1) * PER_PAGE;
-      const topValues = await pluginData.state.counts.getTop(period, PER_PAGE, offset);
+      const topValues = entries ? entries.slice(offset, offset + PER_PAGE) : await source.getTop(PER_PAGE, offset);
 
       const lines = topValues.map((entry, i) => {
         const rank = offset + i;
@@ -72,7 +113,7 @@ export const MessagesLeaderboardCmd = guildPluginMessageCommand<MessageTrackerPl
 
       return new EmbedBuilder()
         .setColor(getGuildEmbedColor(pluginData))
-        .setTitle(PERIOD_TITLES[period])
+        .setTitle(title)
         .setDescription(lines.join("\n"))
         .setFooter(lastPage > 1 ? { text: `Page ${page}/${lastPage}` } : null);
     };

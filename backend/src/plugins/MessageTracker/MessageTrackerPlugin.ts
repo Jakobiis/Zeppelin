@@ -1,4 +1,5 @@
 import { guildPlugin } from "vety";
+import { GuildMessageTrackerChannelCounts } from "../../data/GuildMessageTrackerChannelCounts.js";
 import { GuildMessageTrackerCounts } from "../../data/GuildMessageTrackerCounts.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { MessagesCmd } from "./commands/MessagesCmd.js";
@@ -31,6 +32,7 @@ export const MessageTrackerPlugin = guildPlugin<MessageTrackerPluginType>()({
     const { state, guild } = pluginData;
 
     state.counts = GuildMessageTrackerCounts.getGuildInstance(guild.id);
+    state.channelCounts = GuildMessageTrackerChannelCounts.getGuildInstance(guild.id);
   },
 
   beforeStart(pluginData) {

@@ -1,5 +1,6 @@
 import { BasePluginType, pluginUtils } from "vety";
 import { z } from "zod";
+import { GuildMessageTrackerChannelCounts } from "../../data/GuildMessageTrackerChannelCounts.js";
 import { GuildMessageTrackerCounts } from "../../data/GuildMessageTrackerCounts.js";
 import { zBoundedCharacters, zSnowflake } from "../../utils.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
@@ -23,6 +24,7 @@ export interface MessageTrackerPluginType extends BasePluginType {
   configSchema: typeof zMessageTrackerConfig;
   state: {
     counts: GuildMessageTrackerCounts;
+    channelCounts: GuildMessageTrackerChannelCounts;
     common: pluginUtils.PluginPublicInterface<typeof CommonPlugin>;
   };
 }

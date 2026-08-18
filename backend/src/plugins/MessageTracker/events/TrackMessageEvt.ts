@@ -10,6 +10,9 @@ export const TrackMessageEvt = guildPluginEventListener<MessageTrackerPluginType
     const config = await pluginData.config.getForMessage(msg);
     if (config.ignored_channel_ids.includes(msg.channel.id)) return;
 
-    await pluginData.state.counts.recordMessage(msg.author.id);
+    await Promise.all([
+      pluginData.state.counts.recordMessage(msg.author.id),
+      pluginData.state.channelCounts.recordMessage(msg.channel.id, msg.author.id),
+    ]);
   },
 });
