@@ -1,5 +1,5 @@
 import moment from "moment-timezone";
-import { Giveaway, GiveawayCounterRequirement, GiveawayMessageRequirement } from "../../../data/entities/Giveaway.js";
+import { Giveaway, GiveawayCounterRequirement, GiveawayCountRange, GiveawayMessageRequirement } from "../../../data/entities/Giveaway.js";
 import { GuildGiveaways } from "../../../data/GuildGiveaways.js";
 import { registerUpcomingGiveaway } from "../../../data/loops/upcomingGiveawaysLoop.js";
 import { DBDateFormat } from "../../../utils.js";
@@ -19,7 +19,7 @@ export interface CreateGiveawayFields {
   extra_entries: Record<string, number>;
   message_requirement: GiveawayMessageRequirement | null;
   counter_requirement: GiveawayCounterRequirement | null;
-  coins_requirement: number | null;
+  coins_requirement: GiveawayCountRange | null;
   // Null means no claim requirement — winners aren't rerolled for failing to click Claim Prize.
   claim_time_ms: number | null;
 }

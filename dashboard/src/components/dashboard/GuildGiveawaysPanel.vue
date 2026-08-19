@@ -70,33 +70,39 @@
       <div class="mt-4">
         <label class="flex items-center gap-2 text-sm font-medium">
           <input type="checkbox" class="checkbox" v-model="form.hasMessageRequirement" />
-          Require a minimum message count
+          Require a message count range
         </label>
         <div v-if="form.hasMessageRequirement" class="flex items-center gap-2 mt-2">
           <ComboboxField class="w-40" :options="periodOptions" placeholder="— Select period —" :model-value="form.messagePeriod" @update:model-value="form.messagePeriod = $event" />
-          <input type="number" min="1" class="field-input w-28" placeholder="Count" :value="form.messageCount ?? ''" @input="form.messageCount = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <input type="number" min="0" class="field-input w-24" placeholder="Min" :value="form.messageMin ?? ''" @input="form.messageMin = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <span class="text-sm text-muted-foreground">to</span>
+          <input type="number" min="0" class="field-input w-24" placeholder="Max (optional)" :value="form.messageMax ?? ''" @input="form.messageMax = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">messages</span>
         </div>
       </div>
 
       <div class="mt-4">
         <label class="flex items-center gap-2 text-sm font-medium">
-          <input type="checkbox" class="checkbox" v-model="form.hasCounterRequirement" />
-          Require a minimum counter value (e.g. activity points)
+          <input type="checkbox" class="checkbox" v-model="form.hasActivityRequirement" />
+          Require an activity points range
         </label>
-        <div v-if="form.hasCounterRequirement" class="flex items-center gap-2 mt-2">
-          <input type="text" class="field-input w-40" placeholder="Counter name" v-model="form.counterName" />
-          <input type="number" min="1" class="field-input w-28" placeholder="Count" :value="form.counterCount ?? ''" @input="form.counterCount = numberOrNull(($event.target as HTMLInputElement).value)" />
+        <div v-if="form.hasActivityRequirement" class="flex items-center gap-2 mt-2">
+          <input type="number" min="0" class="field-input w-24" placeholder="Min" :value="form.activityMin ?? ''" @input="form.activityMin = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <span class="text-sm text-muted-foreground">to</span>
+          <input type="number" min="0" class="field-input w-24" placeholder="Max (optional)" :value="form.activityMax ?? ''" @input="form.activityMax = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <span class="text-sm text-muted-foreground">activity points</span>
         </div>
       </div>
 
       <div class="mt-4">
         <label class="flex items-center gap-2 text-sm font-medium">
           <input type="checkbox" class="checkbox" v-model="form.hasCoinsRequirement" />
-          Require a minimum coin balance
+          Require a coin balance range
         </label>
         <div v-if="form.hasCoinsRequirement" class="flex items-center gap-2 mt-2">
-          <input type="number" min="1" class="field-input w-28" placeholder="Count" :value="form.coinsCount ?? ''" @input="form.coinsCount = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <input type="number" min="0" class="field-input w-24" placeholder="Min" :value="form.coinsMin ?? ''" @input="form.coinsMin = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <span class="text-sm text-muted-foreground">to</span>
+          <input type="number" min="0" class="field-input w-24" placeholder="Max (optional)" :value="form.coinsMax ?? ''" @input="form.coinsMax = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">coins</span>
         </div>
       </div>
@@ -111,7 +117,7 @@
       <div v-if="!running.length" class="text-sm text-muted-foreground">No running giveaways</div>
       <div v-for="giveaway in running" :key="giveaway.id" class="border-t border-border first:border-t-0 py-3 flex items-center flex-wrap gap-3">
         <div class="flex-auto min-w-0">
-          <div class="font-medium">#{{ giveaway.id }} {{ giveaway.prize }}</div>
+          <div class="font-medium">{{ giveaway.prize }} <span class="text-muted-foreground font-normal">({{ giveaway.id }})</span></div>
           <div class="text-sm text-muted-foreground">
             channel {{ giveaway.channel_id }} · host {{ memberName(giveaway.host_id) }} · {{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner(s) · ends {{ formatDate(giveaway.ends_at) }}
           </div>
@@ -128,7 +134,7 @@
       <div v-if="!recentlyFinished.length" class="text-sm text-muted-foreground">No finished giveaways yet</div>
       <div v-for="giveaway in recentlyFinished" :key="giveaway.id" class="border-t border-border first:border-t-0 py-3 flex items-center flex-wrap gap-3">
         <div class="flex-auto min-w-0">
-          <div class="font-medium">#{{ giveaway.id }} {{ giveaway.prize }}</div>
+          <div class="font-medium">{{ giveaway.prize }} <span class="text-muted-foreground font-normal">({{ giveaway.id }})</span></div>
           <div class="text-sm text-muted-foreground">
             host {{ memberName(giveaway.host_id) }} ·
             <span v-if="giveaway.status === 'cancelled'">cancelled</span>
@@ -193,12 +199,14 @@ function defaultForm() {
     extra_entries: [] as RoleEntryMapRow[],
     hasMessageRequirement: false,
     messagePeriod: null as string | null,
-    messageCount: null as number | null,
-    hasCounterRequirement: false,
-    counterName: "",
-    counterCount: null as number | null,
+    messageMin: null as number | null,
+    messageMax: null as number | null,
+    hasActivityRequirement: false,
+    activityMin: null as number | null,
+    activityMax: null as number | null,
     hasCoinsRequirement: false,
-    coinsCount: null as number | null,
+    coinsMin: null as number | null,
+    coinsMax: null as number | null,
   };
 }
 
@@ -252,7 +260,7 @@ export default {
     confirmMessage() {
       const state = this.confirmState;
       if (!state) return "";
-      const label = `#${state.giveaway.id} (${state.giveaway.prize})`;
+      const label = `${state.giveaway.prize} (${state.giveaway.id})`;
       if (state.type === "end") return `End giveaway ${label} now and pick winner(s)?`;
       if (state.type === "cancel") return `Cancel giveaway ${label}? No winners will be picked.`;
       return `Reroll winner(s) for giveaway ${label}?`;
@@ -334,17 +342,27 @@ export default {
         this.createError = "Channel is required.";
         return;
       }
-      if (this.form.hasMessageRequirement && (!this.form.messagePeriod || !this.form.messageCount)) {
-        this.createError = "Pick a period and count for the message requirement, or untick it.";
+      if (this.form.hasMessageRequirement && (!this.form.messagePeriod || this.form.messageMin == null)) {
+        this.createError = "Pick a period and minimum for the message requirement, or untick it.";
         return;
       }
-      if (this.form.hasCounterRequirement && (!this.form.counterName.trim() || !this.form.counterCount)) {
-        this.createError = "Enter a counter name and count for the counter requirement, or untick it.";
+      if (this.form.hasActivityRequirement && this.form.activityMin == null) {
+        this.createError = "Enter a minimum for the activity points requirement, or untick it.";
         return;
       }
-      if (this.form.hasCoinsRequirement && !this.form.coinsCount) {
-        this.createError = "Enter a count for the coins requirement, or untick it.";
+      if (this.form.hasCoinsRequirement && this.form.coinsMin == null) {
+        this.createError = "Enter a minimum for the coins requirement, or untick it.";
         return;
+      }
+      for (const [label, min, max] of [
+        ["Message", this.form.messageMin, this.form.messageMax],
+        ["Activity points", this.form.activityMin, this.form.activityMax],
+        ["Coins", this.form.coinsMin, this.form.coinsMax],
+      ] as const) {
+        if (max != null && min != null && max < min) {
+          this.createError = `${label} max can't be lower than min.`;
+          return;
+        }
       }
 
       this.creating = true;
@@ -366,12 +384,14 @@ export default {
               this.form.extra_entries.filter((row: RoleEntryMapRow) => row.role_id).map((row: RoleEntryMapRow) => [row.role_id, row.bonus]),
             ),
             message_requirement: this.form.hasMessageRequirement
-              ? { period: this.form.messagePeriod, count: this.form.messageCount }
+              ? { period: this.form.messagePeriod, min: this.form.messageMin, max: this.form.messageMax }
               : null,
-            counter_requirement: this.form.hasCounterRequirement
-              ? { counter_name: this.form.counterName.trim(), count: this.form.counterCount }
+            activity_requirement: this.form.hasActivityRequirement
+              ? { min: this.form.activityMin, max: this.form.activityMax }
               : null,
-            coins_requirement: this.form.hasCoinsRequirement ? this.form.coinsCount : null,
+            coins_requirement: this.form.hasCoinsRequirement
+              ? { min: this.form.coinsMin, max: this.form.coinsMax }
+              : null,
           },
         });
         this.form = defaultForm();

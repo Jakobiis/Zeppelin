@@ -6,6 +6,7 @@ import { createGiveawayRecord } from "../functions/createGiveaway.js";
 import { hasGiveawayManagerRole } from "../functions/requireGiveawayManager.js";
 import { resolveRoleList } from "../functions/resolveRoleList.js";
 import { parseMessagePeriod } from "../../MessageTracker/functions/messagePeriods.js";
+import { parseCountRange } from "../functions/parseCountRange.js";
 import { GiveawaysPluginType } from "../types.js";
 
 const MAX_ROLES_PER_FLAG = 20;
@@ -28,7 +29,7 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
     template: ct.string({ option: true, shortcut: "t" }),
     claim: ct.string({ option: true }),
     activity: ct.string({ option: true }),
-    coins: ct.number({ option: true }),
+    coins: ct.string({ option: true }),
   },
 
   async run({ pluginData, message, args }) {
@@ -94,16 +95,16 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
       blacklistedRoleIds = roleIds.slice(0, MAX_ROLES_PER_FLAG);
     }
 
-    let messageRequirement: { period: "daily" | "weekly" | "monthly" | "allTime"; count: number } | null = null;
+    let messageRequirement: { period: "daily" | "weekly" | "monthly" | "allTime"; min: number; max: number | null } | null = null;
     if (args.messages) {
-      const [periodStr, countStr] = args.messages.split(":");
+      const [periodStr, rangeStr] = args.messages.split(":");
       const period = parseMessagePeriod(periodStr ?? "");
-      const count = Number.parseInt(countStr ?? "", 10);
-      if (!period || !Number.isInteger(count) || count < 1) {
-        void pluginData.state.common.sendErrorMessage(message, "`-messages` must look like `total:1000` (period: daily/weekly/monthly/total, then a positive count).");
+      const range = rangeStr ? parseCountRange(rangeStr) : null;
+      if (!period || !range) {
+        void pluginData.state.common.sendErrorMessage(message, "`-messages` must look like `total:1000` or `total:100-1000` (period, then a count or min-max range).");
         return;
       }
-      messageRequirement = { period, count };
+      messageRequirement = { period, ...range };
     }
 
     let claimTimeMs: number | null = null;
@@ -117,20 +118,24 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
       claimTimeMs = convertDelayStringToMS(template.claim_time);
     }
 
-    let counterRequirement: { counter_name: string; count: number } | null = null;
+    let counterRequirement: { counter_name: string; min: number; max: number | null } | null = null;
     if (args.activity) {
-      const [counterName, countStr] = args.activity.split(":");
-      const count = Number.parseInt(countStr ?? "", 10);
-      if (!counterName || !Number.isInteger(count) || count < 1) {
-        void pluginData.state.common.sendErrorMessage(message, "`-activity` must look like `activity:100` (counter name, then a positive count).");
+      const range = parseCountRange(args.activity);
+      if (!range) {
+        void pluginData.state.common.sendErrorMessage(message, "`-activity` must be a count or min-max range, e.g. `100` or `100-1000`.");
         return;
       }
-      counterRequirement = { counter_name: counterName, count };
+      counterRequirement = { counter_name: config.activity_counter_name, ...range };
     }
 
-    if (args.coins != null && (!Number.isInteger(args.coins) || args.coins < 1)) {
-      void pluginData.state.common.sendErrorMessage(message, "`-coins` must be a positive whole number.");
-      return;
+    let coinsRequirement: { min: number; max: number | null } | null = null;
+    if (args.coins) {
+      const range = parseCountRange(args.coins);
+      if (!range) {
+        void pluginData.state.common.sendErrorMessage(message, "`-coins` must be a count or min-max range, e.g. `100` or `100-1000`.");
+        return;
+      }
+      coinsRequirement = range;
     }
 
     const giveaway = await createGiveawayRecord(pluginData.guild.id, {
@@ -146,7 +151,7 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
       extra_entries: template?.extra_entries ?? {},
       message_requirement: messageRequirement,
       counter_requirement: counterRequirement,
-      coins_requirement: args.coins ?? null,
+      coins_requirement: coinsRequirement,
       claim_time_ms: claimTimeMs,
     });
 

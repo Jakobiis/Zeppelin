@@ -28,6 +28,10 @@ export const zGiveawaysConfig = z.strictObject({
   // server explicitly sets this.
   manager_roles: z.array(zSnowflake).max(MAX_ROLES_PER_LIST).default([]),
   templates: zBoundedRecord(z.record(zBoundedCharacters(1, 100), zGiveawayTemplate), 0, MAX_TEMPLATES).default({}),
+  // Which Counters-plugin counter "activity points" requirements check — same idea as Economy's own
+  // counter_name (default "coins"): there's no fixed/guaranteed counter name for this concept, so it's a
+  // guild-wide setting here instead of asking staff to type it in on every giveaway.
+  activity_counter_name: zBoundedCharacters(1, 100).default("activity"),
 });
 
 export interface GiveawaysPluginType extends BasePluginType {

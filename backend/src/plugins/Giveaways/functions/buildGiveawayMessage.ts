@@ -1,8 +1,12 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import moment from "moment-timezone";
-import { Giveaway } from "../../../data/entities/Giveaway.js";
+import { Giveaway, GiveawayCountRange } from "../../../data/entities/Giveaway.js";
 import { buildCustomId } from "../../../utils/buildCustomId.js";
 import { DEFAULT_EMBED_COLOR } from "../../../utils/getGuildEmbedColor.js";
+
+function formatRangeLabel(range: GiveawayCountRange): string {
+  return range.max != null ? `${range.min}-${range.max}` : `${range.min}+`;
+}
 
 // winner_ids is append-only full history (every manual/claim-expiry reroll adds to it, never removes) — this
 // is "who actually still has the prize right now", i.e. winner_ids minus anyone whose claim window expired.
@@ -28,13 +32,16 @@ export function buildGiveawayEmbed(
     requirementLines.push(`Requires: ${giveaway.required_role_ids.map((id) => `<@&${id}>`).join(", ")}`);
   }
   if (giveaway.message_requirement) {
-    requirementLines.push(`Requires: ${giveaway.message_requirement.count} messages (${giveaway.message_requirement.period})`);
+    requirementLines.push(`Requires: ${formatRangeLabel(giveaway.message_requirement)} messages (${giveaway.message_requirement.period})`);
   }
   if (giveaway.counter_requirement) {
-    requirementLines.push(`Requires: ${giveaway.counter_requirement.count} ${giveaway.counter_requirement.counter_name}`);
+    // Friendly fixed label rather than the raw counter name (e.g. "activity") — the concept staff configure
+    // this against (see zGiveawaysConfig.activity_counter_name) is always "activity points" from a player's
+    // perspective, even though the actual counter key underneath is guild-configurable.
+    requirementLines.push(`Requires: ${formatRangeLabel(giveaway.counter_requirement)} activity points`);
   }
-  if (giveaway.coins_requirement != null) {
-    requirementLines.push(`Requires: ${giveaway.coins_requirement} coins`);
+  if (giveaway.coins_requirement) {
+    requirementLines.push(`Requires: ${formatRangeLabel(giveaway.coins_requirement)} coins`);
   }
 
   const extraEntryEntries = Object.entries(giveaway.extra_entries);

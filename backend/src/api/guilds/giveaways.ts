@@ -54,6 +54,19 @@ function sanitizeExtraEntries(input: unknown): Record<string, number> {
   return result;
 }
 
+// Same {min, max} shape used everywhere a count-based requirement is stored (see GiveawayCountRange) — max
+// null/absent means "no upper bound". Rejects a negative/non-integer min, or a max below min.
+function sanitizeCountRange(input: unknown): { min: number; max: number | null } | null {
+  if (!input || typeof input !== "object") return null;
+  const { min: rawMin, max: rawMax } = input as Record<string, unknown>;
+  const min = Number(rawMin);
+  if (!Number.isInteger(min) || min < 0) return null;
+  if (rawMax == null) return { min, max: null };
+  const max = Number(rawMax);
+  if (!Number.isInteger(max) || max < min) return null;
+  return { min, max };
+}
+
 // Deliberately swallows errors and denies access rather than letting one propagate — this is called from every
 // route below (directly or via requireGiveawayManager), and an unhandled rejection anywhere in the API process
 // kills the whole thing (see api/index.ts's process.on("unhandledRejection", ...) -> process.exit(1)), taking
@@ -178,33 +191,34 @@ export function initGuildGiveawaysAPI(router: express.Router) {
 
       const hostId = typeof body.host_id === "string" && isValidSnowflake(body.host_id) ? body.host_id : req.user!.userId;
 
-      let messageRequirement: { period: "daily" | "weekly" | "monthly" | "allTime"; count: number } | null = null;
+      let messageRequirement: { period: "daily" | "weekly" | "monthly" | "allTime"; min: number; max: number | null } | null = null;
       if (body.message_requirement) {
         const period = parseMessagePeriod(String(body.message_requirement.period ?? ""));
-        const count = Number(body.message_requirement.count);
-        if (!period || !Number.isInteger(count) || count < 1) {
+        const range = sanitizeCountRange(body.message_requirement);
+        if (!period || !range) {
           return clientError(res, "Invalid message requirement");
         }
-        messageRequirement = { period, count };
+        messageRequirement = { period, ...range };
       }
 
-      let counterRequirement: { counter_name: string; count: number } | null = null;
-      if (body.counter_requirement) {
-        const counterName = typeof body.counter_requirement.counter_name === "string" ? body.counter_requirement.counter_name.trim() : "";
-        const count = Number(body.counter_requirement.count);
-        if (!counterName || !Number.isInteger(count) || count < 1) {
-          return clientError(res, "Invalid counter requirement");
+      // Just a range from the client — the counter name itself comes from this guild's own Giveaways config
+      // (activity_counter_name, default "activity"), same as -activity on the chat command.
+      let counterRequirement: { counter_name: string; min: number; max: number | null } | null = null;
+      if (body.activity_requirement) {
+        const range = sanitizeCountRange(body.activity_requirement);
+        if (!range) {
+          return clientError(res, "Invalid activity points requirement");
         }
-        counterRequirement = { counter_name: counterName, count };
+        counterRequirement = { counter_name: config.activity_counter_name ?? "activity", ...range };
       }
 
-      let coinsRequirement: number | null = null;
-      if (body.coins_requirement != null) {
-        const count = Number(body.coins_requirement);
-        if (!Number.isInteger(count) || count < 1) {
-          return clientError(res, "Coins requirement must be a positive whole number");
+      let coinsRequirement: { min: number; max: number | null } | null = null;
+      if (body.coins_requirement) {
+        const range = sanitizeCountRange(body.coins_requirement);
+        if (!range) {
+          return clientError(res, "Invalid coins requirement");
         }
-        coinsRequirement = count;
+        coinsRequirement = range;
       }
 
       try {

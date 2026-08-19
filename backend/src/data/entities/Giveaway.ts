@@ -2,18 +2,22 @@ import { Column, Entity, PrimaryGeneratedColumn } from "typeorm";
 
 export type GiveawayStatus = "running" | "ended" | "cancelled";
 
-export type GiveawayMessageRequirement = {
-  period: "daily" | "weekly" | "monthly" | "allTime";
-  count: number;
+// max: null means no upper bound (a plain minimum) — every count-based requirement uses this same shape.
+export type GiveawayCountRange = {
+  min: number;
+  max: number | null;
 };
 
-// A minimum value on any named Counters-plugin counter — e.g. "activity points". There's no fixed/guaranteed
+export type GiveawayMessageRequirement = {
+  period: "daily" | "weekly" | "monthly" | "allTime";
+} & GiveawayCountRange;
+
+// A value range on any named Counters-plugin counter — e.g. "activity points". There's no fixed/guaranteed
 // counter name for that concept in this codebase (it's whatever a guild's Automod add_to_counter rules target),
 // so staff specify the counter name themselves rather than one being assumed.
 export type GiveawayCounterRequirement = {
   counter_name: string;
-  count: number;
-};
+} & GiveawayCountRange;
 
 @Entity("giveaways")
 export class Giveaway {
@@ -57,9 +61,9 @@ export class Giveaway {
 
   @Column({ type: "simple-json", nullable: true }) counter_requirement: GiveawayCounterRequirement | null;
 
-  // Minimum Economy balance to enter — read from whatever counter Economy is actually configured to use (see
+  // Economy balance range to enter — read from whatever counter Economy is actually configured to use (see
   // functions/counterRequirements.ts's getCoinsValueForUser), not a fixed counter name.
-  @Column({ type: Number, nullable: true }) coins_requirement: number | null;
+  @Column({ type: "simple-json", nullable: true }) coins_requirement: GiveawayCountRange | null;
 
   // winner_ids is append-only full history (initial roll + every manual/claim-expiry reroll) — never shrinks.
   // expired_winner_ids/claimed_winner_ids are subsets of it. A winner in winner_ids that's in neither, with an
