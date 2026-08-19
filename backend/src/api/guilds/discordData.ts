@@ -1,8 +1,9 @@
 import { ApiPermissions } from "@zeppelinbot/shared/apiPermissions.js";
 import express, { Request, Response } from "express";
 import { env } from "../../env.js";
-import { requireGuildPermission } from "../permissions.js";
-import { serverError } from "../responses.js";
+import { hasGuildPermission, requireGuildPermission } from "../permissions.js";
+import { serverError, unauthorized } from "../responses.js";
+import { isGiveawayManager } from "./giveawayAccess.js";
 
 // The API and bot run as separate processes (see backend/package.json's start-api-* vs start-bot-* scripts), so
 // this can't just read from discord.js's live guild caches — it makes its own bot-token REST calls to Discord.
@@ -78,12 +79,30 @@ export async function getGuildMemberDisplayInfo(guildId: string, userId: string)
   }
 }
 
+// Giveaway managers need role and channel names to create a giveaway, even when they are not allowed to view
+// the guild's full configuration. Other dashboard users retain the normal ReadConfig requirement.
+async function hasDiscordDataAccess(userId: string, guildId: string): Promise<boolean> {
+  return (
+    (await hasGuildPermission(userId, guildId, ApiPermissions.ReadConfig)) ||
+    (await isGiveawayManager(guildId, userId))
+  );
+}
+
+function requireDiscordDataAccess() {
+  return async (req: Request, res: Response, next) => {
+    if (!(await hasDiscordDataAccess(req.user!.userId, req.params.guildId))) {
+      return unauthorized(res);
+    }
+    next();
+  };
+}
+
 export function initGuildDiscordDataAPI(router: express.Router) {
   const discordDataRouter = express.Router();
 
   discordDataRouter.get(
     "/:guildId/discord-data/roles",
-    requireGuildPermission(ApiPermissions.ReadConfig),
+    requireDiscordDataAccess(),
     async (req: Request, res: Response) => {
       try {
         const roles = await cachedDiscordBotRequest(
@@ -104,7 +123,7 @@ export function initGuildDiscordDataAPI(router: express.Router) {
 
   discordDataRouter.get(
     "/:guildId/discord-data/channels",
-    requireGuildPermission(ApiPermissions.ReadConfig),
+    requireDiscordDataAccess(),
     async (req: Request, res: Response) => {
       try {
         const channels = await cachedDiscordBotRequest(
