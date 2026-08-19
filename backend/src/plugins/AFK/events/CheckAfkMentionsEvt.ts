@@ -1,6 +1,7 @@
 import moment from "moment-timezone";
 import { discordTimestamp } from "../../../humanizeDuration.js";
 import { guildPluginEventListener } from "vety";
+import { resolveChannelIds } from "../../../utils/resolveChannelIds.js";
 
 export const CheckAfkMentionsEvt = guildPluginEventListener({
   event: "messageCreate",
@@ -9,7 +10,10 @@ export const CheckAfkMentionsEvt = guildPluginEventListener({
     if (msg.author.bot || msg.webhookId) return;
 
     const config = await pluginData.config.getForMessage(msg);
-    if (config.ignored_channel_ids.includes(msg.channel.id)) return;
+    // Checks the channel itself, its parent category, and (for a thread) its parent channel — so ignoring a
+    // category also ignores every channel/thread under it, not just a channel ID entered directly.
+    const { channel: channelId, category: categoryId, thread: threadId } = resolveChannelIds(msg.channel);
+    if ([channelId, categoryId, threadId].some((id) => id && config.ignored_channel_ids.includes(id))) return;
 
     const ownAfk = await pluginData.state.afk.getByUserId(msg.author.id);
     if (ownAfk) {

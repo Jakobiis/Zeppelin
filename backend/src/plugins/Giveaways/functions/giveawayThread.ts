@@ -46,17 +46,26 @@ export async function createGiveawayThread(pluginData: GuildPluginData<Giveaways
   }
   descriptionLines.push(`Winner: <@${winnerId}>`);
 
+  // Embed titles are capped at 256 characters by Discord — prize names are allowed up to 512 (see the API/chat
+  // command's own validation), so an uncapped title here could throw and, since this runs after the thread (and
+  // its member adds) already exist, would otherwise surface as a misleading "couldn't create the thread" error
+  // on a thread that in fact already exists.
   const infoEmbed = new EmbedBuilder()
     .setColor(giveaway.embed_color ?? DEFAULT_EMBED_COLOR)
-    .setTitle(`Giveaway thread — ${giveaway.prize}`)
+    .setTitle(`Giveaway thread — ${giveaway.prize}`.slice(0, 256))
     .setDescription(descriptionLines.join("\n"));
 
-  await thread.send({
-    content: pingMentions,
-    embeds: [infoEmbed],
-    components: [buildDeleteThreadButtonRow(giveaway.id, winnerId)],
-    allowedMentions: { users: memberIds },
-  });
+  // Best-effort: the thread itself (and who can access it) is already fully set up by this point, so a failure
+  // sending its opening message — e.g. the bot missing "Send Messages in Threads" — shouldn't make the whole
+  // operation look like it failed to the caller.
+  await thread
+    .send({
+      content: pingMentions,
+      embeds: [infoEmbed],
+      components: [buildDeleteThreadButtonRow(giveaway.id, winnerId)],
+      allowedMentions: { users: memberIds },
+    })
+    .catch((err) => console.error(`[GIVEAWAYS] Failed to send opening message in thread ${thread.id}:`, err));
 
   return thread;
 }

@@ -87,6 +87,7 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
       try {
         thread = await createGiveawayThread(pluginData, giveaway, member.id);
       } catch (err) {
+        console.error(`[GIVEAWAYS] Failed to create winner thread for giveaway ${giveaway.id}, winner ${member.id}:`, err);
         await args.interaction.editReply({ content: "Couldn't create the thread — the giveaway's channel may no longer exist or the bot may be missing permissions." }).catch(() => null);
         return;
       }
