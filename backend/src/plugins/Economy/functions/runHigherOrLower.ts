@@ -15,7 +15,7 @@ import { chargeBalance } from "./chargeBalance.js";
 import { checkCooldown } from "./checkCooldown.js";
 import { formatAmount } from "./formatAmount.js";
 import { GameHistoryOutcome, logGameHistory } from "./gameHistory.js";
-import { parseAmountInput } from "./parseAmountInput.js";
+import { isAllOrMaxKeyword, parseAmountInput } from "./parseAmountInput.js";
 import { applyGameHold, getSpendableBalance } from "./pendingBalance.js";
 import { EconomyPluginType, zEconomyHolGame } from "../types.js";
 
@@ -96,7 +96,7 @@ export async function runHigherOrLower(
     return;
   }
 
-  if (amountArg.trim().toLowerCase() === "all") {
+  if (isAllOrMaxKeyword(amountArg)) {
     bet = Math.min(bet, game.max_bet);
   }
 
@@ -159,12 +159,20 @@ export async function runHigherOrLower(
     );
   };
 
+  const betEmbed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
+    .setTitle("Bet Placed")
+    .setDescription(`Playing **${label}** for ${emojiPrefix}**${formatAmount(bet)}** ${config.currency_name}`);
+
   const buildEmbed = (extra?: string): EmbedBuilder =>
     new EmbedBuilder()
       .setColor(0x0159b2)
       .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
       .setTitle(label)
       .setDescription(buildDescription(extra));
+
+  const buildEmbeds = (extra?: string): EmbedBuilder[] => [betEmbed, buildEmbed(extra)];
 
   const buildButtons = (disabled = false): ActionRowBuilder<ButtonBuilder> => {
     const multipliers = roundMultipliers(currentNumber, game.range_max, roundIndex, game.ramp_rounds, game.min_multiplier, game.max_multiplier);
@@ -186,9 +194,9 @@ export async function runHigherOrLower(
     return new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
   };
 
-  const sentMessage = existingMessage ?? (await message.channel.send({ embeds: [buildEmbed()], components: [buildButtons()] }));
+  const sentMessage = existingMessage ?? (await message.channel.send({ embeds: buildEmbeds(), components: [buildButtons()] }));
   if (existingMessage) {
-    await sentMessage.edit({ embeds: [buildEmbed()], components: [buildButtons()] });
+    await sentMessage.edit({ embeds: buildEmbeds(), components: [buildButtons()] });
   }
 
   let finished = false;
@@ -249,7 +257,7 @@ export async function runHigherOrLower(
     // actually spend yet.
     const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
     const description = `${resultText(finalPayout, payout, coinsBoostMultiplier)}\nNew balance: ${emojiPrefix}**${formatAmount(newBalance)}** ${config.currency_name}`;
-    const embed = buildEmbed(description);
+    const embeds = buildEmbeds(description);
     const components = [buildButtons(true)];
     if (canRetry) {
       components.push(
@@ -258,7 +266,7 @@ export async function runHigherOrLower(
         ),
       );
     }
-    const payload = { embeds: [embed], components };
+    const payload = { embeds, components };
 
     if (interaction) {
       await interaction.update(payload).catch(noop);
@@ -285,7 +293,7 @@ export async function runHigherOrLower(
 
       retryCollector.on("end", async () => {
         if (!retryCollector.collected.size) {
-          await sentMessage.edit({ embeds: [embed], components: [buildButtons(true)] }).catch(noop);
+          await sentMessage.edit({ embeds, components: [buildButtons(true)] }).catch(noop);
         }
       });
     }
@@ -360,7 +368,7 @@ export async function runHigherOrLower(
     roundIndex += 1;
     currentNumber = drawnNumber;
 
-    await interaction.update({ embeds: [buildEmbed()], components: [buildButtons()] }).catch(noop);
+    await interaction.update({ embeds: buildEmbeds(), components: [buildButtons()] }).catch(noop);
   });
 
   collector.on("end", async () => {

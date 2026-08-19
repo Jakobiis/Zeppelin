@@ -4,7 +4,7 @@ import { commandTypeHelpers as ct } from "../../../commandTypes.js";
 import { getGuildPrefix } from "../../../utils/getGuildPrefix.js";
 import { findGameEntry } from "../functions/findGame.js";
 import { formatAmount } from "../functions/formatAmount.js";
-import { parseAmountInput } from "../functions/parseAmountInput.js";
+import { isAllOrMaxKeyword, parseAmountInput } from "../functions/parseAmountInput.js";
 import { getSpendableBalance } from "../functions/pendingBalance.js";
 import { playGame } from "../functions/playGame.js";
 import { runBlackjack } from "../functions/runBlackjack.js";
@@ -78,7 +78,7 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
       return;
     }
 
-    if (args.amount.trim().toLowerCase() === "all") {
+    if (isAllOrMaxKeyword(args.amount)) {
       bet = Math.min(bet, game.max_bet);
     }
 
@@ -94,9 +94,14 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
 
     const multiplierText = result.multiplier != null ? ` (**${result.multiplier.toFixed(2)}x**)` : "";
 
-    const embed = new EmbedBuilder()
-      .setColor(result.win ? 0x4caf50 : 0xe53935)
+    const betEmbed = new EmbedBuilder()
+      .setColor(0x5865f2)
       .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
+      .setTitle("Bet Placed")
+      .setDescription(`Playing **${label}** for ${emojiPrefix}**${formatAmount(bet)}** ${config.currency_name}`);
+
+    const gameEmbed = new EmbedBuilder()
+      .setColor(result.win ? 0x4caf50 : 0xe53935)
       .setTitle(label)
       .setDescription(
         result.win
@@ -104,6 +109,6 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
           : `💸 You lost. -${emojiPrefix}**${formatAmount(Math.abs(result.amountChanged))}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`,
       );
 
-    await message.channel.send({ embeds: [embed] });
+    await message.channel.send({ embeds: [betEmbed, gameEmbed] });
   },
 });

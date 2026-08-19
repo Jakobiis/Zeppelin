@@ -7,7 +7,7 @@ import { chargeBalance } from "./chargeBalance.js";
 import { checkCooldown } from "./checkCooldown.js";
 import { formatAmount } from "./formatAmount.js";
 import { logGameHistory } from "./gameHistory.js";
-import { parseAmountInput } from "./parseAmountInput.js";
+import { isAllOrMaxKeyword, parseAmountInput } from "./parseAmountInput.js";
 import { applyGameHold, getSpendableBalance } from "./pendingBalance.js";
 import { playDiceDuel } from "./pvpDiceDuel.js";
 import { PlayPvpMatchFn, PvpMatchContext } from "./pvpMatch.js";
@@ -67,7 +67,7 @@ export async function runPvpGame(
     return;
   }
 
-  if (amountArg.trim().toLowerCase() === "all") {
+  if (isAllOrMaxKeyword(amountArg)) {
     amount = Math.min(amount, game.max_bet);
   }
 

@@ -4,7 +4,7 @@
  */
 export function parseAmountInput(input: string, allValue: number): number | null {
   const trimmed = input.trim().toLowerCase();
-  if (trimmed === "all" || trimmed === "max") {
+  if (isAllOrMaxKeyword(input)) {
     return allValue;
   }
 
@@ -14,4 +14,14 @@ export function parseAmountInput(input: string, allValue: number): number | null
 
   const value = Number.parseInt(trimmed, 10);
   return Number.isSafeInteger(value) ? value : null;
+}
+
+/**
+ * Whether an amount argument is the "all"/"max" keyword rather than a literal number — callers use this to decide
+ * whether to clamp the resolved amount down to a game's configured max_bet (a literal number equal to the balance
+ * should still be rejected by the min/max check, not silently clamped).
+ */
+export function isAllOrMaxKeyword(input: string): boolean {
+  const trimmed = input.trim().toLowerCase();
+  return trimmed === "all" || trimmed === "max";
 }

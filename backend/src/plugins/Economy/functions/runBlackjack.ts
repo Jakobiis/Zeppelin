@@ -33,7 +33,7 @@ import {
 import { checkCooldown } from "./checkCooldown.js";
 import { formatAmount } from "./formatAmount.js";
 import { logGameHistory } from "./gameHistory.js";
-import { parseAmountInput } from "./parseAmountInput.js";
+import { isAllOrMaxKeyword, parseAmountInput } from "./parseAmountInput.js";
 import { applyGameHold, getSpendableBalance } from "./pendingBalance.js";
 import { EconomyPluginType, zEconomyBlackjackGame } from "../types.js";
 
@@ -67,7 +67,7 @@ export async function runBlackjack(
     return;
   }
 
-  if (amountArg.trim().toLowerCase() === "all") {
+  if (isAllOrMaxKeyword(amountArg)) {
     bet = Math.min(bet, game.max_bet);
   }
 
