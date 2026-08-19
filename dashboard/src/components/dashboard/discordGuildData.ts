@@ -30,7 +30,7 @@ function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
     cache.set(
       key,
       load().catch((err) => {
-        cache.delete(key); // don't cache failures — allow a retry on next access
+        cache.delete(key);
         throw err;
       }),
     );
