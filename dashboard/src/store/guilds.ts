@@ -11,6 +11,7 @@ export const GuildStore: Module<GuildState, RootState> = {
     configs: {},
     guildPermissionAssignments: {},
     giveawayAccess: {},
+    giveawayAnalytics: {},
     giveaways: {},
     giveawayTemplates: {},
     giveawayMemberNames: {},
@@ -91,20 +92,28 @@ export const GuildStore: Module<GuildState, RootState> = {
       commit("setGiveaways", { guildId, giveaways });
     },
 
+    async loadGiveawayAnalytics({ commit }, guildId) {
+      const analytics = await get(`guilds/${guildId}/giveaways/analytics`);
+      commit("setGiveawayAnalytics", { guildId, analytics });
+    },
+
     async endGiveaway({ dispatch }, { guildId, giveawayId }) {
       await post(`guilds/${guildId}/giveaways/${giveawayId}/end`);
       await dispatch("loadGiveaways", guildId);
+      await dispatch("loadGiveawayAnalytics", guildId);
     },
 
     async rerollGiveaway({ dispatch }, { guildId, giveawayId, replaceWinnerIds }) {
       const result = await post(`guilds/${guildId}/giveaways/${giveawayId}/reroll`, { replaceWinnerIds });
       await dispatch("loadGiveaways", guildId);
+      await dispatch("loadGiveawayAnalytics", guildId);
       return result;
     },
 
     async cancelGiveaway({ dispatch }, { guildId, giveawayId }) {
       await post(`guilds/${guildId}/giveaways/${giveawayId}/cancel`);
       await dispatch("loadGiveaways", guildId);
+      await dispatch("loadGiveawayAnalytics", guildId);
     },
 
     async loadGiveawayTemplates({ commit }, guildId) {
@@ -115,6 +124,7 @@ export const GuildStore: Module<GuildState, RootState> = {
     async createGiveaway({ dispatch }, { guildId, giveaway }) {
       await post(`guilds/${guildId}/giveaways`, giveaway);
       await dispatch("loadGiveaways", guildId);
+      await dispatch("loadGiveawayAnalytics", guildId);
     },
 
     async loadGiveawayMemberNames({ commit }, { guildId, ids }) {
@@ -178,6 +188,10 @@ export const GuildStore: Module<GuildState, RootState> = {
 
     setGiveawayAccess(state: GuildState, { guildId, isManager }) {
       state.giveawayAccess = { ...state.giveawayAccess, [guildId]: isManager };
+    },
+
+    setGiveawayAnalytics(state: GuildState, { guildId, analytics }) {
+      state.giveawayAnalytics = { ...state.giveawayAnalytics, [guildId]: analytics };
     },
 
     setGiveaways(state: GuildState, { guildId, giveaways }) {

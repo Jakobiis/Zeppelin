@@ -101,27 +101,35 @@ function requireGiveawayManager() {
 export function initGuildGiveawaysAPI(router: express.Router) {
   const giveawaysRouter = express.Router();
 
-  // Resolves winner/host user IDs to display names for the dashboard's giveaway list — one bot-token REST call
-  // per ID (Discord has no bulk lookup), each cached/de-duped by getGuildMemberDisplayInfo already. IDs that
-  // aren't currently guild members (e.g. left after winning) are just omitted rather than erroring the batch.
   giveawaysRouter.get(
-    "/:guildId/giveaways/members",
+    "/:guildId/giveaways/analytics",
     requireGiveawayManager(),
     async (req: Request, res: Response) => {
       try {
-        const ids = String(req.query.ids ?? "")
-          .split(",")
-          .map((id) => id.trim())
-          .filter((id) => isValidSnowflake(id))
-          .slice(0, MAX_MEMBER_LOOKUP_IDS);
-
-        const members = await Promise.all(ids.map((id) => getGuildMemberDisplayInfo(req.params.guildId, id)));
-        res.json(members.filter((m) => m != null));
-      } catch (err) {
-        serverError(res, "Failed to resolve member names");
+        res.json(await GuildGiveaways.getGuildInstance(req.params.guildId).getAnalytics());
+      } catch {
+        serverError(res, "Failed to load giveaway analytics");
       }
     },
   );
+
+  // Resolves winner/host user IDs to display names for the dashboard's giveaway list — one bot-token REST call
+  // per ID (Discord has no bulk lookup), each cached/de-duped by getGuildMemberDisplayInfo already. IDs that
+  // aren't currently guild members (e.g. left after winning) are just omitted rather than erroring the batch.
+  giveawaysRouter.get("/:guildId/giveaways/members", requireGiveawayManager(), async (req: Request, res: Response) => {
+    try {
+      const ids = String(req.query.ids ?? "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => isValidSnowflake(id))
+        .slice(0, MAX_MEMBER_LOOKUP_IDS);
+
+      const members = await Promise.all(ids.map((id) => getGuildMemberDisplayInfo(req.params.guildId, id)));
+      res.json(members.filter((m) => m != null));
+    } catch (err) {
+      serverError(res, "Failed to resolve member names");
+    }
+  });
 
   giveawaysRouter.get("/:guildId/giveaways/access", async (req: Request, res: Response) => {
     const isManager = await isGiveawayManager(req.params.guildId, req.user!.userId);
@@ -154,142 +162,141 @@ export function initGuildGiveawaysAPI(router: express.Router) {
     },
   );
 
-  giveawaysRouter.post(
-    "/:guildId/giveaways",
-    requireGiveawayManager(),
-    async (req: Request, res: Response) => {
-      const body = req.body ?? {};
+  giveawaysRouter.post("/:guildId/giveaways", requireGiveawayManager(), async (req: Request, res: Response) => {
+    const body = req.body ?? {};
 
-      const prize = typeof body.prize === "string" ? body.prize.trim() : "";
-      if (!prize || prize.length > 512) {
-        return clientError(res, "Prize is required and must be at most 512 characters");
+    const prize = typeof body.prize === "string" ? body.prize.trim() : "";
+    if (!prize || prize.length > 512) {
+      return clientError(res, "Prize is required and must be at most 512 characters");
+    }
+
+    const durationMs = typeof body.duration === "string" ? convertDelayStringToMS(body.duration) : null;
+    if (!durationMs || durationMs <= 0) {
+      return clientError(res, "Invalid duration — use a delay string like `1d`, `30m`, or `6h`");
+    }
+
+    const winnerCount = Number(body.winners) || 1;
+    if (!Number.isInteger(winnerCount) || winnerCount < 1) {
+      return clientError(res, "Winner count must be a positive whole number");
+    }
+
+    const config = await getGiveawaysPluginConfig(req.params.guildId);
+    // Same auto-apply-"default" behavior as the chat command (see GiveawayStartCmd.ts) — an explicit template
+    // in the request body always wins over it.
+    const template =
+      typeof body.template === "string" && body.template
+        ? config.templates?.[body.template]
+        : config.templates?.default;
+    if (body.template && !template) {
+      return clientError(res, `Unknown giveaway template \`${body.template}\``);
+    }
+
+    const channelId =
+      typeof body.channel_id === "string" && isValidSnowflake(body.channel_id)
+        ? body.channel_id
+        : (template?.channel_id ?? null);
+    if (!channelId) {
+      return clientError(res, "A channel is required, either directly or via a template");
+    }
+
+    const hostId = typeof body.host_id === "string" && isValidSnowflake(body.host_id) ? body.host_id : req.user!.userId;
+
+    let messageRequirement: {
+      period: "daily" | "weekly" | "monthly" | "allTime";
+      min: number;
+      max: number | null;
+    } | null = null;
+    if (body.message_requirement) {
+      const period = parseMessagePeriod(String(body.message_requirement.period ?? ""));
+      const range = sanitizeCountRange(body.message_requirement);
+      if (!period || !range) {
+        return clientError(res, "Invalid message requirement");
       }
+      messageRequirement = { period, ...range };
+    }
 
-      const durationMs = typeof body.duration === "string" ? convertDelayStringToMS(body.duration) : null;
-      if (!durationMs || durationMs <= 0) {
-        return clientError(res, "Invalid duration — use a delay string like `1d`, `30m`, or `6h`");
+    // Just a range from the client — the counter name itself comes from this guild's own Giveaways config
+    // (activity_counter_name, default "activity"), same as -activity on the chat command.
+    let counterRequirement: { counter_name: string; min: number; max: number | null } | null = null;
+    if (body.activity_requirement) {
+      const range = sanitizeCountRange(body.activity_requirement);
+      if (!range) {
+        return clientError(res, "Invalid activity points requirement");
       }
+      counterRequirement = { counter_name: config.activity_counter_name ?? "activity", ...range };
+    }
 
-      const winnerCount = Number(body.winners) || 1;
-      if (!Number.isInteger(winnerCount) || winnerCount < 1) {
-        return clientError(res, "Winner count must be a positive whole number");
+    let coinsRequirement: { min: number; max: number | null } | null = null;
+    if (body.coins_requirement) {
+      const range = sanitizeCountRange(body.coins_requirement);
+      if (!range) {
+        return clientError(res, "Invalid coins requirement");
       }
+      coinsRequirement = range;
+    }
 
-      const config = await getGiveawaysPluginConfig(req.params.guildId);
-      // Same auto-apply-"default" behavior as the chat command (see GiveawayStartCmd.ts) — an explicit template
-      // in the request body always wins over it.
-      const template =
-        typeof body.template === "string" && body.template ? config.templates?.[body.template] : config.templates?.default;
-      if (body.template && !template) {
-        return clientError(res, `Unknown giveaway template \`${body.template}\``);
-      }
+    try {
+      const giveaway = await createGiveawayRecord(req.params.guildId, {
+        channel_id: channelId,
+        host_id: hostId,
+        prize,
+        winner_count: winnerCount,
+        duration_ms: durationMs,
+        embed_color: typeof body.embed_color === "number" ? body.embed_color : (template?.embed_color ?? null),
+        required_role_ids: sanitizeRoleIds(body.required_role_ids),
+        bypass_role_ids: body.bypass_role_ids ? sanitizeRoleIds(body.bypass_role_ids) : (template?.bypass_roles ?? []),
+        blacklisted_role_ids: body.blacklisted_role_ids
+          ? sanitizeRoleIds(body.blacklisted_role_ids)
+          : (template?.blacklisted_roles ?? []),
+        extra_entries: body.extra_entries ? sanitizeExtraEntries(body.extra_entries) : (template?.extra_entries ?? {}),
+        message_requirement: messageRequirement,
+        counter_requirement: counterRequirement,
+        coins_requirement: coinsRequirement,
+        claim_time_ms: (() => {
+          if (typeof body.claim_time === "string" && body.claim_time) return convertDelayStringToMS(body.claim_time);
+          if (template?.claim_time) return convertDelayStringToMS(template.claim_time);
+          return null;
+        })(),
+      });
+      res.json({ ...giveaway, entry_count: 0 });
+    } catch (err) {
+      serverError(res, "Failed to create giveaway");
+    }
+  });
 
-      const channelId = typeof body.channel_id === "string" && isValidSnowflake(body.channel_id) ? body.channel_id : template?.channel_id ?? null;
-      if (!channelId) {
-        return clientError(res, "A channel is required, either directly or via a template");
-      }
+  giveawaysRouter.get("/:guildId/giveaways", requireGiveawayManager(), async (req: Request, res: Response) => {
+    try {
+      const repo = GuildGiveaways.getGuildInstance(req.params.guildId);
+      const [running, recentlyFinished] = await Promise.all([
+        repo.getRunning(),
+        repo.getRecentlyFinished(RECENT_FINISHED_LIMIT),
+      ]);
 
-      const hostId = typeof body.host_id === "string" && isValidSnowflake(body.host_id) ? body.host_id : req.user!.userId;
+      const withEntryCounts = await Promise.all(
+        [...running, ...recentlyFinished].map(async (giveaway) => ({
+          ...giveaway,
+          entry_count: await giveawayEntries.count(giveaway.id),
+        })),
+      );
 
-      let messageRequirement: { period: "daily" | "weekly" | "monthly" | "allTime"; min: number; max: number | null } | null = null;
-      if (body.message_requirement) {
-        const period = parseMessagePeriod(String(body.message_requirement.period ?? ""));
-        const range = sanitizeCountRange(body.message_requirement);
-        if (!period || !range) {
-          return clientError(res, "Invalid message requirement");
-        }
-        messageRequirement = { period, ...range };
-      }
+      res.json(withEntryCounts);
+    } catch (err) {
+      serverError(res, "Failed to load giveaways");
+    }
+  });
 
-      // Just a range from the client — the counter name itself comes from this guild's own Giveaways config
-      // (activity_counter_name, default "activity"), same as -activity on the chat command.
-      let counterRequirement: { counter_name: string; min: number; max: number | null } | null = null;
-      if (body.activity_requirement) {
-        const range = sanitizeCountRange(body.activity_requirement);
-        if (!range) {
-          return clientError(res, "Invalid activity points requirement");
-        }
-        counterRequirement = { counter_name: config.activity_counter_name ?? "activity", ...range };
-      }
+  giveawaysRouter.post("/:guildId/giveaways/:id/end", requireGiveawayManager(), async (req: Request, res: Response) => {
+    try {
+      const giveaway = await GuildGiveaways.getGuildInstance(req.params.guildId).find(Number(req.params.id));
+      if (!giveaway) return notFound(res);
+      if (giveaway.status !== "running") return clientError(res, "Giveaway isn't running");
 
-      let coinsRequirement: { min: number; max: number | null } | null = null;
-      if (body.coins_requirement) {
-        const range = sanitizeCountRange(body.coins_requirement);
-        if (!range) {
-          return clientError(res, "Invalid coins requirement");
-        }
-        coinsRequirement = range;
-      }
-
-      try {
-        const giveaway = await createGiveawayRecord(req.params.guildId, {
-          channel_id: channelId,
-          host_id: hostId,
-          prize,
-          winner_count: winnerCount,
-          duration_ms: durationMs,
-          embed_color: typeof body.embed_color === "number" ? body.embed_color : template?.embed_color ?? null,
-          required_role_ids: sanitizeRoleIds(body.required_role_ids),
-          bypass_role_ids: body.bypass_role_ids ? sanitizeRoleIds(body.bypass_role_ids) : template?.bypass_roles ?? [],
-          blacklisted_role_ids: body.blacklisted_role_ids ? sanitizeRoleIds(body.blacklisted_role_ids) : template?.blacklisted_roles ?? [],
-          extra_entries: body.extra_entries ? sanitizeExtraEntries(body.extra_entries) : template?.extra_entries ?? {},
-          message_requirement: messageRequirement,
-          counter_requirement: counterRequirement,
-          coins_requirement: coinsRequirement,
-          claim_time_ms: (() => {
-            if (typeof body.claim_time === "string" && body.claim_time) return convertDelayStringToMS(body.claim_time);
-            if (template?.claim_time) return convertDelayStringToMS(template.claim_time);
-            return null;
-          })(),
-        });
-        res.json({ ...giveaway, entry_count: 0 });
-      } catch (err) {
-        serverError(res, "Failed to create giveaway");
-      }
-    },
-  );
-
-  giveawaysRouter.get(
-    "/:guildId/giveaways",
-    requireGiveawayManager(),
-    async (req: Request, res: Response) => {
-      try {
-        const repo = GuildGiveaways.getGuildInstance(req.params.guildId);
-        const [running, recentlyFinished] = await Promise.all([
-          repo.getRunning(),
-          repo.getRecentlyFinished(RECENT_FINISHED_LIMIT),
-        ]);
-
-        const withEntryCounts = await Promise.all(
-          [...running, ...recentlyFinished].map(async (giveaway) => ({
-            ...giveaway,
-            entry_count: await giveawayEntries.count(giveaway.id),
-          })),
-        );
-
-        res.json(withEntryCounts);
-      } catch (err) {
-        serverError(res, "Failed to load giveaways");
-      }
-    },
-  );
-
-  giveawaysRouter.post(
-    "/:guildId/giveaways/:id/end",
-    requireGiveawayManager(),
-    async (req: Request, res: Response) => {
-      try {
-        const giveaway = await GuildGiveaways.getGuildInstance(req.params.guildId).find(Number(req.params.id));
-        if (!giveaway) return notFound(res);
-        if (giveaway.status !== "running") return clientError(res, "Giveaway isn't running");
-
-        await finalizeGiveaway(giveaway.id, { cancelled: false });
-        ok(res);
-      } catch (err) {
-        serverError(res, "Failed to end giveaway");
-      }
-    },
-  );
+      await finalizeGiveaway(giveaway.id, { cancelled: false });
+      ok(res);
+    } catch (err) {
+      serverError(res, "Failed to end giveaway");
+    }
+  });
 
   giveawaysRouter.post(
     "/:guildId/giveaways/:id/reroll",
@@ -305,7 +312,8 @@ export function initGuildGiveawaysAPI(router: express.Router) {
         if (replaceWinnerIds.length === 0 || replaceWinnerIds.length !== new Set(replaceWinnerIds).size) {
           return clientError(res, "Select one or more current winners to reroll");
         }
-        if (replaceWinnerIds.some((id) => !currentWinnerIds.includes(id))) return clientError(res, "Invalid winner selection");
+        if (replaceWinnerIds.some((id) => !currentWinnerIds.includes(id)))
+          return clientError(res, "Invalid winner selection");
 
         const { newWinnerIds } = await rerollGiveaway(giveaway.id, replaceWinnerIds);
         res.json({ result: "ok", newWinnerCount: newWinnerIds.length });

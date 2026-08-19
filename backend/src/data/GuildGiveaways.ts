@@ -47,6 +47,25 @@ export class GuildGiveaways extends BaseGuildRepository {
       .getMany();
   }
 
+  async getAnalytics(): Promise<{ totalGiveaways: number; claimedPrizes: number; totalEntries: number }> {
+    const [row] = await dataSource.query(
+      `SELECT
+        (SELECT COUNT(*) FROM giveaways WHERE guild_id = ?) AS totalGiveaways,
+        (SELECT COALESCE(SUM(JSON_LENGTH(claimed_winner_ids)), 0) FROM giveaways WHERE guild_id = ?) AS claimedPrizes,
+        (SELECT COALESCE(SUM(giveaway_entries.entries), 0)
+          FROM giveaway_entries
+          INNER JOIN giveaways ON giveaways.id = giveaway_entries.giveaway_id
+          WHERE giveaways.guild_id = ?) AS totalEntries`,
+      [this.guildId, this.guildId, this.guildId],
+    );
+
+    return {
+      totalGiveaways: Number(row.totalGiveaways),
+      claimedPrizes: Number(row.claimedPrizes),
+      totalEntries: Number(row.totalEntries),
+    };
+  }
+
   async create(data: Omit<Partial<Giveaway>, "id">): Promise<Giveaway> {
     const result = await this.giveaways.insert({
       ...data,

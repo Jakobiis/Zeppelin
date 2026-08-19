@@ -57,6 +57,12 @@ export interface GiveawayMemberInfo {
   avatar: string | null;
 }
 
+export interface GiveawayAnalytics {
+  totalGiveaways: number;
+  claimedPrizes: number;
+  totalEntries: number;
+}
+
 export interface GuildState {
   availableGuildsLoadStatus: LoadStatus;
   available: Map<
@@ -75,6 +81,9 @@ export interface GuildState {
   };
   giveawayAccess: {
     [guildId: string]: boolean;
+  };
+  giveawayAnalytics: {
+    [guildId: string]: GiveawayAnalytics;
   };
   giveaways: {
     [guildId: string]: GiveawayApiItem[];

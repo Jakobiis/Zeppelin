@@ -1,171 +1,302 @@
 <template>
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-4">
+    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-3">
+      <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Hosted giveaways</div>
+      <div class="mt-1 text-2xl font-semibold">{{ analytics.totalGiveaways }}</div>
+    </div>
+    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-3">
+      <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Claimed prizes</div>
+      <div class="mt-1 text-2xl font-semibold">{{ analytics.claimedPrizes }}</div>
+    </div>
+    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-3">
+      <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total entries</div>
+      <div class="mt-1 text-2xl font-semibold">{{ analytics.totalEntries }}</div>
+    </div>
+  </div>
+
   <div class="grid min-w-0 items-start gap-4 xl:grid-cols-3">
     <Expandable class="min-w-0">
       <template v-slot:title>Create giveaway</template>
       <template v-slot:content>
-      <div v-if="createError" class="bg-card border border-destructive/40 border-l-4 border-l-destructive py-2 px-3 rounded-lg text-sm text-destructive mb-3">
-        {{ createError }}
-      </div>
+        <div
+          v-if="createError"
+          class="bg-card border border-destructive/40 border-l-4 border-l-destructive py-2 px-3 rounded-lg text-sm text-destructive mb-3"
+        >
+          {{ createError }}
+        </div>
 
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label class="font-medium text-sm">Prize</label>
-          <input type="text" class="field-input mt-1" v-model="form.prize" placeholder="e.g. Discord Nitro" />
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label class="font-medium text-sm">Prize</label>
+            <input type="text" class="field-input mt-1" v-model="form.prize" placeholder="e.g. Discord Nitro" />
+          </div>
+          <div>
+            <label class="font-medium text-sm">Duration</label>
+            <input type="text" class="field-input mt-1" v-model="form.duration" placeholder="e.g. 1d, 30m, 6h" />
+          </div>
+          <div>
+            <label class="font-medium text-sm">Winners</label>
+            <input type="number" min="1" class="field-input mt-1" v-model.number="form.winners" />
+          </div>
+          <div>
+            <label class="font-medium text-sm">Channel</label>
+            <RoleChannelPickerField
+              class="mt-1"
+              :guild-id="guildId"
+              entity-type="channel"
+              :model-value="form.channel_id"
+              @update:model-value="form.channel_id = $event"
+            />
+          </div>
+          <div>
+            <label class="font-medium text-sm">Host</label>
+            <input
+              type="text"
+              class="field-input mt-1 font-mono text-sm"
+              v-model="form.host_id"
+              placeholder="User ID — leave blank to use yourself"
+            />
+          </div>
+          <div v-if="templates.length">
+            <label class="font-medium text-sm">Template</label>
+            <ComboboxField
+              class="mt-1"
+              :options="templateOptions"
+              :model-value="form.template"
+              placeholder="— None —"
+              @update:model-value="applyTemplate"
+            />
+          </div>
+          <div>
+            <label class="font-medium text-sm">Embed color</label>
+            <ColorPickerField
+              class="mt-1"
+              :model-value="form.embed_color"
+              @update:model-value="form.embed_color = $event"
+            />
+          </div>
         </div>
-        <div>
-          <label class="font-medium text-sm">Duration</label>
-          <input type="text" class="field-input mt-1" v-model="form.duration" placeholder="e.g. 1d, 30m, 6h" />
-        </div>
-        <div>
-          <label class="font-medium text-sm">Winners</label>
-          <input type="number" min="1" class="field-input mt-1" v-model.number="form.winners" />
-        </div>
-        <div>
-          <label class="font-medium text-sm">Channel</label>
-          <RoleChannelPickerField
+
+        <div class="mt-4">
+          <label class="font-medium text-sm"
+            >Required roles <span class="text-muted-foreground font-normal">(entrants need ALL of these)</span></label
+          >
+          <RoleListField
             class="mt-1"
             :guild-id="guildId"
-            entity-type="channel"
-            :model-value="form.channel_id"
-            @update:model-value="form.channel_id = $event"
+            :model-value="form.required_role_ids"
+            @update:model-value="form.required_role_ids = $event"
           />
         </div>
-        <div>
-          <label class="font-medium text-sm">Host</label>
-          <input type="text" class="field-input mt-1 font-mono text-sm" v-model="form.host_id" placeholder="User ID — leave blank to use yourself" />
-        </div>
-        <div v-if="templates.length">
-          <label class="font-medium text-sm">Template</label>
-          <ComboboxField
+        <div class="mt-4">
+          <label class="font-medium text-sm"
+            >Bypass roles <span class="text-muted-foreground font-normal">(skip role/message requirements)</span></label
+          >
+          <RoleListField
             class="mt-1"
-            :options="templateOptions"
-            :model-value="form.template"
-            placeholder="— None —"
-            @update:model-value="applyTemplate"
+            :guild-id="guildId"
+            :model-value="form.bypass_role_ids"
+            @update:model-value="form.bypass_role_ids = $event"
           />
         </div>
-        <div>
-          <label class="font-medium text-sm">Embed color</label>
-          <ColorPickerField class="mt-1" :model-value="form.embed_color" @update:model-value="form.embed_color = $event" />
+        <div class="mt-4">
+          <label class="font-medium text-sm"
+            >Blacklisted roles <span class="text-muted-foreground font-normal">(can never enter)</span></label
+          >
+          <RoleListField
+            class="mt-1"
+            :guild-id="guildId"
+            :model-value="form.blacklisted_role_ids"
+            @update:model-value="form.blacklisted_role_ids = $event"
+          />
         </div>
-      </div>
-
-      <div class="mt-4">
-        <label class="font-medium text-sm">Required roles <span class="text-muted-foreground font-normal">(entrants need ALL of these)</span></label>
-        <RoleListField class="mt-1" :guild-id="guildId" :model-value="form.required_role_ids" @update:model-value="form.required_role_ids = $event" />
-      </div>
-      <div class="mt-4">
-        <label class="font-medium text-sm">Bypass roles <span class="text-muted-foreground font-normal">(skip role/message requirements)</span></label>
-        <RoleListField class="mt-1" :guild-id="guildId" :model-value="form.bypass_role_ids" @update:model-value="form.bypass_role_ids = $event" />
-      </div>
-      <div class="mt-4">
-        <label class="font-medium text-sm">Blacklisted roles <span class="text-muted-foreground font-normal">(can never enter)</span></label>
-        <RoleListField class="mt-1" :guild-id="guildId" :model-value="form.blacklisted_role_ids" @update:model-value="form.blacklisted_role_ids = $event" />
-      </div>
-      <div class="mt-4">
-        <label class="font-medium text-sm">Extra entries <span class="text-muted-foreground font-normal">(bonus entries per role — highest applicable, not stacked)</span></label>
-        <RoleEntryMapField class="mt-1" :guild-id="guildId" :model-value="form.extra_entries" @update:model-value="form.extra_entries = $event" />
-      </div>
-
-      <div class="mt-4">
-        <label class="flex items-center gap-2 text-sm font-medium">
-          <input type="checkbox" class="checkbox" v-model="form.hasMessageRequirement" />
-          Require a message count range
-        </label>
-        <div v-if="form.hasMessageRequirement" class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <ComboboxField class="w-40" :options="periodOptions" placeholder="— Select period —" :model-value="form.messagePeriod" @update:model-value="form.messagePeriod = $event" />
-          <input type="number" min="0" class="field-input w-full sm:w-24" placeholder="Min" :value="form.messageMin ?? ''" @input="form.messageMin = numberOrNull(($event.target as HTMLInputElement).value)" />
-          <span class="text-sm text-muted-foreground">to</span>
-          <input type="number" min="0" class="field-input w-full sm:w-36" placeholder="Max (optional)" :value="form.messageMax ?? ''" @input="form.messageMax = numberOrNull(($event.target as HTMLInputElement).value)" />
-          <span class="text-sm text-muted-foreground">messages</span>
+        <div class="mt-4">
+          <label class="font-medium text-sm"
+            >Extra entries
+            <span class="text-muted-foreground font-normal"
+              >(bonus entries per role — highest applicable, not stacked)</span
+            ></label
+          >
+          <RoleEntryMapField
+            class="mt-1"
+            :guild-id="guildId"
+            :model-value="form.extra_entries"
+            @update:model-value="form.extra_entries = $event"
+          />
         </div>
-      </div>
 
-      <div class="mt-4">
-        <label class="flex items-center gap-2 text-sm font-medium">
-          <input type="checkbox" class="checkbox" v-model="form.hasActivityRequirement" />
-          Require an activity points range
-        </label>
-        <div v-if="form.hasActivityRequirement" class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input type="number" min="0" class="field-input w-full sm:w-24" placeholder="Min" :value="form.activityMin ?? ''" @input="form.activityMin = numberOrNull(($event.target as HTMLInputElement).value)" />
-          <span class="text-sm text-muted-foreground">to</span>
-          <input type="number" min="0" class="field-input w-full sm:w-36" placeholder="Max (optional)" :value="form.activityMax ?? ''" @input="form.activityMax = numberOrNull(($event.target as HTMLInputElement).value)" />
-          <span class="text-sm text-muted-foreground">activity points</span>
+        <div class="mt-4">
+          <label class="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" class="checkbox" v-model="form.hasMessageRequirement" />
+            Require a message count range
+          </label>
+          <div v-if="form.hasMessageRequirement" class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <ComboboxField
+              class="w-40"
+              :options="periodOptions"
+              placeholder="— Select period —"
+              :model-value="form.messagePeriod"
+              @update:model-value="form.messagePeriod = $event"
+            />
+            <input
+              type="number"
+              min="0"
+              class="field-input w-full sm:w-24"
+              placeholder="Min"
+              :value="form.messageMin ?? ''"
+              @input="form.messageMin = numberOrNull(($event.target as HTMLInputElement).value)"
+            />
+            <span class="text-sm text-muted-foreground">to</span>
+            <input
+              type="number"
+              min="0"
+              class="field-input w-full sm:w-36"
+              placeholder="Max (optional)"
+              :value="form.messageMax ?? ''"
+              @input="form.messageMax = numberOrNull(($event.target as HTMLInputElement).value)"
+            />
+            <span class="text-sm text-muted-foreground">messages</span>
+          </div>
         </div>
-      </div>
 
-      <div class="mt-4">
-        <label class="flex items-center gap-2 text-sm font-medium">
-          <input type="checkbox" class="checkbox" v-model="form.hasCoinsRequirement" />
-          Require a coin balance range
-        </label>
-        <div v-if="form.hasCoinsRequirement" class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input type="number" min="0" class="field-input w-full sm:w-24" placeholder="Min" :value="form.coinsMin ?? ''" @input="form.coinsMin = numberOrNull(($event.target as HTMLInputElement).value)" />
-          <span class="text-sm text-muted-foreground">to</span>
-          <input type="number" min="0" class="field-input w-full sm:w-36" placeholder="Max (optional)" :value="form.coinsMax ?? ''" @input="form.coinsMax = numberOrNull(($event.target as HTMLInputElement).value)" />
-          <span class="text-sm text-muted-foreground">coins</span>
+        <div class="mt-4">
+          <label class="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" class="checkbox" v-model="form.hasActivityRequirement" />
+            Require an activity points range
+          </label>
+          <div v-if="form.hasActivityRequirement" class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              type="number"
+              min="0"
+              class="field-input w-full sm:w-24"
+              placeholder="Min"
+              :value="form.activityMin ?? ''"
+              @input="form.activityMin = numberOrNull(($event.target as HTMLInputElement).value)"
+            />
+            <span class="text-sm text-muted-foreground">to</span>
+            <input
+              type="number"
+              min="0"
+              class="field-input w-full sm:w-36"
+              placeholder="Max (optional)"
+              :value="form.activityMax ?? ''"
+              @input="form.activityMax = numberOrNull(($event.target as HTMLInputElement).value)"
+            />
+            <span class="text-sm text-muted-foreground">activity points</span>
+          </div>
         </div>
-      </div>
 
-      <button class="btn-primary mt-4 mb-4" :disabled="creating" @click="submit">
-        {{ creating ? "Creating…" : "Create Giveaway" }}
-      </button>
+        <div class="mt-4">
+          <label class="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" class="checkbox" v-model="form.hasCoinsRequirement" />
+            Require a coin balance range
+          </label>
+          <div v-if="form.hasCoinsRequirement" class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              type="number"
+              min="0"
+              class="field-input w-full sm:w-24"
+              placeholder="Min"
+              :value="form.coinsMin ?? ''"
+              @input="form.coinsMin = numberOrNull(($event.target as HTMLInputElement).value)"
+            />
+            <span class="text-sm text-muted-foreground">to</span>
+            <input
+              type="number"
+              min="0"
+              class="field-input w-full sm:w-36"
+              placeholder="Max (optional)"
+              :value="form.coinsMax ?? ''"
+              @input="form.coinsMax = numberOrNull(($event.target as HTMLInputElement).value)"
+            />
+            <span class="text-sm text-muted-foreground">coins</span>
+          </div>
+        </div>
+
+        <button class="btn-primary mt-4 mb-4" :disabled="creating" @click="submit">
+          {{ creating ? "Creating…" : "Create Giveaway" }}
+        </button>
       </template>
     </Expandable>
 
     <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
-        <h3 class="mb-3">Running</h3>
-        <div v-if="!running.length" class="text-sm text-muted-foreground">No running giveaways</div>
-        <div class="flex flex-col gap-3">
-          <div v-for="giveaway in running" :key="giveaway.id" class="border border-border rounded-lg p-3 flex flex-col gap-2">
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0 break-words font-semibold">{{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span></div>
-              <span class="flex-none text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">Running</span>
+      <h3 class="mb-3">Running</h3>
+      <div v-if="!running.length" class="text-sm text-muted-foreground">No running giveaways</div>
+      <div class="flex flex-col gap-3">
+        <div
+          v-for="giveaway in running"
+          :key="giveaway.id"
+          class="border border-border rounded-lg p-3 flex flex-col gap-2"
+        >
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 break-words font-semibold">
+              {{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span>
             </div>
-            <div class="text-sm text-muted-foreground">
-              channel {{ giveaway.channel_id }} · host {{ memberName(giveaway.host_id) }}
-            </div>
-            <div class="text-sm text-muted-foreground">
-              {{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner(s) · ends {{ formatDate(giveaway.ends_at) }}
-            </div>
-            <div class="mt-1 flex flex-wrap gap-2">
-              <button type="button" class="btn-secondary" @click="promptEnd(giveaway)">End now</button>
-              <button type="button" class="btn-secondary" @click="promptCancel(giveaway)">Cancel</button>
-            </div>
+            <span class="flex-none text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary"
+              >Running</span
+            >
+          </div>
+          <div class="text-sm text-muted-foreground">
+            channel {{ giveaway.channel_id }} · host {{ memberName(giveaway.host_id) }}
+          </div>
+          <div class="text-sm text-muted-foreground">
+            {{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner(s) · ends
+            {{ formatDate(giveaway.ends_at) }}
+          </div>
+          <div class="mt-1 flex flex-wrap gap-2">
+            <button type="button" class="btn-secondary" @click="promptEnd(giveaway)">End now</button>
+            <button type="button" class="btn-secondary" @click="promptCancel(giveaway)">Cancel</button>
           </div>
         </div>
+      </div>
     </div>
 
     <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
-        <h3 class="mb-3">Recently finished</h3>
-        <div v-if="!recentlyFinished.length" class="text-sm text-muted-foreground">No finished giveaways yet</div>
-        <div class="flex flex-col gap-3">
-          <div v-for="giveaway in recentlyFinished" :key="giveaway.id" class="border border-border rounded-lg p-3 flex flex-col gap-2">
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0 break-words font-semibold">{{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span></div>
-              <span
-                class="flex-none text-xs font-medium px-2 py-0.5 rounded-full"
-                :class="giveaway.status === 'cancelled'
+      <h3 class="mb-3">Recently finished</h3>
+      <div v-if="!recentlyFinished.length" class="text-sm text-muted-foreground">No finished giveaways yet</div>
+      <div class="flex flex-col gap-3">
+        <div
+          v-for="giveaway in recentlyFinished"
+          :key="giveaway.id"
+          class="border border-border rounded-lg p-3 flex flex-col gap-2"
+        >
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 break-words font-semibold">
+              {{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span>
+            </div>
+            <span
+              class="flex-none text-xs font-medium px-2 py-0.5 rounded-full"
+              :class="
+                giveaway.status === 'cancelled'
                   ? 'bg-destructive/10 text-destructive'
                   : currentWinnerIds(giveaway).length
                     ? 'bg-secondary text-secondary-foreground'
-                    : 'bg-muted text-muted-foreground'"
-              >
-                {{ giveaway.status === 'cancelled' ? 'Cancelled' : currentWinnerIds(giveaway).length ? 'Ended' : 'No winners' }}
-              </span>
-            </div>
-            <div class="text-sm text-muted-foreground">host {{ memberName(giveaway.host_id) }}</div>
-            <div class="text-sm">
-              <span v-if="giveaway.status === 'cancelled'" class="text-muted-foreground">No winners were picked.</span>
-              <span v-else-if="!currentWinnerIds(giveaway).length" class="text-muted-foreground">Ended, no eligible entries.</span>
-              <span v-else>Won by {{ currentWinnerIds(giveaway).map(memberName).join(', ') }}</span>
-            </div>
-            <div class="text-xs text-muted-foreground">ended {{ formatDate(giveaway.ended_at) }}</div>
-            <div class="mt-1" v-if="giveaway.status === 'ended'">
-              <button type="button" class="btn-secondary" @click="promptReroll(giveaway)">Reroll</button>
-            </div>
+                    : 'bg-muted text-muted-foreground'
+              "
+            >
+              {{
+                giveaway.status === "cancelled"
+                  ? "Cancelled"
+                  : currentWinnerIds(giveaway).length
+                    ? "Ended"
+                    : "No winners"
+              }}
+            </span>
+          </div>
+          <div class="text-sm text-muted-foreground">host {{ memberName(giveaway.host_id) }}</div>
+          <div class="text-sm">
+            <span v-if="giveaway.status === 'cancelled'" class="text-muted-foreground">No winners were picked.</span>
+            <span v-else-if="!currentWinnerIds(giveaway).length" class="text-muted-foreground"
+              >Ended, no eligible entries.</span
+            >
+            <span v-else>Won by {{ currentWinnerIds(giveaway).map(memberName).join(", ") }}</span>
+          </div>
+          <div class="text-xs text-muted-foreground">ended {{ formatDate(giveaway.ended_at) }}</div>
+          <div class="mt-1" v-if="giveaway.status === 'ended'">
+            <button type="button" class="btn-secondary" @click="promptReroll(giveaway)">Reroll</button>
           </div>
         </div>
+      </div>
     </div>
 
     <ConfirmModal
@@ -192,7 +323,13 @@
 import moment from "moment";
 import { mapState } from "vuex";
 import { ApiError } from "../../api";
-import { GiveawayApiItem, GiveawayMemberInfo, GiveawayTemplate, GuildState } from "../../store/types";
+import {
+  GiveawayAnalytics,
+  GiveawayApiItem,
+  GiveawayMemberInfo,
+  GiveawayTemplate,
+  GuildState,
+} from "../../store/types";
 import Expandable from "../Expandable.vue";
 import ColorPickerField from "./ColorPickerField.vue";
 import ComboboxField from "./ComboboxField.vue";
@@ -237,7 +374,15 @@ function defaultForm() {
 }
 
 export default {
-  components: { Expandable, RoleChannelPickerField, ColorPickerField, ComboboxField, RoleListField, RoleEntryMapField, ConfirmModal },
+  components: {
+    Expandable,
+    RoleChannelPickerField,
+    ColorPickerField,
+    ComboboxField,
+    RoleListField,
+    RoleEntryMapField,
+    ConfirmModal,
+  },
 
   props: {
     guildId: { type: String, required: true },
@@ -265,6 +410,9 @@ export default {
       },
       memberNames(state: GuildState): { [userId: string]: GiveawayMemberInfo } {
         return state.giveawayMemberNames[this.guildId] || {};
+      },
+      analytics(state: GuildState): GiveawayAnalytics {
+        return state.giveawayAnalytics[this.guildId] || { totalGiveaways: 0, claimedPrizes: 0, totalEntries: 0 };
       },
     }),
 
@@ -309,6 +457,7 @@ export default {
     await Promise.all([
       this.$store.dispatch("guilds/loadGiveaways", this.guildId).catch(() => {}),
       this.$store.dispatch("guilds/loadGiveawayTemplates", this.guildId).catch(() => {}),
+      this.$store.dispatch("guilds/loadGiveawayAnalytics", this.guildId).catch(() => {}),
     ]);
 
     // Same auto-apply-"default" behavior as -giveaway start (see GiveawayStartCmd.ts) — prefills the form so
@@ -356,7 +505,10 @@ export default {
       if (template.bypass_roles?.length) this.form.bypass_role_ids = [...template.bypass_roles];
       if (template.blacklisted_roles?.length) this.form.blacklisted_role_ids = [...template.blacklisted_roles];
       if (template.extra_entries && Object.keys(template.extra_entries).length) {
-        this.form.extra_entries = Object.entries(template.extra_entries).map(([role_id, bonus]) => ({ role_id, bonus }));
+        this.form.extra_entries = Object.entries(template.extra_entries).map(([role_id, bonus]) => ({
+          role_id,
+          bonus,
+        }));
       }
     },
 
@@ -414,7 +566,9 @@ export default {
             bypass_role_ids: this.form.bypass_role_ids.filter((id) => id),
             blacklisted_role_ids: this.form.blacklisted_role_ids.filter((id) => id),
             extra_entries: Object.fromEntries(
-              this.form.extra_entries.filter((row: RoleEntryMapRow) => row.role_id).map((row: RoleEntryMapRow) => [row.role_id, row.bonus]),
+              this.form.extra_entries
+                .filter((row: RoleEntryMapRow) => row.role_id)
+                .map((row: RoleEntryMapRow) => [row.role_id, row.bonus]),
             ),
             message_requirement: this.form.hasMessageRequirement
               ? { period: this.form.messagePeriod, min: this.form.messageMin, max: this.form.messageMax }
