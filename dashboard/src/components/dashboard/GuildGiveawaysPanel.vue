@@ -1,6 +1,6 @@
 <template>
-  <div class="grid items-start gap-4 xl:grid-cols-3">
-    <Expandable>
+  <div class="grid min-w-0 items-start gap-4 xl:grid-cols-3">
+    <Expandable class="min-w-0">
       <template v-slot:title>Create giveaway</template>
       <template v-slot:content>
       <div v-if="createError" class="bg-card border border-destructive/40 border-l-4 border-l-destructive py-2 px-3 rounded-lg text-sm text-destructive mb-3">
@@ -72,11 +72,11 @@
           <input type="checkbox" class="checkbox" v-model="form.hasMessageRequirement" />
           Require a message count range
         </label>
-        <div v-if="form.hasMessageRequirement" class="flex items-center gap-2 mt-2">
+        <div v-if="form.hasMessageRequirement" class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
           <ComboboxField class="w-40" :options="periodOptions" placeholder="— Select period —" :model-value="form.messagePeriod" @update:model-value="form.messagePeriod = $event" />
-          <input type="number" min="0" class="field-input w-24" placeholder="Min" :value="form.messageMin ?? ''" @input="form.messageMin = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <input type="number" min="0" class="field-input w-full sm:w-24" placeholder="Min" :value="form.messageMin ?? ''" @input="form.messageMin = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">to</span>
-          <input type="number" min="0" class="field-input w-36" placeholder="Max (optional)" :value="form.messageMax ?? ''" @input="form.messageMax = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <input type="number" min="0" class="field-input w-full sm:w-36" placeholder="Max (optional)" :value="form.messageMax ?? ''" @input="form.messageMax = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">messages</span>
         </div>
       </div>
@@ -86,10 +86,10 @@
           <input type="checkbox" class="checkbox" v-model="form.hasActivityRequirement" />
           Require an activity points range
         </label>
-        <div v-if="form.hasActivityRequirement" class="flex items-center gap-2 mt-2">
-          <input type="number" min="0" class="field-input w-24" placeholder="Min" :value="form.activityMin ?? ''" @input="form.activityMin = numberOrNull(($event.target as HTMLInputElement).value)" />
+        <div v-if="form.hasActivityRequirement" class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <input type="number" min="0" class="field-input w-full sm:w-24" placeholder="Min" :value="form.activityMin ?? ''" @input="form.activityMin = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">to</span>
-          <input type="number" min="0" class="field-input w-36" placeholder="Max (optional)" :value="form.activityMax ?? ''" @input="form.activityMax = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <input type="number" min="0" class="field-input w-full sm:w-36" placeholder="Max (optional)" :value="form.activityMax ?? ''" @input="form.activityMax = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">activity points</span>
         </div>
       </div>
@@ -99,10 +99,10 @@
           <input type="checkbox" class="checkbox" v-model="form.hasCoinsRequirement" />
           Require a coin balance range
         </label>
-        <div v-if="form.hasCoinsRequirement" class="flex items-center gap-2 mt-2">
-          <input type="number" min="0" class="field-input w-24" placeholder="Min" :value="form.coinsMin ?? ''" @input="form.coinsMin = numberOrNull(($event.target as HTMLInputElement).value)" />
+        <div v-if="form.hasCoinsRequirement" class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <input type="number" min="0" class="field-input w-full sm:w-24" placeholder="Min" :value="form.coinsMin ?? ''" @input="form.coinsMin = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">to</span>
-          <input type="number" min="0" class="field-input w-36" placeholder="Max (optional)" :value="form.coinsMax ?? ''" @input="form.coinsMax = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <input type="number" min="0" class="field-input w-full sm:w-36" placeholder="Max (optional)" :value="form.coinsMax ?? ''" @input="form.coinsMax = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">coins</span>
         </div>
       </div>
@@ -113,13 +113,13 @@
       </template>
     </Expandable>
 
-    <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4">
+    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
         <h3 class="mb-3">Running</h3>
         <div v-if="!running.length" class="text-sm text-muted-foreground">No running giveaways</div>
         <div class="flex flex-col gap-3">
           <div v-for="giveaway in running" :key="giveaway.id" class="border border-border rounded-lg p-3 flex flex-col gap-2">
             <div class="flex items-start justify-between gap-2">
-              <div class="font-semibold">{{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span></div>
+              <div class="min-w-0 break-words font-semibold">{{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span></div>
               <span class="flex-none text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">Running</span>
             </div>
             <div class="text-sm text-muted-foreground">
@@ -128,7 +128,7 @@
             <div class="text-sm text-muted-foreground">
               {{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner(s) · ends {{ formatDate(giveaway.ends_at) }}
             </div>
-            <div class="flex gap-2 mt-1">
+            <div class="mt-1 flex flex-wrap gap-2">
               <button type="button" class="btn-secondary" @click="promptEnd(giveaway)">End now</button>
               <button type="button" class="btn-secondary" @click="promptCancel(giveaway)">Cancel</button>
             </div>
@@ -136,13 +136,13 @@
         </div>
     </div>
 
-    <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4">
+    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
         <h3 class="mb-3">Recently finished</h3>
         <div v-if="!recentlyFinished.length" class="text-sm text-muted-foreground">No finished giveaways yet</div>
         <div class="flex flex-col gap-3">
           <div v-for="giveaway in recentlyFinished" :key="giveaway.id" class="border border-border rounded-lg p-3 flex flex-col gap-2">
             <div class="flex items-start justify-between gap-2">
-              <div class="font-semibold">{{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span></div>
+              <div class="min-w-0 break-words font-semibold">{{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span></div>
               <span
                 class="flex-none text-xs font-medium px-2 py-0.5 rounded-full"
                 :class="giveaway.status === 'cancelled'
