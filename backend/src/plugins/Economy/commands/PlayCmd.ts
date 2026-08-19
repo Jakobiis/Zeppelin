@@ -95,9 +95,7 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
     const multiplierText = result.multiplier != null ? ` (**${result.multiplier.toFixed(2)}x**)` : "";
 
     const betEmbed = new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
-      .setTitle("Bet Placed")
+      .setColor(0x0159b2)
       .setDescription(`Playing **${label}** for ${emojiPrefix}**${formatAmount(bet)}** ${config.currency_name}`);
 
     const gameEmbed = new EmbedBuilder()

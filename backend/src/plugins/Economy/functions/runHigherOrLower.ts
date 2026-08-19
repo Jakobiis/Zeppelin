@@ -160,9 +160,7 @@ export async function runHigherOrLower(
   };
 
   const betEmbed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setAuthor({ name: message.author.username, iconURL: message.author.displayAvatarURL() })
-    .setTitle("Bet Placed")
+    .setColor(0x0159b2)
     .setDescription(`Playing **${label}** for ${emojiPrefix}**${formatAmount(bet)}** ${config.currency_name}`);
 
   const buildEmbed = (extra?: string): EmbedBuilder =>
