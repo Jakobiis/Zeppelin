@@ -184,10 +184,11 @@ textarea.field-input {
   @apply bg-muted/25 rounded-r-lg;
 }
 
-/* Collapsible card for a single array item / record entry — subtle elevation over the surrounding panel, with
-   its own hover state so a long list of entries doesn't read as a flat wall of identical boxes. */
+/* Collapsible card for a single array item / record entry — a real card (same solid bg-card + shadow as the
+   top-level plugin/section cards, not just a tinted panel) so a nested list of entries reads as a stack of
+   distinct cards rather than a row of dropdown-menu-style toggles, no matter how many levels deep it sits. */
 .item-card {
-  @apply border border-border rounded-lg bg-card/70;
+  @apply border border-border rounded-lg bg-card shadow-sm;
   @apply transition-colors duration-150;
 
   &:hover {
@@ -196,11 +197,12 @@ textarea.field-input {
 }
 
 .item-card-header {
-  @apply flex items-center gap-2 px-3 py-2;
+  @apply flex items-center gap-2 px-3 py-2.5;
 }
 
 .item-card-body {
-  @apply px-3 pb-3;
+  @apply px-3 pb-3.5;
+  @apply border-t border-border/60 mt-0.5 pt-3;
 }
 
 /* Checkbox: a pill-style toggle switch (track + sliding thumb) rather than a checkmark box — still a real

@@ -1,17 +1,22 @@
 <template>
-  <div class="bg-card border border-border rounded-lg shadow-md p-6">
-    <div v-if="pluginTitle" class="mb-4 pb-4 border-b border-border">
-      <h1 class="text-lg font-semibold">{{ pluginTitle }}</h1>
-      <div v-if="pluginDescription" class="main-content text-sm text-muted-foreground mt-1">
-        <MarkdownBlock :content="pluginDescription" />
-      </div>
+  <div v-if="pluginTitle" class="mb-4">
+    <h1 class="text-lg font-semibold">{{ pluginTitle }}</h1>
+    <div v-if="pluginDescription" class="main-content text-sm text-muted-foreground mt-1">
+      <MarkdownBlock :content="pluginDescription" />
     </div>
+  </div>
 
-    <div v-if="searchedVisibleConfigKeys.length" class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
+  <div class="flex flex-col gap-4">
+    <!-- Each "wide" field (records/arrays/objects/unions/special pickers — anything that needs real room, same
+         cutoff PluginConfigField itself uses for its own nested fields) gets its own card instead of sharing one
+         big card with everything else, so e.g. a plugin's whole "counters" list reads as its own distinct unit
+         rather than being crammed in next to unrelated toggles. -->
+    <div
+      v-for="key in wideVisibleKeys"
+      :key="key"
+      class="bg-card border border-border rounded-lg shadow-md p-4 sm:p-6"
+    >
       <PluginConfigField
-        v-for="key in searchedVisibleConfigKeys"
-        :key="key"
-        :class="isWide(configSchema.properties[key], key) ? 'col-span-full' : ''"
         :schema="configSchema.properties[key]"
         :field-key="key"
         :label="prettifyKey(key)"
@@ -19,13 +24,34 @@
         @update:model-value="(val) => updateConfigKey(key, val)"
       />
     </div>
-    <p v-else-if="searchQuery" class="text-sm text-muted-foreground italic">No fields match "{{ searchQuery }}".</p>
-    <p v-else class="text-sm text-muted-foreground italic">Nothing configurable here yet.</p>
+
+    <!-- Everything simple (booleans, plain strings/numbers, color pickers) shares one compact card — these are
+         the "3 toggles" a plugin like Counters has alongside its counters list, and packing them together reads
+         far better than each getting its own mostly-empty card. -->
+    <div v-if="packedVisibleKeys.length" class="bg-card border border-border rounded-lg shadow-md p-4 sm:p-6">
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
+        <PluginConfigField
+          v-for="key in packedVisibleKeys"
+          :key="key"
+          :schema="configSchema.properties[key]"
+          :field-key="key"
+          :label="prettifyKey(key)"
+          :model-value="modelValue.config[key]"
+          @update:model-value="(val) => updateConfigKey(key, val)"
+        />
+      </div>
+    </div>
+
+    <p v-if="!searchedVisibleConfigKeys.length && searchQuery" class="text-sm text-muted-foreground italic">
+      No fields match "{{ searchQuery }}".
+    </p>
+    <p v-else-if="!searchedVisibleConfigKeys.length && !hiddenConfigKeys.length" class="text-sm text-muted-foreground italic">
+      Nothing configurable here yet.
+    </p>
 
     <ComboboxField
       v-if="hiddenConfigKeys.length"
       class="max-w-xs"
-      :class="visibleConfigKeys.length ? 'mt-3' : 'mt-2'"
       input-class="btn-add"
       reset-on-select
       placeholder="+ Add field…"
@@ -34,8 +60,8 @@
       @update:model-value="(key) => addConfigField(String(key))"
     />
 
-    <div v-if="overridesSchema" class="border-t border-border pt-5 mt-6">
-      <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Overrides</h2>
+    <div v-if="overridesSchema" class="bg-card border border-border rounded-lg shadow-md p-4 sm:p-6">
+      <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Overrides</h2>
       <PluginConfigField
         :schema="overridesSchema"
         field-key="overrides"
@@ -94,6 +120,12 @@ const searchedVisibleConfigKeys = computed(() => {
       schemaValueMatchesSearch(configSchema.value?.properties?.[key], props.modelValue.config[key], q),
   );
 });
+
+// Same wide/packed split PluginConfigField uses to decide whether one of ITS nested fields needs the full grid
+// row — reused here to decide whether a top-level field gets its own card (records/arrays/objects/unions/special
+// pickers) or shares the compact "General"-style card with the other simple fields (booleans/strings/numbers).
+const wideVisibleKeys = computed(() => searchedVisibleConfigKeys.value.filter((key) => isWide(configSchema.value?.properties?.[key], key)));
+const packedVisibleKeys = computed(() => searchedVisibleConfigKeys.value.filter((key) => !isWide(configSchema.value?.properties?.[key], key)));
 
 function updateConfigKey(key: string, value: any) {
   emit("update:modelValue", { ...props.modelValue, config: { ...props.modelValue.config, [key]: value } });

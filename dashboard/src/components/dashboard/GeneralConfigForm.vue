@@ -1,12 +1,15 @@
 <template>
-  <div class="bg-card border border-border rounded-lg shadow-md p-6">
-    <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">General</h2>
+  <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">General</h2>
 
-    <div v-if="searchedVisibleKeys.length" class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
+  <div class="flex flex-col gap-4">
+    <!-- Same wide/packed card split as a plugin's own Interface form (see PluginConfigForm.vue) — a record like
+         "levels" gets its own card instead of being crammed in next to the plain prefix/embed_color fields. -->
+    <div
+      v-for="key in wideVisibleKeys"
+      :key="key"
+      class="bg-card border border-border rounded-lg shadow-md p-4 sm:p-6"
+    >
       <PluginConfigField
-        v-for="key in searchedVisibleKeys"
-        :key="key"
-        :class="isWide(schema.properties[key], key) ? 'col-span-full' : ''"
         :schema="schema.properties[key]"
         :field-key="key"
         :label="prettifyKey(key)"
@@ -14,13 +17,31 @@
         @update:model-value="(val) => updateKey(key, val)"
       />
     </div>
-    <p v-else-if="searchQuery" class="text-sm text-muted-foreground italic">No fields match "{{ searchQuery }}".</p>
-    <p v-else class="text-sm text-muted-foreground italic">Nothing configurable here yet.</p>
+
+    <div v-if="packedVisibleKeys.length" class="bg-card border border-border rounded-lg shadow-md p-4 sm:p-6">
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
+        <PluginConfigField
+          v-for="key in packedVisibleKeys"
+          :key="key"
+          :schema="schema.properties[key]"
+          :field-key="key"
+          :label="prettifyKey(key)"
+          :model-value="modelValue[key]"
+          @update:model-value="(val) => updateKey(key, val)"
+        />
+      </div>
+    </div>
+
+    <p v-if="!searchedVisibleKeys.length && searchQuery" class="text-sm text-muted-foreground italic">
+      No fields match "{{ searchQuery }}".
+    </p>
+    <p v-else-if="!searchedVisibleKeys.length && !hiddenKeys.length" class="text-sm text-muted-foreground italic">
+      Nothing configurable here yet.
+    </p>
 
     <ComboboxField
       v-if="hiddenKeys.length"
       class="max-w-xs"
-      :class="visibleKeys.length ? 'mt-3' : 'mt-2'"
       input-class="btn-add"
       reset-on-select
       placeholder="+ Add field…"
@@ -65,6 +86,11 @@ const searchedVisibleKeys = computed(() => {
       schemaValueMatchesSearch(props.schema?.properties?.[key], props.modelValue[key], q),
   );
 });
+
+// Same wide/packed split as PluginConfigForm — a field needing real room (e.g. the "levels" record) gets its own
+// card, while plain fields (prefix, embed_color) share one compact card.
+const wideVisibleKeys = computed(() => searchedVisibleKeys.value.filter((key) => isWide(props.schema?.properties?.[key], key)));
+const packedVisibleKeys = computed(() => searchedVisibleKeys.value.filter((key) => !isWide(props.schema?.properties?.[key], key)));
 
 function updateKey(key: string, value: any) {
   emit("update:modelValue", { ...props.modelValue, [key]: value });
