@@ -3,6 +3,7 @@ import { convertDelayStringToMS } from "../../../utils.js";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
 import { EconomyPluginType } from "../types.js";
 import { checkCooldown } from "./checkCooldown.js";
+import { logGameHistory } from "./gameHistory.js";
 import { addPendingHold, getSpendableBalance, pendingHoldCountersConfigured } from "./pendingBalance.js";
 
 export type GiveResult =
@@ -60,19 +61,45 @@ export async function giveCoins(
     const amountReceived = amount - fee;
 
     await pluginData.state.counters.changeCounterValue(config.counter_name, null, giverId, -amount);
+    const newBalance = balance - amount;
+    await logGameHistory(pluginData, {
+      userId: giverId,
+      gameName: "give",
+      gameType: "give",
+      outcome: "loss",
+      betAmount: 0,
+      amountChanged: -amount,
+      balanceAfter: newBalance,
+      opponentId: recipientId,
+    });
+
     if (amountReceived > 0) {
       await pluginData.state.counters.changeCounterValue(config.counter_name, null, recipientId, amountReceived);
 
       if (holdDurationMs) {
         await addPendingHold(pluginData, recipientId, amountReceived, holdDurationMs);
       }
+
+      // Reflects the same "spendable, holds excluded" balance the rest of this file reports for the giver, so a
+      // recipient's held gift doesn't look like it's already usable in their own history.
+      const { spendable: recipientBalanceAfter } = await getSpendableBalance(pluginData, config.counter_name, recipientId);
+      await logGameHistory(pluginData, {
+        userId: recipientId,
+        gameName: "give",
+        gameType: "give",
+        outcome: "win",
+        betAmount: 0,
+        amountChanged: amountReceived,
+        balanceAfter: recipientBalanceAfter,
+        opponentId: giverId,
+      });
     }
 
     if (cooldownCheck.cooldownMs) {
       pluginData.state.lastPlayedAt.set(cooldownKey, Date.now());
     }
 
-    return { type: "result", amountSent: amount, amountReceived, fee, newBalance: balance - amount };
+    return { type: "result", amountSent: amount, amountReceived, fee, newBalance };
   } finally {
     lock.unlock();
   }

@@ -27,6 +27,11 @@ export const zGiveawaysConfig = z.strictObject({
   // to evaluate a guild's full config-override tree. Empty by default: nobody can manage giveaways until a
   // server explicitly sets this.
   manager_roles: z.array(zSnowflake).max(MAX_ROLES_PER_LIST).default([]),
+  // A role that marks someone as a "giveaway contributor" (e.g. a staff member/partner who's allowed to donate
+  // or help source prizes) — purely a role ID this plugin hands off to Discord's own role-grant API on the
+  // dashboard's "Giveaway contributor" card (see api/guilds/giveaways.ts); this plugin doesn't otherwise check
+  // or care who holds it. Null (default) means the card is unavailable — nothing to grant/revoke.
+  contributor_role_id: zSnowflake.nullable().default(null),
   templates: zBoundedRecord(z.record(zBoundedCharacters(1, 100), zGiveawayTemplate), 0, MAX_TEMPLATES).default({}),
   // Which Counters-plugin counter "activity points" requirements check — same idea as Economy's own
   // counter_name (default "coins"): there's no fixed/guaranteed counter name for this concept, so it's a

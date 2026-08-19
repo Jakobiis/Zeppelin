@@ -15,9 +15,8 @@
   </div>
 
   <div class="grid min-w-0 items-start gap-4 xl:grid-cols-3">
-    <Expandable class="min-w-0">
-      <template v-slot:title>Create giveaway</template>
-      <template v-slot:content>
+    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Create giveaway</h3>
         <div
           v-if="createError"
           class="bg-card border border-destructive/40 border-l-4 border-l-destructive py-2 px-3 rounded-lg text-sm text-destructive mb-3"
@@ -90,10 +89,13 @@
           </div>
         </div>
 
-        <div class="mt-4">
-          <label class="font-medium text-sm"
-            >Required roles <span class="text-muted-foreground font-normal">(entrants need ALL of these)</span></label
-          >
+        <div class="mt-4" v-if="visibleRoleFields.includes('required_role_ids')">
+          <div class="flex items-center justify-between gap-2">
+            <label class="font-medium text-sm"
+              >Required roles <span class="text-muted-foreground font-normal">(entrants need ALL of these)</span></label
+            >
+            <button type="button" class="btn-remove shrink-0" @click="removeRoleField('required_role_ids')">Remove</button>
+          </div>
           <RoleListField
             class="mt-1"
             :guild-id="guildId"
@@ -101,10 +103,13 @@
             @update:model-value="form.required_role_ids = $event"
           />
         </div>
-        <div class="mt-4">
-          <label class="font-medium text-sm"
-            >Bypass roles <span class="text-muted-foreground font-normal">(skip role/message requirements)</span></label
-          >
+        <div class="mt-4" v-if="visibleRoleFields.includes('bypass_role_ids')">
+          <div class="flex items-center justify-between gap-2">
+            <label class="font-medium text-sm"
+              >Bypass roles <span class="text-muted-foreground font-normal">(skip role/message requirements)</span></label
+            >
+            <button type="button" class="btn-remove shrink-0" @click="removeRoleField('bypass_role_ids')">Remove</button>
+          </div>
           <RoleListField
             class="mt-1"
             :guild-id="guildId"
@@ -112,15 +117,29 @@
             @update:model-value="form.bypass_role_ids = $event"
           />
         </div>
-        <div class="mt-4">
-          <label class="font-medium text-sm"
-            >Blacklisted roles <span class="text-muted-foreground font-normal">(can never enter)</span></label
-          >
+        <div class="mt-4" v-if="visibleRoleFields.includes('blacklisted_role_ids')">
+          <div class="flex items-center justify-between gap-2">
+            <label class="font-medium text-sm"
+              >Blacklisted roles <span class="text-muted-foreground font-normal">(can never enter)</span></label
+            >
+            <button type="button" class="btn-remove shrink-0" @click="removeRoleField('blacklisted_role_ids')">Remove</button>
+          </div>
           <RoleListField
             class="mt-1"
             :guild-id="guildId"
             :model-value="form.blacklisted_role_ids"
             @update:model-value="form.blacklisted_role_ids = $event"
+          />
+        </div>
+        <div class="mt-4" v-if="hiddenRoleFieldOptions.length">
+          <ComboboxField
+            class="max-w-xs"
+            input-class="btn-add"
+            reset-on-select
+            placeholder="+ Add role field…"
+            :options="hiddenRoleFieldOptions"
+            :model-value="null"
+            @update:model-value="(key) => addRoleField(String(key))"
           />
         </div>
         <div class="mt-4">
@@ -229,8 +248,7 @@
         <button class="btn-primary mt-4 mb-4" :disabled="creating" @click="submit">
           {{ creating ? "Creating…" : "Create Giveaway" }}
         </button>
-      </template>
-    </Expandable>
+    </div>
 
     <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Running</h3>
@@ -267,10 +285,20 @@
 
     <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Recently finished</h3>
-      <div v-if="!recentlyFinished.length" class="text-sm text-muted-foreground">No finished giveaways yet</div>
+      <input
+        type="text"
+        class="field-input mb-3"
+        placeholder="Search by prize, host username, or host user ID…"
+        :value="finishedSearchInput"
+        @input="onFinishedSearchInput(($event.target as HTMLInputElement).value)"
+      />
+      <div v-if="finishedLoading" class="text-sm text-muted-foreground">Loading…</div>
+      <div v-else-if="!finishedGiveaways.length" class="text-sm text-muted-foreground">
+        {{ finishedSearchInput.trim() ? "No finished giveaways match your search." : "No finished giveaways yet" }}
+      </div>
       <div class="flex flex-col gap-3">
         <div
-          v-for="giveaway in recentlyFinished"
+          v-for="giveaway in finishedGiveaways"
           :key="giveaway.id"
           class="border border-border rounded-lg p-3 flex flex-col gap-2"
         >
@@ -314,6 +342,82 @@
           </div>
         </div>
       </div>
+      <div v-if="finishedTotalPages > 1" class="mt-3 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="finishedPage <= 1"
+          @click="goToFinishedPage(finishedPage - 1)"
+        >
+          Previous
+        </button>
+        <span class="text-xs text-muted-foreground"
+          >Page {{ finishedPage }} of {{ finishedTotalPages }} ({{ finishedTotal }} total)</span
+        >
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="finishedPage >= finishedTotalPages"
+          @click="goToFinishedPage(finishedPage + 1)"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+
+    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Giveaway contributor</h3>
+      <input
+        type="text"
+        class="field-input"
+        placeholder="Username or user ID…"
+        :value="contributorLookupQuery"
+        @input="onContributorLookupInput(($event.target as HTMLInputElement).value)"
+      />
+      <div v-if="contributorLookupResults.length" class="mt-2 border border-border rounded-lg overflow-hidden">
+        <button
+          v-for="m in contributorLookupResults"
+          :key="m.id"
+          type="button"
+          class="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+          @click="selectContributorUser(m)"
+        >
+          {{ m.displayName }} <span class="text-xs text-muted-foreground font-mono">{{ m.id }}</span>
+        </button>
+      </div>
+
+      <div v-if="giveawayContributor" class="mt-4 border-t border-border pt-4">
+        <div class="font-semibold">{{ giveawayContributor.member?.displayName ?? giveawayContributor.userId }}</div>
+        <div class="text-xs text-muted-foreground font-mono">{{ giveawayContributor.userId }}</div>
+
+        <div v-if="!giveawayContributor.configured" class="mt-2 text-sm text-muted-foreground">
+          No contributor role is configured — set <code class="font-mono">contributor_role_id</code> in this plugin's
+          YAML config first.
+        </div>
+        <template v-else>
+          <div class="mt-2 text-sm" :class="giveawayContributor.hasRole ? 'text-green-500' : 'text-muted-foreground'">
+            {{ giveawayContributor.hasRole ? "Has the contributor role" : "Doesn't have the contributor role" }}
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="btn-secondary"
+              :disabled="giveawayContributor.hasRole || contributorUpdating"
+              @click="setContributorRole(true)"
+            >
+              Grant
+            </button>
+            <button
+              type="button"
+              class="btn-secondary"
+              :disabled="!giveawayContributor.hasRole || contributorUpdating"
+              @click="setContributorRole(false)"
+            >
+              Revoke
+            </button>
+          </div>
+        </template>
+      </div>
     </div>
 
     <ConfirmModal
@@ -341,13 +445,14 @@ import moment from "moment";
 import { mapState } from "vuex";
 import { ApiError } from "../../api";
 import {
+  FinishedGiveawaysPage,
   GiveawayAnalytics,
   GiveawayApiItem,
+  GiveawayContributorStatus,
   GiveawayMemberInfo,
   GiveawayTemplate,
   GuildState,
 } from "../../store/types";
-import Expandable from "../Expandable.vue";
 import ColorPickerField from "./ColorPickerField.vue";
 import ComboboxField from "./ComboboxField.vue";
 import ConfirmModal from "./ConfirmModal.vue";
@@ -360,6 +465,16 @@ const PERIOD_OPTIONS = [
   { value: "weekly", label: "Weekly" },
   { value: "monthly", label: "Monthly" },
   { value: "allTime", label: "All-time" },
+];
+
+const FINISHED_PAGE_SIZE = 15;
+
+// Required/bypass/blacklisted roles start hidden in the create form (see visibleRoleFields) — most giveaways use
+// none of them, so showing all three RoleListFields unconditionally was mostly empty space.
+const ROLE_FIELD_DEFS: { key: "required_role_ids" | "bypass_role_ids" | "blacklisted_role_ids"; label: string }[] = [
+  { key: "required_role_ids", label: "Required roles" },
+  { key: "bypass_role_ids", label: "Bypass roles" },
+  { key: "blacklisted_role_ids", label: "Blacklisted roles" },
 ];
 
 type ConfirmState = { type: "end" | "cancel" | "reroll"; giveaway: GiveawayApiItem };
@@ -394,7 +509,6 @@ function defaultForm() {
 
 export default {
   components: {
-    Expandable,
     RoleChannelPickerField,
     ColorPickerField,
     ComboboxField,
@@ -416,6 +530,15 @@ export default {
       confirmState: null as ConfirmState | null,
       toastMessage: null as string | null,
       toastTimeout: null as ReturnType<typeof setTimeout> | null,
+      finishedSearchInput: "",
+      finishedPage: 1,
+      finishedSearchTimeout: null as ReturnType<typeof setTimeout> | null,
+      finishedLoading: false,
+      visibleRoleFields: [] as string[],
+      contributorLookupQuery: "",
+      contributorLookupResults: [] as GiveawayMemberInfo[],
+      contributorLookupTimeout: null as ReturnType<typeof setTimeout> | null,
+      contributorUpdating: false,
     };
   },
 
@@ -433,14 +556,35 @@ export default {
       analytics(state: GuildState): GiveawayAnalytics {
         return state.giveawayAnalytics[this.guildId] || { totalGiveaways: 0, claimedPrizes: 0, totalEntries: 0 };
       },
+      finishedGiveawaysPage(state: GuildState): FinishedGiveawaysPage | null {
+        return state.finishedGiveaways[this.guildId] || null;
+      },
+      giveawayContributor(state: GuildState): GiveawayContributorStatus | null {
+        return state.giveawayContributor[this.guildId] || null;
+      },
     }),
 
-    running() {
-      return this.allGiveaways.filter((g: GiveawayApiItem) => g.status === "running");
+    hiddenRoleFieldOptions() {
+      return ROLE_FIELD_DEFS.filter((d) => !this.visibleRoleFields.includes(d.key)).map((d) => ({ value: d.key, label: d.label }));
     },
 
-    recentlyFinished() {
-      return this.allGiveaways.filter((g: GiveawayApiItem) => g.status !== "running");
+    // The backend's /giveaways route is running-only now — "Recently finished" is its own paginated/searchable
+    // request (see finishedGiveawaysPage above) since it needs to reach the guild's entire finished history, not
+    // just whatever's already loaded here.
+    running() {
+      return this.allGiveaways;
+    },
+
+    finishedGiveaways() {
+      return this.finishedGiveawaysPage?.items ?? [];
+    },
+
+    finishedTotal() {
+      return this.finishedGiveawaysPage?.total ?? 0;
+    },
+
+    finishedTotalPages() {
+      return Math.max(1, Math.ceil(this.finishedTotal / FINISHED_PAGE_SIZE));
     },
 
     templateOptions() {
@@ -477,6 +621,7 @@ export default {
       this.$store.dispatch("guilds/loadGiveaways", this.guildId).catch(() => {}),
       this.$store.dispatch("guilds/loadGiveawayTemplates", this.guildId).catch(() => {}),
       this.$store.dispatch("guilds/loadGiveawayAnalytics", this.guildId).catch(() => {}),
+      this.fetchFinishedPage(),
     ]);
 
     // Same auto-apply-"default" behavior as -giveaway start (see GiveawayStartCmd.ts) — prefills the form so
@@ -486,10 +631,7 @@ export default {
       this.applyTemplate("default");
     }
 
-    const ids = this.allGiveaways.flatMap((g: GiveawayApiItem) =>
-      g.holder_id ? [g.host_id, g.holder_id, ...g.winner_ids] : [g.host_id, ...g.winner_ids],
-    );
-    this.$store.dispatch("guilds/loadGiveawayMemberNames", { guildId: this.guildId, ids }).catch(() => {});
+    this.loadMemberNamesFor(this.allGiveaways);
   },
 
   methods: {
@@ -509,6 +651,50 @@ export default {
       return member ? member.displayName : id;
     },
 
+    addRoleField(key: string) {
+      if (!this.visibleRoleFields.includes(key)) this.visibleRoleFields.push(key);
+    },
+
+    removeRoleField(key: "required_role_ids" | "bypass_role_ids" | "blacklisted_role_ids") {
+      this.visibleRoleFields = this.visibleRoleFields.filter((k) => k !== key);
+      this.form[key] = [];
+    },
+
+    loadMemberNamesFor(giveaways: GiveawayApiItem[]) {
+      const ids = giveaways.flatMap((g) => (g.holder_id ? [g.host_id, g.holder_id, ...g.winner_ids] : [g.host_id, ...g.winner_ids]));
+      this.$store.dispatch("guilds/loadGiveawayMemberNames", { guildId: this.guildId, ids }).catch(() => {});
+    },
+
+    // Fetches "Recently finished" at the current search/page — called on mount, on search input (debounced, see
+    // onFinishedSearchInput), on page change, and after End/Cancel/Reroll so the list reflects the change.
+    async fetchFinishedPage() {
+      this.finishedLoading = true;
+      try {
+        await this.$store.dispatch("guilds/loadFinishedGiveaways", {
+          guildId: this.guildId,
+          search: this.finishedSearchInput.trim(),
+          page: this.finishedPage,
+          pageSize: FINISHED_PAGE_SIZE,
+        });
+        this.loadMemberNamesFor(this.finishedGiveaways);
+      } finally {
+        this.finishedLoading = false;
+      }
+    },
+
+    onFinishedSearchInput(value: string) {
+      this.finishedSearchInput = value;
+      this.finishedPage = 1;
+      if (this.finishedSearchTimeout) clearTimeout(this.finishedSearchTimeout);
+      this.finishedSearchTimeout = setTimeout(() => this.fetchFinishedPage(), 300);
+    },
+
+    goToFinishedPage(page: number) {
+      if (page < 1 || page > this.finishedTotalPages || page === this.finishedPage) return;
+      this.finishedPage = page;
+      this.fetchFinishedPage();
+    },
+
     // winner_ids is append-only full history (every reroll adds to it, never removes) — this is who currently
     // still has the prize, i.e. winner_ids minus anyone whose claim window expired and was rerolled away.
     currentWinnerIds(giveaway: GiveawayApiItem): string[] {
@@ -523,8 +709,14 @@ export default {
       if (!template) return;
       if (template.channel_id) this.form.channel_id = template.channel_id;
       if (template.embed_color != null) this.form.embed_color = template.embed_color;
-      if (template.bypass_roles?.length) this.form.bypass_role_ids = [...template.bypass_roles];
-      if (template.blacklisted_roles?.length) this.form.blacklisted_role_ids = [...template.blacklisted_roles];
+      if (template.bypass_roles?.length) {
+        this.form.bypass_role_ids = [...template.bypass_roles];
+        this.addRoleField("bypass_role_ids");
+      }
+      if (template.blacklisted_roles?.length) {
+        this.form.blacklisted_role_ids = [...template.blacklisted_roles];
+        this.addRoleField("blacklisted_role_ids");
+      }
       if (template.extra_entries && Object.keys(template.extra_entries).length) {
         this.form.extra_entries = Object.entries(template.extra_entries).map(([role_id, bonus]) => ({
           role_id,
@@ -609,6 +801,7 @@ export default {
           },
         });
         this.form = defaultForm();
+        this.visibleRoleFields = [];
       } catch (err) {
         this.createError = err instanceof ApiError && err.body?.error ? err.body.error : "Failed to create giveaway.";
       } finally {
@@ -635,8 +828,10 @@ export default {
 
       if (state.type === "end") {
         await this.$store.dispatch("guilds/endGiveaway", { guildId: this.guildId, giveawayId: state.giveaway.id });
+        await this.fetchFinishedPage();
       } else if (state.type === "cancel") {
         await this.$store.dispatch("guilds/cancelGiveaway", { guildId: this.guildId, giveawayId: state.giveaway.id });
+        await this.fetchFinishedPage();
       } else {
         if (selectedValues.length === 0) {
           this.showToast("Select at least one winner to reroll.");
@@ -647,6 +842,7 @@ export default {
           giveawayId: state.giveaway.id,
           replaceWinnerIds: selectedValues,
         });
+        await this.fetchFinishedPage();
         if (result?.newWinnerCount === 0) {
           this.showToast(`No other eligible entrants to reroll ${state.giveaway.prize} to.`);
         }
@@ -660,6 +856,51 @@ export default {
         this.toastMessage = null;
         this.toastTimeout = null;
       }, 4000);
+    },
+
+    onContributorLookupInput(value: string) {
+      this.contributorLookupQuery = value;
+      if (this.contributorLookupTimeout) clearTimeout(this.contributorLookupTimeout);
+      if (!value.trim()) {
+        this.contributorLookupResults = [];
+        return;
+      }
+      this.contributorLookupTimeout = setTimeout(async () => {
+        try {
+          this.contributorLookupResults = await this.$store.dispatch("guilds/lookupGiveawayMembers", {
+            guildId: this.guildId,
+            query: value.trim(),
+          });
+        } catch {
+          this.contributorLookupResults = [];
+        }
+      }, 300);
+    },
+
+    async selectContributorUser(member: GiveawayMemberInfo) {
+      this.contributorLookupQuery = "";
+      this.contributorLookupResults = [];
+      await this.$store
+        .dispatch("guilds/loadGiveawayContributorStatus", { guildId: this.guildId, userId: member.id })
+        .catch(() => {});
+    },
+
+    async setContributorRole(grant: boolean) {
+      if (!this.giveawayContributor) return;
+      this.contributorUpdating = true;
+      try {
+        await this.$store.dispatch("guilds/setGiveawayContributorRole", {
+          guildId: this.guildId,
+          userId: this.giveawayContributor.userId,
+          member: this.giveawayContributor.member,
+          grant,
+        });
+        this.showToast(grant ? "Contributor role granted." : "Contributor role revoked.");
+      } catch (err) {
+        this.showToast(err instanceof ApiError && err.body?.error ? err.body.error : "Failed to update the contributor role.");
+      } finally {
+        this.contributorUpdating = false;
+      }
     },
   },
 };

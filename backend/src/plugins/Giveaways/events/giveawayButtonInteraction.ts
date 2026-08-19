@@ -3,10 +3,10 @@ import { guildPluginEventListener } from "vety";
 import { GiveawayEntries } from "../../../data/GiveawayEntries.js";
 import { GuildMessageTrackerCounts } from "../../../data/GuildMessageTrackerCounts.js";
 import { getCustomIdNamespace, parseCustomId } from "../../../utils/parseCustomId.js";
-import { buildGiveawayButtons } from "../functions/buildGiveawayMessage.js";
+import { buildGiveawayButtons, buildGiveawayThreadActionRows } from "../functions/buildGiveawayMessage.js";
 import { buildParticipantsEmbed } from "../functions/buildParticipantsEmbed.js";
 import { checkEntryRequirements } from "../functions/checkEntryRequirements.js";
-import { markWinnerClaimed } from "../functions/claimGiveaway.js";
+import { confirmWinnerClaimed, pauseClaimDeadline } from "../functions/claimGiveaway.js";
 import { computeEntryWeight } from "../functions/computeEntryWeight.js";
 import { getCoinsValueForUser, getNamedCounterValueForUser } from "../functions/counterRequirements.js";
 import { createGiveawayThread } from "../functions/giveawayThread.js";
@@ -15,7 +15,13 @@ import { GiveawaysPluginType } from "../types.js";
 
 const giveawayEntries = new GiveawayEntries();
 
-const BUTTON_NAMESPACES = ["giveaway", "giveawayParticipants", "giveawayThread", "giveawayThreadDelete", "giveawayClaim"];
+const BUTTON_NAMESPACES = [
+  "giveaway",
+  "giveawayParticipants",
+  "giveawayThread",
+  "giveawayThreadDelete",
+  "giveawayThreadConfirmClaim",
+];
 
 // Restart-proof by construction: this listener is re-attached every time the plugin loads (every bot boot,
 // same as every other guildPluginEventListener), and everything it needs — the giveaway row, the clicking
@@ -55,20 +61,6 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
       return;
     }
 
-    if (namespace === "giveawayClaim") {
-      const claimed = await markWinnerClaimed(giveawayId, member.id);
-      if (claimed) {
-        await args.interaction.reply({ ephemeral: true, content: "🎉 Claimed! Talk to the host to sort out your prize." }).catch(() => null);
-      } else if (giveaway.claimed_winner_ids.includes(member.id)) {
-        await args.interaction.reply({ ephemeral: true, content: "You've already claimed this prize." }).catch(() => null);
-      } else if (giveaway.expired_winner_ids.includes(member.id)) {
-        await args.interaction.reply({ ephemeral: true, content: "Your claim window already expired and you were rerolled." }).catch(() => null);
-      } else {
-        await args.interaction.reply({ ephemeral: true, content: "You don't have a prize to claim here." }).catch(() => null);
-      }
-      return;
-    }
-
     if (namespace === "giveawayThread") {
       // winner_ids is append-only history (see entity comment) — expired_winner_ids excludes anyone whose
       // claim window ran out and was rerolled, so they don't still count as a current winner here.
@@ -78,11 +70,12 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
         return;
       }
 
-      // A deliberately-closed thread (the "Delete Thread" button, or everyone claiming — see
-      // winner_thread_closed_ids' entity comment) means the handoff is done, full stop — unlike a thread that's
-      // merely missing for some other reason (checked below), this doesn't get a replacement.
+      // A confirmed claim (via "Confirm Claimed" — see winner_thread_closed_ids' entity comment) means the
+      // handoff is done, full stop — unlike a thread that's merely missing for some other reason (checked
+      // below, including a manager deleting it without ever confirming the claim), this doesn't get a
+      // replacement.
       if (giveaway.winner_thread_closed_ids.includes(member.id)) {
-        await args.interaction.reply({ ephemeral: true, content: "Your prize thread has already been closed out — this giveaway's handoff is complete." }).catch(() => null);
+        await args.interaction.reply({ ephemeral: true, content: "Your prize claim has already been confirmed — this giveaway's handoff is complete." }).catch(() => null);
         return;
       }
 
@@ -117,10 +110,39 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
       await pluginData.state.giveaways.update(giveaway.id, {
         winner_thread_ids: { ...winnerThreadIds, [member.id]: thread.id },
       });
+      // Opening the thread is the winner's whole claim action — pauses their reroll deadline (if this giveaway
+      // has one) right here, well before the host/holder ever gets around to confirming the handoff itself.
+      await pauseClaimDeadline(giveaway.id, member.id);
+
       const reply = sendError
         ? `Thread created: <#${thread.id}> — but I couldn't post the opening message in it (${sendError}).`
         : `Thread created: <#${thread.id}>`;
       await args.interaction.editReply({ content: reply }).catch(() => null);
+      return;
+    }
+
+    if (namespace === "giveawayThreadConfirmClaim") {
+      const winnerId: string | undefined = data?.winner;
+      if (!winnerId) {
+        return;
+      }
+
+      // Whoever's actually responsible for handing the prize over — not the general manager_roles list, which
+      // is reserved for reviewing/deleting the thread afterward (see "giveawayThreadDelete" below).
+      const isHostOrHolder = member.id === giveaway.host_id || (giveaway.holder_id != null && member.id === giveaway.holder_id);
+      if (!isHostOrHolder) {
+        await args.interaction.reply({ ephemeral: true, content: "Only the giveaway host or the person holding this prize can confirm the claim." }).catch(() => null);
+        return;
+      }
+
+      const confirmed = await confirmWinnerClaimed(giveaway.id, winnerId);
+      if (!confirmed) {
+        await args.interaction.reply({ ephemeral: true, content: "This claim was already confirmed, or that user isn't a current winner here." }).catch(() => null);
+        return;
+      }
+
+      await args.interaction.update({ components: buildGiveawayThreadActionRows(giveaway.id, winnerId, false) }).catch(() => null);
+      await args.interaction.followUp({ ephemeral: true, content: `✅ Marked <@${winnerId}> as claimed.` }).catch(() => null);
       return;
     }
 
@@ -136,15 +158,7 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
       if (winnerId) {
         const nextThreadIds = { ...giveaway.winner_thread_ids };
         delete nextThreadIds[winnerId];
-        // A manager deleting the thread on purpose means the handoff is done — block the winner from creating
-        // a replacement (see winner_thread_closed_ids' entity comment), same as the auto-close once everyone
-        // claims.
-        await pluginData.state.giveaways
-          .update(giveaway.id, {
-            winner_thread_ids: nextThreadIds,
-            winner_thread_closed_ids: [...new Set([...giveaway.winner_thread_closed_ids, winnerId])],
-          })
-          .catch(() => null);
+        await pluginData.state.giveaways.update(giveaway.id, { winner_thread_ids: nextThreadIds }).catch(() => null);
       }
 
       const channel = args.interaction.channel;

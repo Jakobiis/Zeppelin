@@ -80,39 +80,45 @@ export function buildGiveawayButtons(giveawayId: number, entryCount: number, dis
   );
 }
 
-// On the winner-announcement message, alongside the Claim button when there's a claim requirement — clicking
-// creates the private host/winner(s)/manager thread (see functions/giveawayThread.ts, bot-process-only since
-// it needs a live guild member cache).
-export function buildWinnerAnnouncementButtons(giveawayId: number, includeClaim: boolean): ActionRowBuilder<ButtonBuilder>[] {
-  const row = new ActionRowBuilder<ButtonBuilder>();
-  if (includeClaim) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setStyle(ButtonStyle.Success)
-        .setEmoji("✅")
-        .setLabel("Claim Prize")
-        .setCustomId(buildCustomId("giveawayClaim", { id: giveawayId })),
-    );
-  }
-  row.addComponents(
+// On the winner-announcement message — clicking creates the private host/winner(+holder) thread (see
+// functions/giveawayThread.ts, bot-process-only since it needs a live guild member cache). This is the winner's
+// only action now: opening the thread doubles as "showing up" for a claim requirement (see claimGiveaway.ts's
+// pauseClaimDeadline) — there's no separate Claim button, since actually confirming the prize was received is a
+// host/holder call made from inside the thread (see buildGiveawayThreadActionRows below), not the winner's.
+export function buildWinnerAnnouncementButtons(giveawayId: number): ActionRowBuilder<ButtonBuilder>[] {
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji("🧵")
-      .setLabel("Create Thread")
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji("🎉")
+      .setLabel("Claim Prize")
       .setCustomId(buildCustomId("giveawayThread", { id: giveawayId })),
   );
   return [row];
 }
 
-// Posted as part of the thread's first message (see functions/giveawayThread.ts) — restricted to manager_roles
-// at the interaction-handling end, not here (a button alone can't enforce who clicks it). Carries the winner ID
-// since each winner's thread is tracked separately in winner_thread_ids.
-export function buildDeleteThreadButtonRow(giveawayId: number, winnerId: string): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+// Posted as part of the thread's first message (see functions/giveawayThread.ts). Neither button's permission is
+// enforced here (a button alone can't restrict who clicks it) — see giveawayButtonInteraction.ts:
+// "Confirm Claimed" is restricted to the giveaway's host/holder (whoever actually hands the prize over) and only
+// shown when the giveaway has a claim requirement at all; "Delete Thread" is restricted to manager_roles, giving
+// them a final look before closing things out. Both carry the winner ID since each winner's thread is tracked
+// separately in winner_thread_ids.
+export function buildGiveawayThreadActionRows(giveawayId: number, winnerId: string, includeConfirmClaim: boolean): ActionRowBuilder<ButtonBuilder>[] {
+  const row = new ActionRowBuilder<ButtonBuilder>();
+  if (includeConfirmClaim) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setStyle(ButtonStyle.Success)
+        .setEmoji("✅")
+        .setLabel("Confirm Claimed")
+        .setCustomId(buildCustomId("giveawayThreadConfirmClaim", { id: giveawayId, winner: winnerId })),
+    );
+  }
+  row.addComponents(
     new ButtonBuilder()
       .setStyle(ButtonStyle.Danger)
       .setEmoji("🗑️")
       .setLabel("Delete Thread")
       .setCustomId(buildCustomId("giveawayThreadDelete", { id: giveawayId, winner: winnerId })),
   );
+  return [row];
 }

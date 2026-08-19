@@ -43,14 +43,14 @@ function buildEndedEmbed(giveaway: Giveaway, cancelled: boolean, participantCoun
 
 function buildWinnerAnnouncementPayload(giveaway: Giveaway) {
   const mentions = giveaway.winner_ids.map((id) => `<@${id}>`).join(", ");
-  const hasClaim = giveaway.claim_time_ms != null;
-  const claimLine = hasClaim
-    ? `\nClick ✅ **Claim Prize** within **${humanizeDuration(giveaway.claim_time_ms!)}** or you'll be rerolled!`
-    : "";
+  const claimLine =
+    giveaway.claim_time_ms != null
+      ? `\nClick 🎉 **Claim Prize** within **${humanizeDuration(giveaway.claim_time_ms)}** or you'll be rerolled!`
+      : "";
   return {
     content: `🎉 Congratulations ${mentions}! You won **${giveaway.prize}**!${claimLine}`,
     allowed_mentions: { users: giveaway.winner_ids },
-    components: buildWinnerAnnouncementButtons(giveaway.id, hasClaim).map((row) => row.toJSON()),
+    components: buildWinnerAnnouncementButtons(giveaway.id).map((row) => row.toJSON()),
   };
 }
 
@@ -129,15 +129,15 @@ export async function rerollGiveaway(giveawayId: number, replaceWinnerIds: strin
   if (newWinnerIds.length > 0) {
     updated = await armClaimDeadlines(updated, newWinnerIds);
 
-    const hasClaim = updated.claim_time_ms != null;
-    const claimLine = hasClaim
-      ? `\nClick ✅ **Claim Prize** within **${humanizeDuration(updated.claim_time_ms!)}** or you'll be rerolled!`
-      : "";
+    const claimLine =
+      updated.claim_time_ms != null
+        ? `\nClick 🎉 **Claim Prize** within **${humanizeDuration(updated.claim_time_ms)}** or you'll be rerolled!`
+        : "";
 
     await sendChannelMessage(updated.channel_id, {
       content: `🎉 Giveaway rerolled for **${updated.prize}**! New winner(s): ${newWinnerIds.map((id) => `<@${id}>`).join(", ")}${claimLine}`,
       allowed_mentions: { users: newWinnerIds },
-      components: buildWinnerAnnouncementButtons(updated.id, hasClaim).map((row) => row.toJSON()),
+      components: buildWinnerAnnouncementButtons(updated.id).map((row) => row.toJSON()),
     }).catch(() => null);
   }
   // No Discord message when there's no one left to reroll to — callers (the chat command, the dashboard) each

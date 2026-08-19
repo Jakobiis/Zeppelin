@@ -8,10 +8,11 @@
       <pre v-for="error in errors" class="text-sm whitespace-pre-wrap font-mono text-foreground/90">{{ error }}</pre>
     </div>
 
-    <Tabs>
-      <Tab v-if="canReadConfig" :active="mode === 'yaml'"><a href="javascript:void(0)" v-on:click="setMode('yaml')">Raw YAML</a></Tab>
-      <Tab v-if="canReadConfig" :active="mode === 'interface'"><a href="javascript:void(0)" v-on:click="setMode('interface')">Interface</a></Tab>
-      <Tab v-if="isGiveawayManager" :active="mode === 'giveaways'"><a href="javascript:void(0)" v-on:click="setMode('giveaways')">Giveaways</a></Tab>
+    <Tabs variant="header">
+      <Tab variant="header" v-if="canReadConfig" :active="mode === 'yaml'"><a href="javascript:void(0)" v-on:click="setMode('yaml')">YAML</a></Tab>
+      <Tab variant="header" v-if="canReadConfig" :active="mode === 'interface'"><a href="javascript:void(0)" v-on:click="setMode('interface')">Interface</a></Tab>
+      <Tab variant="header" v-if="isGiveawayManager" :active="mode === 'giveaways'"><a href="javascript:void(0)" v-on:click="setMode('giveaways')">Giveaways</a></Tab>
+      <Tab variant="header" v-if="isEconomyManager" :active="mode === 'economy'"><a href="javascript:void(0)" v-on:click="setMode('economy')">Economy</a></Tab>
     </Tabs>
 
     <v-ace-editor v-if="canReadConfig" v-show="mode === 'yaml'" class="rounded-lg shadow-lg border border-border"
@@ -96,6 +97,7 @@
     </div>
 
     <GuildGiveawaysPanel v-if="mode === 'giveaways' && isGiveawayManager" class="mt-4" :guild-id="String($route.params.guildId)" />
+    <GuildEconomyPanel v-if="mode === 'economy' && isEconomyManager" class="mt-4" :guild-id="String($route.params.guildId)" />
   </div>
 </template>
 
@@ -117,6 +119,7 @@
   import Tab from "../Tab.vue";
   import Tabs from "../Tabs.vue";
   import GeneralConfigForm from "./GeneralConfigForm.vue";
+  import GuildEconomyPanel from "./GuildEconomyPanel.vue";
   import GuildGiveawaysPanel from "./GuildGiveawaysPanel.vue";
   import PluginConfigForm from "./PluginConfigForm.vue";
   import { dereferenceSchema, fillDefaults } from "./pluginConfigSchema";
@@ -135,6 +138,7 @@
       GeneralConfigForm,
       PluginConfigForm,
       GuildGiveawaysPanel,
+      GuildEconomyPanel,
     },
     // Reactive provide (Options API needs an explicit computed() to keep it reactive for injecting descendants)
     // so the search bar above the Interface tab can reach every PluginConfigField in the tree without threading
@@ -172,6 +176,12 @@
         .dispatch("guilds/loadGiveawayAccess", this.$route.params.guildId)
         .catch(() => false);
 
+      // Same idea as isGiveawayManager above, but for Economy's own manager_roles (see Economy/types.ts) — the
+      // tab only appears for someone who could actually use it.
+      this.isEconomyManager = await this.$store
+        .dispatch("guilds/loadEconomyAccess", this.$route.params.guildId)
+        .catch(() => false);
+
       this.canReadConfig = await post(`guilds/${this.$route.params.guildId}/check-permission`, { permission: ApiPermissions.ReadConfig })
         .then((result) => result.result)
         .catch(() => false);
@@ -190,7 +200,18 @@
       const validPluginNames = new Set([this.GENERAL, ...this.formPlugins.map((p) => p.name)]);
       this.selectedPlugin = queryPlugin && validPluginNames.has(queryPlugin) ? queryPlugin : this.GENERAL;
       const queryMode = this.$route.query.mode;
-      this.mode = queryMode === "giveaways" && this.isGiveawayManager ? "giveaways" : this.canReadConfig && queryMode === "interface" ? "interface" : this.canReadConfig ? "yaml" : "giveaways";
+      this.mode =
+        queryMode === "giveaways" && this.isGiveawayManager
+          ? "giveaways"
+          : queryMode === "economy" && this.isEconomyManager
+            ? "economy"
+            : this.canReadConfig && queryMode === "interface"
+              ? "interface"
+              : this.canReadConfig
+                ? "yaml"
+                : this.isGiveawayManager
+                  ? "giveaways"
+                  : "economy";
 
       this.loading = false;
 
@@ -224,6 +245,7 @@
         savedTimeout: null,
         mode: "yaml",
         isGiveawayManager: false,
+        isEconomyManager: false,
         canReadConfig: false,
         selectedPlugin: null,
         GENERAL,
@@ -302,6 +324,9 @@
           query.plugin = this.selectedPlugin;
         } else if (this.mode === "giveaways") {
           query.mode = "giveaways";
+          delete query.plugin;
+        } else if (this.mode === "economy") {
+          query.mode = "economy";
           delete query.plugin;
         } else {
           delete query.mode;

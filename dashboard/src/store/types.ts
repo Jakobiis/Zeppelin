@@ -64,6 +64,96 @@ export interface GiveawayAnalytics {
   totalEntries: number;
 }
 
+export interface GiveawayContributorStatus {
+  userId: string;
+  member: GiveawayMemberInfo | null;
+  // False when no contributor_role_id is configured for this server — the card shows a "not set up" state
+  // rather than an error.
+  configured: boolean;
+  hasRole: boolean;
+}
+
+export interface FinishedGiveawaysPage {
+  items: GiveawayApiItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  // Echoes the search that produced this page — lets the component tell whether a still-in-flight request's
+  // result belongs to the search box's *current* value or a since-superseded one (see loadFinishedGiveaways).
+  search: string;
+}
+
+export interface EconomyMemberInfo {
+  id: string;
+  username: string;
+  displayName: string;
+  avatar: string | null;
+}
+
+export interface EconomyLeaderboardEntry {
+  userId: string;
+  balance: number;
+  member: EconomyMemberInfo | null;
+}
+
+export interface EconomyLeaderboardPage {
+  items: EconomyLeaderboardEntry[];
+  total: number;
+}
+
+export interface EconomyActiveBoost {
+  type: "coins" | "activity";
+  boostKey: string;
+  multiplier: number;
+  expiresAt: string;
+}
+
+export interface EconomyUserInfo {
+  userId: string;
+  member: EconomyMemberInfo | null;
+  balance: number;
+  activeBoosts: EconomyActiveBoost[];
+}
+
+export interface EconomyHistoryEntry {
+  id: number;
+  user_id: string;
+  game_name: string;
+  game_type: string;
+  outcome: string;
+  bet_amount: number;
+  amount_changed: number;
+  balance_after: number;
+  opponent_id: string | null;
+  created_at: string;
+}
+
+export interface EconomyHistorySummary {
+  totalEntries: number;
+  totalWagered: number;
+  net: number;
+  totalWon: number;
+  // Sum of every negative amount_changed — i.e. <= 0, not a positive magnitude.
+  totalLost: number;
+}
+
+export interface EconomyUserHistoryPage {
+  items: EconomyHistoryEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  summary: EconomyHistorySummary;
+  members: { [userId: string]: EconomyMemberInfo };
+}
+
+export interface EconomyTransactionsPage {
+  items: EconomyHistoryEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  members: { [userId: string]: EconomyMemberInfo };
+}
+
 export interface GuildState {
   availableGuildsLoadStatus: LoadStatus;
   available: Map<
@@ -89,11 +179,35 @@ export interface GuildState {
   giveaways: {
     [guildId: string]: GiveawayApiItem[];
   };
+  finishedGiveaways: {
+    [guildId: string]: FinishedGiveawaysPage;
+  };
   giveawayTemplates: {
     [guildId: string]: GiveawayTemplate[];
   };
   giveawayMemberNames: {
     [guildId: string]: { [userId: string]: GiveawayMemberInfo };
+  };
+  economyAccess: {
+    [guildId: string]: boolean;
+  };
+  economyLeaderboard: {
+    [guildId: string]: EconomyLeaderboardPage;
+  };
+  economyAnalytics: {
+    [guildId: string]: EconomyHistorySummary;
+  };
+  economyUser: {
+    [guildId: string]: EconomyUserInfo | null;
+  };
+  economyUserHistory: {
+    [guildId: string]: EconomyUserHistoryPage | null;
+  };
+  economyTransactions: {
+    [guildId: string]: EconomyTransactionsPage | null;
+  };
+  giveawayContributor: {
+    [guildId: string]: GiveawayContributorStatus | null;
   };
 }
 

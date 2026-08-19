@@ -2,11 +2,12 @@ import { Giveaway } from "../../../data/entities/Giveaway.js";
 import { deleteChannel } from "./discordRest.js";
 
 /**
- * Deletes the private Discord threads for `winnerIds` and drops them from winner_thread_ids — shared by every
- * "this winner's thread is done" path: a reroll/claim-expiry (the winner no longer holds the prize at all —
- * see finalizeGiveaway.ts's rerollGiveaway and claimGiveaway.ts's processExpiredClaims) and everyone claiming
- * (the prize was successfully handed off — see claimGiveaway.ts's markWinnerClaimed). Failed/already-deleted
- * Discord threads are harmless (deleteChannel's own .catch(() => null) below).
+ * Deletes the private Discord threads for `winnerIds` and drops them from winner_thread_ids — used when a
+ * winner no longer holds the prize at all, i.e. a reroll or claim-expiry (see finalizeGiveaway.ts's
+ * rerollGiveaway and claimGiveaway.ts's processExpiredClaims). A winner who *did* successfully claim keeps their
+ * thread until a manager reviews and deletes it themselves (see giveawayButtonInteraction.ts's
+ * "giveawayThreadDelete") — that path doesn't go through here. Failed/already-deleted Discord threads are
+ * harmless (deleteChannel's own .catch(() => null) below).
  */
 export async function deleteWinnerThreads(giveaway: Giveaway, winnerIds: string[]): Promise<Record<string, string>> {
   const nextThreadIds = { ...giveaway.winner_thread_ids };

@@ -32,52 +32,60 @@ export async function armClaimDeadlines(giveaway: Giveaway, winnerIds: string[])
 }
 
 /**
- * Marks `winnerId` as having claimed their prize, if they currently have a pending claim on this giveaway.
- * Returns false (no-op) if they don't — already claimed, already expired, or never had a claim requirement. If
- * this was the last current winner still owed a claim, closes the giveaway out (see closeOutFullyClaimedGiveaway).
+ * Pauses `winnerId`'s reroll deadline — called when they open their prize thread (see
+ * giveawayButtonInteraction.ts's "giveawayThread" handler), which counts as "showing up" even though the prize
+ * hasn't actually changed hands yet (see confirmWinnerClaimed below for that part). A winner who's opened their
+ * thread is never rerolled for missing the deadline, regardless of what happens to the thread afterward — no-op
+ * if they don't currently have a pending deadline (no claim requirement, already paused, or already expired).
  */
-export async function markWinnerClaimed(giveawayId: number, winnerId: string): Promise<boolean> {
+export async function pauseClaimDeadline(giveawayId: number, winnerId: string): Promise<void> {
   const giveaway = await giveaways.find(giveawayId);
   if (!giveaway || !(winnerId in giveaway.winner_claim_deadlines)) {
-    return false;
+    return;
   }
 
   const nextDeadlines = { ...giveaway.winner_claim_deadlines };
   delete nextDeadlines[winnerId];
-
-  await giveaways.update(giveawayId, {
-    winner_claim_deadlines: nextDeadlines,
-    claimed_winner_ids: [...giveaway.claimed_winner_ids, winnerId],
-  });
+  await giveaways.update(giveawayId, { winner_claim_deadlines: nextDeadlines });
 
   const updated = (await giveaways.find(giveawayId))!;
   registerUpcomingClaimDeadline(updated);
-
-  const stillHeldWinnerIds = currentWinnerIds(updated);
-  const allClaimed = stillHeldWinnerIds.length > 0 && stillHeldWinnerIds.every((id) => updated.claimed_winner_ids.includes(id));
-  if (allClaimed) {
-    await closeOutFullyClaimedGiveaway(updated, stillHeldWinnerIds);
-  }
-
-  return true;
 }
 
 /**
- * Once every current winner of a giveaway has claimed their prize, there's nothing left to coordinate — deletes
- * everyone's remaining private thread, marks them all closed (see the entity comment on
- * winner_thread_closed_ids — this blocks re-creating one afterward, same as the manual "Delete Thread" button),
- * and announces the giveaway is fully wrapped up.
+ * Confirms `winnerId` actually received their prize — clicked from inside that winner's thread, restricted (at
+ * the interaction-handling end, not here) to the giveaway's host or holder, i.e. whoever actually handed the
+ * prize over. This is the one thing that finalizes a claim: opening the thread only pauses the reroll deadline
+ * (see pauseClaimDeadline above) to prove the winner showed up, it doesn't confirm the handoff itself — if the
+ * thread gets deleted before this is ever clicked, the winner was never actually marked as having claimed
+ * anything, by design. Also blocks the winner from opening another thread for this giveaway (see the entity
+ * comment on winner_thread_closed_ids). Returns false if there's nothing to confirm (not a current winner, or
+ * already confirmed).
  */
-async function closeOutFullyClaimedGiveaway(giveaway: Giveaway, winnerIds: string[]): Promise<void> {
-  const nextThreadIds = await deleteWinnerThreads(giveaway, winnerIds);
-  await giveaways.update(giveaway.id, {
-    winner_thread_ids: nextThreadIds,
-    winner_thread_closed_ids: [...new Set([...giveaway.winner_thread_closed_ids, ...winnerIds])],
+export async function confirmWinnerClaimed(giveawayId: number, winnerId: string): Promise<boolean> {
+  const giveaway = await giveaways.find(giveawayId);
+  if (!giveaway || !currentWinnerIds(giveaway).includes(winnerId) || giveaway.claimed_winner_ids.includes(winnerId)) {
+    return false;
+  }
+
+  await giveaways.update(giveawayId, {
+    claimed_winner_ids: [...giveaway.claimed_winner_ids, winnerId],
+    winner_thread_closed_ids: [...new Set([...giveaway.winner_thread_closed_ids, winnerId])],
   });
 
-  await sendChannelMessage(giveaway.channel_id, {
-    content: `✅ All prizes for **${giveaway.prize}** have been claimed! Winner threads have been closed.`,
-  }).catch(() => null);
+  const updated = (await giveaways.find(giveawayId))!;
+
+  // Just an announcement at this point — each winner's thread is closed out individually by a manager reviewing
+  // and deleting it (see giveawayButtonInteraction.ts's "giveawayThreadDelete"), not automatically here.
+  const stillHeldWinnerIds = currentWinnerIds(updated);
+  const allClaimed = stillHeldWinnerIds.length > 0 && stillHeldWinnerIds.every((id) => updated.claimed_winner_ids.includes(id));
+  if (allClaimed) {
+    await sendChannelMessage(updated.channel_id, {
+      content: `✅ All prizes for **${updated.prize}** have been claimed!`,
+    }).catch(() => null);
+  }
+
+  return true;
 }
 
 /**
@@ -130,7 +138,7 @@ export async function processExpiredClaims(giveawayId: number): Promise<void> {
     await sendChannelMessage(updated.channel_id, {
       content: `⌛ ${expiredMentions} didn't claim **${updated.prize}** in time and ${overdueWinnerIds.length === 1 ? "was" : "were"} rerolled. New winner(s): ${newMentions}`,
       allowed_mentions: { users: [...overdueWinnerIds, ...replacementWinnerIds] },
-      components: buildWinnerAnnouncementButtons(updated.id, true).map((row) => row.toJSON()),
+      components: buildWinnerAnnouncementButtons(updated.id).map((row) => row.toJSON()),
     }).catch(() => null);
   } else {
     await sendChannelMessage(updated.channel_id, {

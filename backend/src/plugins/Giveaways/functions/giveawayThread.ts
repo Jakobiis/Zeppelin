@@ -1,17 +1,23 @@
-import { ChannelType, EmbedBuilder, Snowflake, ThreadChannel } from "discord.js";
+import { ChannelType, EmbedBuilder, MessageFlags, Snowflake, ThreadChannel } from "discord.js";
 import { GuildPluginData } from "vety";
 import { Giveaway } from "../../../data/entities/Giveaway.js";
 import { DEFAULT_EMBED_COLOR } from "../../../utils/getGuildEmbedColor.js";
 import { getOrFetchGuildMember } from "../../../utils/getOrFetchGuildMember.js";
-import { buildDeleteThreadButtonRow } from "./buildGiveawayMessage.js";
+import { buildGiveawayThreadActionRows } from "./buildGiveawayMessage.js";
 import { GiveawaysPluginType } from "../types.js";
 
 /**
- * Creates a private thread for one specific winner + the host, on demand from the "Create Thread" button on the
- * winner announcement. Each winner gets their own — they never share one, since prize coordination (shipping
- * address, account details, etc.) is winner-specific. Manager-role holders aren't added or pinged here at all —
+ * Creates a private thread for one specific winner + the host, on demand from the "Claim Prize" button on the
+ * winner announcement (still namespaced "giveawayThread" internally — see buildWinnerAnnouncementButtons). Each winner gets their own — they never share one, since prize coordination (shipping
+ * address, account details, etc.) is winner-specific. Manager-role holders aren't added as thread members here —
  * a "manage giveaways" role is expected to already have Manage Threads on the channel, which is enough for its
- * holders to see/join the private thread without notifying all of them every time a winner opens one.
+ * holders to see/join the private thread. They do get a heads-up (see the silent role-ping message below), just
+ * not a loud one.
+ *
+ * Opening this thread is the winner's entire "claim" action when the giveaway has a claim requirement — it
+ * pauses their reroll deadline (see giveawayButtonInteraction.ts, which calls claimGiveaway.ts's
+ * pauseClaimDeadline right after this succeeds). Actually confirming the prize was received is a separate,
+ * host/holder-only step from inside the thread (see buildGiveawayThreadActionRows' "Confirm Claimed" button).
  */
 export interface CreateGiveawayThreadResult {
   thread: ThreadChannel;
@@ -74,13 +80,30 @@ export async function createGiveawayThread(pluginData: GuildPluginData<Giveaways
     .send({
       content: pingMentions,
       embeds: [infoEmbed],
-      components: [buildDeleteThreadButtonRow(giveaway.id, winnerId)],
+      components: buildGiveawayThreadActionRows(giveaway.id, winnerId, giveaway.claim_time_ms != null),
       allowedMentions: { users: memberIds },
     })
     .catch((err) => {
       console.error(`[GIVEAWAYS] Failed to send opening message in thread ${thread.id}:`, err);
       sendError = err instanceof Error ? err.message : String(err);
     });
+
+  // A separate, silent (MessageFlags.SuppressNotifications — the same thing as typing "@silent" in the client)
+  // heads-up for the manager role(s), kept apart from the message above so it doesn't dampen the host/winner's
+  // own ping, which should stay a normal, attention-grabbing notification. Silent still means visible: the
+  // mention renders and stays in the thread for anyone who checks, it just doesn't push/toast anyone. Private
+  // threads don't grant access from a mention either way (that's membership-only — see the comment above), so
+  // this is purely a courtesy notice for a role that's expected to already have Manage Threads on the channel.
+  const config = pluginData.config.get();
+  if (config.manager_roles.length > 0) {
+    await thread
+      .send({
+        content: config.manager_roles.map((roleId) => `<@&${roleId}>`).join(" "),
+        allowedMentions: { roles: config.manager_roles },
+        flags: MessageFlags.SuppressNotifications,
+      })
+      .catch(() => null);
+  }
 
   return { thread, sendError };
 }

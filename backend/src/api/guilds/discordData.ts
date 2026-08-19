@@ -39,6 +39,22 @@ function cachedDiscordBotRequest(cacheKey: string, path: string): Promise<any> {
   return promise;
 }
 
+// Adds/removes a single role on a guild member directly via the bot token — no live gateway connection needed
+// (PUT/DELETE .../roles/{role.id} is a plain REST call), used by the dashboard's role-grant cards (e.g.
+// Giveaways' contributor role, see api/guilds/giveaways.ts). Discord itself enforces the usual constraints (the
+// bot needs Manage Roles and its own top role above the target role) — a failure here just surfaces as a normal
+// thrown error for the caller to report, same as any other Discord API error in this file.
+export async function setGuildMemberRole(guildId: string, userId: string, roleId: string, grant: boolean): Promise<void> {
+  const res = await fetch(`${DISCORD_API_URL}/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+    method: grant ? "PUT" : "DELETE",
+    headers: { Authorization: `Bot ${env.BOT_TOKEN}` },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Discord API error ${res.status}: ${body}`);
+  }
+}
+
 // Used by the Giveaways dashboard page's access check (backend/src/api/guilds/giveaways.ts) — the dashboard
 // has no OAuth scope for a user's live guild roles, so this asks Discord for them using the bot's own
 // membership in the guild instead, same cache/error-handling shape as the role/channel/emoji lookups above.
@@ -76,6 +92,23 @@ export async function getGuildMemberDisplayInfo(guildId: string, userId: string)
     };
   } catch {
     return null;
+  }
+}
+
+// Used by the Giveaways dashboard's "Recently finished" search to resolve a typed username/nickname into
+// candidate host IDs — giveaways only ever store host_id, never a username, so matching by name has to go
+// through Discord's own member search rather than anything stored locally. Discord's member search endpoint
+// prefix-matches from the start of a username/nickname, case-insensitively. Only finds members *currently* in
+// the guild — a host who's since left won't turn up, same limitation as every other live-Discord lookup here.
+export async function searchGuildMembersByUsername(guildId: string, query: string, limit: number): Promise<string[]> {
+  try {
+    const members = await cachedDiscordBotRequest(
+      `member-search:${guildId}:${query.toLowerCase()}:${limit}`,
+      `guilds/${guildId}/members/search?query=${encodeURIComponent(query)}&limit=${limit}`,
+    );
+    return (members as any[]).map((m) => m.user.id);
+  } catch {
+    return [];
   }
 }
 

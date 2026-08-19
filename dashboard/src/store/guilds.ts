@@ -13,8 +13,16 @@ export const GuildStore: Module<GuildState, RootState> = {
     giveawayAccess: {},
     giveawayAnalytics: {},
     giveaways: {},
+    finishedGiveaways: {},
     giveawayTemplates: {},
     giveawayMemberNames: {},
+    economyAccess: {},
+    economyLeaderboard: {},
+    economyAnalytics: {},
+    economyUser: {},
+    economyUserHistory: {},
+    economyTransactions: {},
+    giveawayContributor: {},
   },
 
   actions: {
@@ -92,6 +100,13 @@ export const GuildStore: Module<GuildState, RootState> = {
       commit("setGiveaways", { guildId, giveaways });
     },
 
+    // Separate from loadGiveaways (running only) — this is its own paginated/searchable request against the
+    // guild's entire finished history, not just whatever's currently in state.
+    async loadFinishedGiveaways({ commit }, { guildId, search, page, pageSize }) {
+      const result = await get(`guilds/${guildId}/giveaways/finished`, { search: search || "", page, pageSize });
+      commit("setFinishedGiveaways", { guildId, page: { ...result, search: search || "" } });
+    },
+
     async loadGiveawayAnalytics({ commit }, guildId) {
       const analytics = await get(`guilds/${guildId}/giveaways/analytics`);
       commit("setGiveawayAnalytics", { guildId, analytics });
@@ -132,6 +147,62 @@ export const GuildStore: Module<GuildState, RootState> = {
       if (!uniqueIds.length) return;
       const members = await get(`guilds/${guildId}/giveaways/members`, { ids: uniqueIds.join(",") });
       commit("setGiveawayMemberNames", { guildId, members });
+    },
+
+    async loadEconomyAccess({ commit }, guildId) {
+      const result = await get(`guilds/${guildId}/economy/access`);
+      commit("setEconomyAccess", { guildId, isManager: result.isManager });
+      return result.isManager;
+    },
+
+    async loadEconomyLeaderboard({ commit }, { guildId, limit, offset }) {
+      const page = await get(`guilds/${guildId}/economy/leaderboard`, { limit, offset });
+      commit("setEconomyLeaderboard", { guildId, page });
+    },
+
+    // Resolves a typed ID or username/nickname into candidate members — doesn't touch shared state, the
+    // component just wants the list back directly for its picker.
+    lookupEconomyMembers(_ctx, { guildId, query }) {
+      return get(`guilds/${guildId}/economy/lookup`, { query });
+    },
+
+    async loadEconomyUser({ commit }, { guildId, userId }) {
+      const user = await get(`guilds/${guildId}/economy/user/${userId}`);
+      commit("setEconomyUser", { guildId, user });
+    },
+
+    async loadEconomyUserHistory({ commit }, { guildId, userId, page, pageSize }) {
+      const result = await get(`guilds/${guildId}/economy/user/${userId}/history`, { page, pageSize });
+      commit("setEconomyUserHistory", { guildId, page: result });
+    },
+
+    async adjustEconomyBalance(_ctx, { guildId, userId, action, amount }) {
+      const result = await post(`guilds/${guildId}/economy/user/${userId}/balance`, { action, amount });
+      return result.balance;
+    },
+
+    async loadEconomyAnalytics({ commit }, guildId) {
+      const analytics = await get(`guilds/${guildId}/economy/analytics`);
+      commit("setEconomyAnalytics", { guildId, analytics });
+    },
+
+    async loadEconomyTransactions({ commit }, { guildId, page, pageSize }) {
+      const result = await get(`guilds/${guildId}/economy/transactions`, { page, pageSize });
+      commit("setEconomyTransactions", { guildId, page: result });
+    },
+
+    lookupGiveawayMembers(_ctx, { guildId, query }) {
+      return get(`guilds/${guildId}/giveaways/lookup`, { query });
+    },
+
+    async loadGiveawayContributorStatus({ commit }, { guildId, userId }) {
+      const status = await get(`guilds/${guildId}/giveaways/contributor/${userId}`);
+      commit("setGiveawayContributor", { guildId, status: { userId, ...status } });
+    },
+
+    async setGiveawayContributorRole({ commit }, { guildId, userId, member, grant }) {
+      const result = await post(`guilds/${guildId}/giveaways/contributor/${userId}`, { grant });
+      commit("setGiveawayContributor", { guildId, status: { userId, member, configured: true, hasRole: result.hasRole } });
     },
   },
 
@@ -198,6 +269,10 @@ export const GuildStore: Module<GuildState, RootState> = {
       state.giveaways = { ...state.giveaways, [guildId]: giveaways };
     },
 
+    setFinishedGiveaways(state: GuildState, { guildId, page }) {
+      state.finishedGiveaways = { ...state.finishedGiveaways, [guildId]: page };
+    },
+
     setGiveawayTemplates(state: GuildState, { guildId, templates }) {
       state.giveawayTemplates = { ...state.giveawayTemplates, [guildId]: templates };
     },
@@ -209,6 +284,34 @@ export const GuildStore: Module<GuildState, RootState> = {
         next[member.id] = member;
       }
       state.giveawayMemberNames = { ...state.giveawayMemberNames, [guildId]: next };
+    },
+
+    setEconomyAccess(state: GuildState, { guildId, isManager }) {
+      state.economyAccess = { ...state.economyAccess, [guildId]: isManager };
+    },
+
+    setEconomyLeaderboard(state: GuildState, { guildId, page }) {
+      state.economyLeaderboard = { ...state.economyLeaderboard, [guildId]: page };
+    },
+
+    setEconomyUser(state: GuildState, { guildId, user }) {
+      state.economyUser = { ...state.economyUser, [guildId]: user };
+    },
+
+    setEconomyUserHistory(state: GuildState, { guildId, page }) {
+      state.economyUserHistory = { ...state.economyUserHistory, [guildId]: page };
+    },
+
+    setEconomyAnalytics(state: GuildState, { guildId, analytics }) {
+      state.economyAnalytics = { ...state.economyAnalytics, [guildId]: analytics };
+    },
+
+    setEconomyTransactions(state: GuildState, { guildId, page }) {
+      state.economyTransactions = { ...state.economyTransactions, [guildId]: page };
+    },
+
+    setGiveawayContributor(state: GuildState, { guildId, status }) {
+      state.giveawayContributor = { ...state.giveawayContributor, [guildId]: status };
     },
   },
 };

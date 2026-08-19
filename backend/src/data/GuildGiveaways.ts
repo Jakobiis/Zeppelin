@@ -1,4 +1,4 @@
-import { Repository } from "typeorm";
+import { Brackets, Repository } from "typeorm";
 import { BaseGuildRepository } from "./BaseGuildRepository.js";
 import { dataSource } from "./dataSource.js";
 import { Giveaway } from "./entities/Giveaway.js";
@@ -34,8 +34,9 @@ export class GuildGiveaways extends BaseGuildRepository {
       .getMany();
   }
 
-  // Most recently ended/cancelled giveaways first, capped at `limit` — used for the dashboard list and
-  // `-giveaway list`, neither of which needs the full history.
+  // Most recently ended/cancelled giveaways first, capped at `limit` — used by `-giveaway list`, which (unlike
+  // the dashboard's paginated/searchable "Recently finished" — see searchFinished below) just wants a quick
+  // recent handful.
   getRecentlyFinished(limit: number): Promise<Giveaway[]> {
     return this.giveaways
       .createQueryBuilder()
@@ -45,6 +46,34 @@ export class GuildGiveaways extends BaseGuildRepository {
       .addOrderBy("id", "DESC")
       .limit(limit)
       .getMany();
+  }
+
+  // Powers the dashboard's "Recently finished" search + pagination (api/guilds/giveaways.ts's /giveaways/finished
+  // route). `search`, when given, matches a giveaway whose prize contains it OR whose host_id is in `hostIds` —
+  // the caller resolves that list itself (an exact-snowflake candidate plus/or Discord member-search matches for
+  // a typed username), since matching a *username* isn't something a plain SQL query can do on its own here.
+  async searchFinished(opts: { search: string | null; hostIds: string[]; page: number; pageSize: number }): Promise<{ items: Giveaway[]; total: number }> {
+    const qb = this.giveaways
+      .createQueryBuilder("g")
+      .where("g.guild_id = :guildId", { guildId: this.guildId })
+      .andWhere("g.status != :status", { status: "running" });
+
+    if (opts.search) {
+      qb.andWhere(
+        new Brackets((sub) => {
+          sub.where("g.prize LIKE :prizeQuery", { prizeQuery: `%${opts.search}%` });
+          if (opts.hostIds.length > 0) {
+            sub.orWhere("g.host_id IN (:...hostIds)", { hostIds: opts.hostIds });
+          }
+        }),
+      );
+    }
+
+    qb.orderBy("g.ended_at", "DESC").addOrderBy("g.id", "DESC");
+    qb.skip((opts.page - 1) * opts.pageSize).take(opts.pageSize);
+
+    const [items, total] = await qb.getManyAndCount();
+    return { items, total };
   }
 
   async getAnalytics(): Promise<{ totalGiveaways: number; claimedPrizes: number; totalEntries: number }> {

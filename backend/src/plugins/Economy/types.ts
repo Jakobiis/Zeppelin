@@ -2,12 +2,13 @@ import { BasePluginType, pluginUtils } from "vety";
 import { z } from "zod";
 import { GuildEconomyGameHistory } from "../../data/GuildEconomyGameHistory.js";
 import { GuildEconomyShop } from "../../data/GuildEconomyShop.js";
-import { zBoundedCharacters, zBoundedRecord, zDelayString } from "../../utils.js";
+import { zBoundedCharacters, zBoundedRecord, zDelayString, zSnowflake } from "../../utils.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { CountersPlugin } from "../Counters/CountersPlugin.js";
 
 const MAX_GAMES = 20;
 const MAX_SHOP_BOOSTS = 20;
+const MAX_MANAGER_ROLES = 20;
 
 // Either a flat number (e.g. 2) or a {min, max} range that gets rolled randomly each time (e.g. {min: 1.5, max: 3}
 // = a fresh value between 1.5-3 picked per play). Used both for win_multiplier (wager games) and reward (reward
@@ -215,6 +216,12 @@ export const zEconomyTrade = z.strictObject({
 });
 
 export const zEconomyConfig = z.strictObject({
+  // The whole permission model for the dashboard's Economy admin page (balance give/subtract/set, leaderboard,
+  // game history, analytics) — same idea as Giveaways' manager_roles (see Giveaways/types.ts): a member with any
+  // of these role IDs can manage the economy from the dashboard, checked from the API process
+  // (api/guilds/economy.ts) the same way Giveaways' manager_roles is. Independent of can_manage below, which
+  // gates the in-Discord `-history` chat command via the normal vety permission-level system instead.
+  manager_roles: z.array(zSnowflake).max(MAX_MANAGER_ROLES).default([]),
   currency_name: zBoundedCharacters(1, 32).default("Coins"),
   currency_emoji: z.string().nullable().default(null),
   // The Counters plugin counter used to store each user's coin balance

@@ -7,13 +7,17 @@ import { finalizeGiveaway, rerollGiveaway } from "../../plugins/Giveaways/functi
 import { parseMessagePeriod } from "../../plugins/MessageTracker/functions/messagePeriods.js";
 import { convertDelayStringToMS, isValidSnowflake } from "../../utils.js";
 import { loadYamlSafely } from "../../utils/loadYamlSafely.js";
-import { getGuildMemberDisplayInfo, getGuildMemberRoleIds } from "./discordData.js";
+import { getGuildMemberDisplayInfo, getGuildMemberRoleIds, searchGuildMembersByUsername, setGuildMemberRole } from "./discordData.js";
 import { clientError, notFound, ok, serverError, unauthorized } from "../responses.js";
 
-const RECENT_FINISHED_LIMIT = 20;
 const MAX_ROLES_PER_FIELD = 20;
 const MAX_EXTRA_ENTRY_ROLES = 20;
 const MAX_MEMBER_LOOKUP_IDS = 100;
+const MAX_FINISHED_SEARCH_LENGTH = 200;
+const MAX_FINISHED_PAGE_SIZE = 50;
+const DEFAULT_FINISHED_PAGE_SIZE = 15;
+const MAX_FINISHED_USERNAME_MATCHES = 25;
+const MAX_LOOKUP_MATCHES = 10;
 
 const configs = new Configs();
 const giveawayEntries = new GiveawayEntries();
@@ -135,6 +139,74 @@ export function initGuildGiveawaysAPI(router: express.Router) {
     const isManager = await isGiveawayManager(req.params.guildId, req.user!.userId);
     res.json({ isManager });
   });
+
+  // Resolves a typed ID or username/nickname into candidate guild members — powers the dashboard's "Giveaway
+  // contributor" card's user picker, same shape as Economy's /economy/lookup.
+  giveawaysRouter.get("/:guildId/giveaways/lookup", requireGiveawayManager(), async (req: Request, res: Response) => {
+    try {
+      const query = typeof req.query.query === "string" ? req.query.query.trim() : "";
+      if (!query) return res.json([]);
+
+      if (isValidSnowflake(query)) {
+        const member = await getGuildMemberDisplayInfo(req.params.guildId, query);
+        return res.json(member ? [member] : []);
+      }
+
+      const ids = await searchGuildMembersByUsername(req.params.guildId, query, MAX_LOOKUP_MATCHES);
+      const members = await Promise.all(ids.map((id) => getGuildMemberDisplayInfo(req.params.guildId, id)));
+      res.json(members.filter((m) => m != null));
+    } catch (err) {
+      serverError(res, "Failed to look up members");
+    }
+  });
+
+  // Whether `userId` currently holds this guild's configured giveaway-contributor role — `configured: false`
+  // (rather than an error) when contributor_role_id isn't set, so the dashboard card can show "not set up" as
+  // its own state instead of a failure.
+  giveawaysRouter.get(
+    "/:guildId/giveaways/contributor/:userId",
+    requireGiveawayManager(),
+    async (req: Request, res: Response) => {
+      try {
+        const { guildId, userId } = req.params;
+        if (!isValidSnowflake(userId)) return clientError(res, "Invalid user ID");
+
+        const config = await getGiveawaysPluginConfig(guildId);
+        const roleId: string | null = config.contributor_role_id ?? null;
+        if (!roleId) return res.json({ configured: false, hasRole: false, member: null });
+
+        const [memberRoleIds, member] = await Promise.all([
+          getGuildMemberRoleIds(guildId, userId),
+          getGuildMemberDisplayInfo(guildId, userId),
+        ]);
+
+        res.json({ configured: true, hasRole: memberRoleIds?.includes(roleId) ?? false, member });
+      } catch (err) {
+        serverError(res, "Failed to load contributor status");
+      }
+    },
+  );
+
+  giveawaysRouter.post(
+    "/:guildId/giveaways/contributor/:userId",
+    requireGiveawayManager(),
+    async (req: Request, res: Response) => {
+      try {
+        const { guildId, userId } = req.params;
+        if (!isValidSnowflake(userId)) return clientError(res, "Invalid user ID");
+
+        const grant = req.body?.grant === true;
+        const config = await getGiveawaysPluginConfig(guildId);
+        const roleId: string | null = config.contributor_role_id ?? null;
+        if (!roleId) return clientError(res, "No contributor role is configured for this server");
+
+        await setGuildMemberRole(guildId, userId, roleId, grant);
+        res.json({ hasRole: grant });
+      } catch (err) {
+        serverError(res, `Failed to ${req.body?.grant ? "grant" : "revoke"} the contributor role`);
+      }
+    },
+  );
 
   // Powers the dashboard create form's template dropdown — just the names + the fields relevant to prefilling
   // the form (not manager_roles, which isn't a giveaway-creation concern).
@@ -267,16 +339,15 @@ export function initGuildGiveawaysAPI(router: express.Router) {
     }
   });
 
+  // Running only — "Recently finished" is its own paginated/searchable endpoint below, since unlike this list
+  // (typically just a handful at once) it needs to reach the guild's entire finished history.
   giveawaysRouter.get("/:guildId/giveaways", requireGiveawayManager(), async (req: Request, res: Response) => {
     try {
       const repo = GuildGiveaways.getGuildInstance(req.params.guildId);
-      const [running, recentlyFinished] = await Promise.all([
-        repo.getRunning(),
-        repo.getRecentlyFinished(RECENT_FINISHED_LIMIT),
-      ]);
+      const running = await repo.getRunning();
 
       const withEntryCounts = await Promise.all(
-        [...running, ...recentlyFinished].map(async (giveaway) => ({
+        running.map(async (giveaway) => ({
           ...giveaway,
           entry_count: await giveawayEntries.count(giveaway.id),
         })),
@@ -287,6 +358,51 @@ export function initGuildGiveawaysAPI(router: express.Router) {
       serverError(res, "Failed to load giveaways");
     }
   });
+
+  // Paginated + searchable across the guild's *entire* finished history (not just whatever's currently loaded
+  // client-side) — `search` matches a giveaway whose prize contains it, or whose host is it (as a raw ID) or
+  // matches it (as a username/nickname, resolved live via Discord's member search, so it only catches hosts
+  // still in the guild — see searchGuildMembersByUsername).
+  giveawaysRouter.get(
+    "/:guildId/giveaways/finished",
+    requireGiveawayManager(),
+    async (req: Request, res: Response) => {
+      try {
+        const search =
+          typeof req.query.search === "string" ? req.query.search.trim().slice(0, MAX_FINISHED_SEARCH_LENGTH) : "";
+        const page = Math.max(1, Math.trunc(Number(req.query.page)) || 1);
+        const pageSize = Math.min(
+          MAX_FINISHED_PAGE_SIZE,
+          Math.max(1, Math.trunc(Number(req.query.pageSize)) || DEFAULT_FINISHED_PAGE_SIZE),
+        );
+
+        const hostIds: string[] = [];
+        if (search) {
+          if (isValidSnowflake(search)) {
+            hostIds.push(search);
+          }
+          const usernameMatches = await searchGuildMembersByUsername(req.params.guildId, search, MAX_FINISHED_USERNAME_MATCHES);
+          for (const id of usernameMatches) {
+            if (!hostIds.includes(id)) hostIds.push(id);
+          }
+        }
+
+        const repo = GuildGiveaways.getGuildInstance(req.params.guildId);
+        const { items, total } = await repo.searchFinished({ search: search || null, hostIds, page, pageSize });
+
+        const withEntryCounts = await Promise.all(
+          items.map(async (giveaway) => ({
+            ...giveaway,
+            entry_count: await giveawayEntries.count(giveaway.id),
+          })),
+        );
+
+        res.json({ items: withEntryCounts, total, page, pageSize });
+      } catch (err) {
+        serverError(res, "Failed to load finished giveaways");
+      }
+    },
+  );
 
   giveawaysRouter.post("/:guildId/giveaways/:id/end", requireGiveawayManager(), async (req: Request, res: Response) => {
     try {

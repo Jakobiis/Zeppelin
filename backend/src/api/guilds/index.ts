@@ -1,6 +1,7 @@
 import express from "express";
 import { apiTokenAuthHandlers } from "../auth.js";
 import { initGuildDiscordDataAPI } from "./discordData.js";
+import { initGuildEconomyAPI } from "./economy.js";
 import { initGuildGeneralConfigSchemaAPI } from "./generalConfigSchema.js";
 import { initGuildGiveawaysAPI } from "./giveaways.js";
 import { initGuildsImportExportAPI } from "./importExport.js";
@@ -17,6 +18,7 @@ export function initGuildsAPI(router: express.Router) {
   initGuildGeneralConfigSchemaAPI(guildRouter);
   initGuildDiscordDataAPI(guildRouter);
   initGuildGiveawaysAPI(guildRouter);
+  initGuildEconomyAPI(guildRouter);
 
   router.use("/guilds", guildRouter);
 }

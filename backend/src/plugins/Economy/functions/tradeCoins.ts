@@ -1,6 +1,7 @@
 import { GuildPluginData } from "vety";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
 import { EconomyPluginType } from "../types.js";
+import { logGameHistory } from "./gameHistory.js";
 import { getSpendableBalance } from "./pendingBalance.js";
 
 // Guards floor()/ceil() against float rounding noise (e.g. 3 * 0.1 === 0.30000000000000004) at exchange-rate
@@ -61,6 +62,16 @@ export async function tradeCoins(
       // coins the user can actually spend.
       const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
 
+      await logGameHistory(pluginData, {
+        userId,
+        gameName: "trade",
+        gameType: "trade",
+        outcome: "win",
+        betAmount: 0,
+        amountChanged: coinsGained,
+        balanceAfter: newBalance,
+      });
+
       return { type: "result", direction, spent: actualPointsCost, received: coinsGained, newBalance };
     }
 
@@ -107,12 +118,33 @@ export async function tradeCoins(
       }
 
       const { spendable: cappedNewBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
+
+      await logGameHistory(pluginData, {
+        userId,
+        gameName: "tradeback",
+        gameType: "tradeback",
+        outcome: "loss",
+        betAmount: 0,
+        amountChanged: -actualCoinsSpent,
+        balanceAfter: cappedNewBalance,
+      });
+
       return { type: "result", direction, spent: actualCoinsSpent, received: actualPointsGained, newBalance: cappedNewBalance };
     }
 
     // Excludes any unrelated active hold (e.g. from a recent gift), so the displayed balance only counts
     // coins the user can actually spend.
     const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
+
+    await logGameHistory(pluginData, {
+      userId,
+      gameName: "tradeback",
+      gameType: "tradeback",
+      outcome: "loss",
+      betAmount: 0,
+      amountChanged: -amount,
+      balanceAfter: newBalance,
+    });
 
     return { type: "result", direction, spent: amount, received: pointsGained, newBalance };
   } finally {
