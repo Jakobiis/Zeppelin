@@ -17,13 +17,24 @@ export function currentWinnerIds(giveaway: Pick<Giveaway, "winner_ids" | "expire
  * The embed + "Enter" button for a running giveaway. Deliberately doesn't show live entry counts/requirements
  * detail beyond a summary line — the entry button itself is the source of truth for whether someone qualifies.
  */
-export function buildGiveawayEmbed(giveaway: Pick<Giveaway, "prize" | "host_id" | "winner_count" | "ends_at" | "embed_color" | "required_role_ids" | "message_requirement" | "extra_entries">): EmbedBuilder {
+export function buildGiveawayEmbed(
+  giveaway: Pick<
+    Giveaway,
+    "prize" | "host_id" | "winner_count" | "ends_at" | "embed_color" | "required_role_ids" | "message_requirement" | "counter_requirement" | "coins_requirement" | "extra_entries"
+  >,
+): EmbedBuilder {
   const requirementLines: string[] = [];
   if (giveaway.required_role_ids.length > 0) {
     requirementLines.push(`Requires: ${giveaway.required_role_ids.map((id) => `<@&${id}>`).join(", ")}`);
   }
   if (giveaway.message_requirement) {
     requirementLines.push(`Requires: ${giveaway.message_requirement.count} messages (${giveaway.message_requirement.period})`);
+  }
+  if (giveaway.counter_requirement) {
+    requirementLines.push(`Requires: ${giveaway.counter_requirement.count} ${giveaway.counter_requirement.counter_name}`);
+  }
+  if (giveaway.coins_requirement != null) {
+    requirementLines.push(`Requires: ${giveaway.coins_requirement} coins`);
   }
 
   const extraEntryEntries = Object.entries(giveaway.extra_entries);

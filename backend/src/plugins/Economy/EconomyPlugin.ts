@@ -19,6 +19,7 @@ import { TradeBackCmd } from "./commands/TradeBackCmd.js";
 import { TradeCmd } from "./commands/TradeCmd.js";
 import { WorkCmd } from "./commands/WorkCmd.js";
 import { getActiveBoostMultiplier } from "./functions/getActiveBoostMultiplier.js";
+import { getCounterName } from "./functions/getCounterName.js";
 import { EconomyPluginType, zEconomyConfig } from "./types.js";
 
 const defaultOverrides: Array<PluginOverride<EconomyPluginType>> = [
@@ -59,6 +60,7 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
   public(pluginData) {
     return {
       getActiveBoostMultiplier: makePublicFn(pluginData, getActiveBoostMultiplier),
+      getCounterName: makePublicFn(pluginData, getCounterName),
     };
   },
 

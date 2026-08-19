@@ -50,6 +50,13 @@ export interface GiveawayTemplate {
   extra_entries: Record<string, number>;
 }
 
+export interface GiveawayMemberInfo {
+  id: string;
+  username: string;
+  displayName: string;
+  avatar: string | null;
+}
+
 export interface GuildState {
   availableGuildsLoadStatus: LoadStatus;
   available: Map<
@@ -74,6 +81,9 @@ export interface GuildState {
   };
   giveawayTemplates: {
     [guildId: string]: GiveawayTemplate[];
+  };
+  giveawayMemberNames: {
+    [guildId: string]: { [userId: string]: GiveawayMemberInfo };
   };
 }
 

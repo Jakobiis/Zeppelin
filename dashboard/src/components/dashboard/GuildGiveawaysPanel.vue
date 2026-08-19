@@ -73,9 +73,31 @@
           Require a minimum message count
         </label>
         <div v-if="form.hasMessageRequirement" class="flex items-center gap-2 mt-2">
-          <ComboboxField class="w-40" :options="periodOptions" :model-value="form.messagePeriod" @update:model-value="form.messagePeriod = $event" />
-          <input type="number" min="1" class="field-input w-28" v-model.number="form.messageCount" />
+          <ComboboxField class="w-40" :options="periodOptions" placeholder="— Select period —" :model-value="form.messagePeriod" @update:model-value="form.messagePeriod = $event" />
+          <input type="number" min="1" class="field-input w-28" placeholder="Count" :value="form.messageCount ?? ''" @input="form.messageCount = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">messages</span>
+        </div>
+      </div>
+
+      <div class="mt-4">
+        <label class="flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" class="checkbox" v-model="form.hasCounterRequirement" />
+          Require a minimum counter value (e.g. activity points)
+        </label>
+        <div v-if="form.hasCounterRequirement" class="flex items-center gap-2 mt-2">
+          <input type="text" class="field-input w-40" placeholder="Counter name" v-model="form.counterName" />
+          <input type="number" min="1" class="field-input w-28" placeholder="Count" :value="form.counterCount ?? ''" @input="form.counterCount = numberOrNull(($event.target as HTMLInputElement).value)" />
+        </div>
+      </div>
+
+      <div class="mt-4">
+        <label class="flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" class="checkbox" v-model="form.hasCoinsRequirement" />
+          Require a minimum coin balance
+        </label>
+        <div v-if="form.hasCoinsRequirement" class="flex items-center gap-2 mt-2">
+          <input type="number" min="1" class="field-input w-28" placeholder="Count" :value="form.coinsCount ?? ''" @input="form.coinsCount = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <span class="text-sm text-muted-foreground">coins</span>
         </div>
       </div>
 
@@ -91,12 +113,12 @@
         <div class="flex-auto min-w-0">
           <div class="font-medium">#{{ giveaway.id }} {{ giveaway.prize }}</div>
           <div class="text-sm text-muted-foreground">
-            channel {{ giveaway.channel_id }} · host {{ giveaway.host_id }} · {{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner(s) · ends {{ formatDate(giveaway.ends_at) }}
+            channel {{ giveaway.channel_id }} · host {{ memberName(giveaway.host_id) }} · {{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner(s) · ends {{ formatDate(giveaway.ends_at) }}
           </div>
         </div>
         <div class="flex-none flex gap-2">
-          <button type="button" class="btn-secondary" @click="endGiveaway(giveaway)">End now</button>
-          <button type="button" class="btn-secondary" @click="cancelGiveaway(giveaway)">Cancel</button>
+          <button type="button" class="btn-secondary" @click="promptEnd(giveaway)">End now</button>
+          <button type="button" class="btn-secondary" @click="promptCancel(giveaway)">Cancel</button>
         </div>
       </div>
     </div>
@@ -108,17 +130,30 @@
         <div class="flex-auto min-w-0">
           <div class="font-medium">#{{ giveaway.id }} {{ giveaway.prize }}</div>
           <div class="text-sm text-muted-foreground">
+            host {{ memberName(giveaway.host_id) }} ·
             <span v-if="giveaway.status === 'cancelled'">cancelled</span>
             <span v-else-if="!currentWinnerIds(giveaway).length">ended, no eligible entries</span>
-            <span v-else>won by {{ currentWinnerIds(giveaway).join(', ') }}</span>
+            <span v-else>won by {{ currentWinnerIds(giveaway).map(memberName).join(', ') }}</span>
             · ended {{ formatDate(giveaway.ended_at) }}
           </div>
         </div>
         <div class="flex-none" v-if="giveaway.status === 'ended'">
-          <button type="button" class="btn-secondary" @click="rerollGiveaway(giveaway)">Reroll</button>
+          <button type="button" class="btn-secondary" @click="promptReroll(giveaway)">Reroll</button>
         </div>
       </div>
     </div>
+
+    <ConfirmModal
+      :open="!!confirmState"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :confirm-label="confirmLabel"
+      :show-number-input="confirmState?.type === 'reroll' && confirmState.giveaway.winner_count > 1"
+      number-label="How many times to reroll?"
+      :number-default="1"
+      @confirm="onConfirmModal"
+      @cancel="confirmState = null"
+    />
   </div>
 </template>
 
@@ -126,9 +161,10 @@
 import moment from "moment";
 import { mapState } from "vuex";
 import { ApiError } from "../../api";
-import { GiveawayApiItem, GiveawayTemplate, GuildState } from "../../store/types";
+import { GiveawayApiItem, GiveawayMemberInfo, GiveawayTemplate, GuildState } from "../../store/types";
 import ColorPickerField from "./ColorPickerField.vue";
 import ComboboxField from "./ComboboxField.vue";
+import ConfirmModal from "./ConfirmModal.vue";
 import RoleChannelPickerField from "./RoleChannelPickerField.vue";
 import RoleEntryMapField, { RoleEntryMapRow } from "./RoleEntryMapField.vue";
 import RoleListField from "./RoleListField.vue";
@@ -139,6 +175,8 @@ const PERIOD_OPTIONS = [
   { value: "monthly", label: "Monthly" },
   { value: "allTime", label: "All-time" },
 ];
+
+type ConfirmState = { type: "end" | "cancel" | "reroll"; giveaway: GiveawayApiItem };
 
 function defaultForm() {
   return {
@@ -154,13 +192,18 @@ function defaultForm() {
     blacklisted_role_ids: [] as (string | null)[],
     extra_entries: [] as RoleEntryMapRow[],
     hasMessageRequirement: false,
-    messagePeriod: "daily",
-    messageCount: 100,
+    messagePeriod: null as string | null,
+    messageCount: null as number | null,
+    hasCounterRequirement: false,
+    counterName: "",
+    counterCount: null as number | null,
+    hasCoinsRequirement: false,
+    coinsCount: null as number | null,
   };
 }
 
 export default {
-  components: { RoleChannelPickerField, ColorPickerField, ComboboxField, RoleListField, RoleEntryMapField },
+  components: { RoleChannelPickerField, ColorPickerField, ComboboxField, RoleListField, RoleEntryMapField, ConfirmModal },
 
   props: {
     guildId: { type: String, required: true },
@@ -172,6 +215,7 @@ export default {
       creating: false,
       createError: null as string | null,
       periodOptions: PERIOD_OPTIONS,
+      confirmState: null as ConfirmState | null,
     };
   },
 
@@ -182,6 +226,9 @@ export default {
       },
       templates(state: GuildState): GiveawayTemplate[] {
         return state.giveawayTemplates[this.guildId] || [];
+      },
+      memberNames(state: GuildState): { [userId: string]: GiveawayMemberInfo } {
+        return state.giveawayMemberNames[this.guildId] || {};
       },
     }),
 
@@ -195,6 +242,25 @@ export default {
 
     templateOptions() {
       return this.templates.map((t: GiveawayTemplate) => ({ value: t.name, label: t.name }));
+    },
+
+    confirmTitle() {
+      if (!this.confirmState) return "";
+      return { end: "End giveaway", cancel: "Cancel giveaway", reroll: "Reroll giveaway" }[this.confirmState.type];
+    },
+
+    confirmMessage() {
+      const state = this.confirmState;
+      if (!state) return "";
+      const label = `#${state.giveaway.id} (${state.giveaway.prize})`;
+      if (state.type === "end") return `End giveaway ${label} now and pick winner(s)?`;
+      if (state.type === "cancel") return `Cancel giveaway ${label}? No winners will be picked.`;
+      return `Reroll winner(s) for giveaway ${label}?`;
+    },
+
+    confirmLabel() {
+      if (!this.confirmState) return "Confirm";
+      return { end: "End now", cancel: "Cancel giveaway", reroll: "Reroll" }[this.confirmState.type];
     },
   },
 
@@ -210,12 +276,26 @@ export default {
     if (this.templates.some((t: GiveawayTemplate) => t.name === "default")) {
       this.applyTemplate("default");
     }
+
+    const ids = this.allGiveaways.flatMap((g: GiveawayApiItem) => [g.host_id, ...g.winner_ids]);
+    this.$store.dispatch("guilds/loadGiveawayMemberNames", { guildId: this.guildId, ids }).catch(() => {});
   },
 
   methods: {
     formatDate(dateStr: string | null) {
       if (!dateStr) return "";
       return moment.utc(dateStr).local().format("YYYY-MM-DD HH:mm");
+    },
+
+    numberOrNull(raw: string): number | null {
+      if (raw === "") return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    },
+
+    memberName(id: string): string {
+      const member = this.memberNames[id];
+      return member ? member.displayName : id;
     },
 
     // winner_ids is append-only full history (every reroll adds to it, never removes) — this is who currently
@@ -254,6 +334,18 @@ export default {
         this.createError = "Channel is required.";
         return;
       }
+      if (this.form.hasMessageRequirement && (!this.form.messagePeriod || !this.form.messageCount)) {
+        this.createError = "Pick a period and count for the message requirement, or untick it.";
+        return;
+      }
+      if (this.form.hasCounterRequirement && (!this.form.counterName.trim() || !this.form.counterCount)) {
+        this.createError = "Enter a counter name and count for the counter requirement, or untick it.";
+        return;
+      }
+      if (this.form.hasCoinsRequirement && !this.form.coinsCount) {
+        this.createError = "Enter a count for the coins requirement, or untick it.";
+        return;
+      }
 
       this.creating = true;
       try {
@@ -276,6 +368,10 @@ export default {
             message_requirement: this.form.hasMessageRequirement
               ? { period: this.form.messagePeriod, count: this.form.messageCount }
               : null,
+            counter_requirement: this.form.hasCounterRequirement
+              ? { counter_name: this.form.counterName.trim(), count: this.form.counterCount }
+              : null,
+            coins_requirement: this.form.hasCoinsRequirement ? this.form.coinsCount : null,
           },
         });
         this.form = defaultForm();
@@ -286,19 +382,30 @@ export default {
       }
     },
 
-    async endGiveaway(giveaway: GiveawayApiItem) {
-      if (!window.confirm(`End giveaway #${giveaway.id} (${giveaway.prize}) now and pick winner(s)?`)) return;
-      await this.$store.dispatch("guilds/endGiveaway", { guildId: this.guildId, giveawayId: giveaway.id });
+    promptEnd(giveaway: GiveawayApiItem) {
+      this.confirmState = { type: "end", giveaway };
     },
 
-    async cancelGiveaway(giveaway: GiveawayApiItem) {
-      if (!window.confirm(`Cancel giveaway #${giveaway.id} (${giveaway.prize})? No winners will be picked.`)) return;
-      await this.$store.dispatch("guilds/cancelGiveaway", { guildId: this.guildId, giveawayId: giveaway.id });
+    promptCancel(giveaway: GiveawayApiItem) {
+      this.confirmState = { type: "cancel", giveaway };
     },
 
-    async rerollGiveaway(giveaway: GiveawayApiItem) {
-      if (!window.confirm(`Reroll winner(s) for giveaway #${giveaway.id} (${giveaway.prize})?`)) return;
-      await this.$store.dispatch("guilds/rerollGiveaway", { guildId: this.guildId, giveawayId: giveaway.id });
+    promptReroll(giveaway: GiveawayApiItem) {
+      this.confirmState = { type: "reroll", giveaway };
+    },
+
+    async onConfirmModal(amount: number | undefined) {
+      const state = this.confirmState;
+      if (!state) return;
+      this.confirmState = null;
+
+      if (state.type === "end") {
+        await this.$store.dispatch("guilds/endGiveaway", { guildId: this.guildId, giveawayId: state.giveaway.id });
+      } else if (state.type === "cancel") {
+        await this.$store.dispatch("guilds/cancelGiveaway", { guildId: this.guildId, giveawayId: state.giveaway.id });
+      } else {
+        await this.$store.dispatch("guilds/rerollGiveaway", { guildId: this.guildId, giveawayId: state.giveaway.id, amount: amount ?? 1 });
+      }
     },
   },
 };

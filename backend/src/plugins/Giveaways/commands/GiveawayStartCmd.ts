@@ -27,6 +27,8 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
     messages: ct.string({ option: true }),
     template: ct.string({ option: true, shortcut: "t" }),
     claim: ct.string({ option: true }),
+    activity: ct.string({ option: true }),
+    coins: ct.number({ option: true }),
   },
 
   async run({ pluginData, message, args }) {
@@ -115,6 +117,22 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
       claimTimeMs = convertDelayStringToMS(template.claim_time);
     }
 
+    let counterRequirement: { counter_name: string; count: number } | null = null;
+    if (args.activity) {
+      const [counterName, countStr] = args.activity.split(":");
+      const count = Number.parseInt(countStr ?? "", 10);
+      if (!counterName || !Number.isInteger(count) || count < 1) {
+        void pluginData.state.common.sendErrorMessage(message, "`-activity` must look like `activity:100` (counter name, then a positive count).");
+        return;
+      }
+      counterRequirement = { counter_name: counterName, count };
+    }
+
+    if (args.coins != null && (!Number.isInteger(args.coins) || args.coins < 1)) {
+      void pluginData.state.common.sendErrorMessage(message, "`-coins` must be a positive whole number.");
+      return;
+    }
+
     const giveaway = await createGiveawayRecord(pluginData.guild.id, {
       channel_id: channel.id,
       host_id: hostId,
@@ -127,6 +145,8 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
       blacklisted_role_ids: blacklistedRoleIds,
       extra_entries: template?.extra_entries ?? {},
       message_requirement: messageRequirement,
+      counter_requirement: counterRequirement,
+      coins_requirement: args.coins ?? null,
       claim_time_ms: claimTimeMs,
     });
 

@@ -4,15 +4,20 @@ import { MessageCounts } from "../../../data/GuildMessageTrackerCounts.js";
 export type EntryRequirementResult = { allowed: true } | { allowed: false; reason: string };
 
 /**
- * Checks whether a member (given their current role IDs and message counts) is allowed to enter a giveaway.
- * Blacklisted role always wins, even over a bypass role. A bypass role skips the required-role and
- * message-count checks entirely. Otherwise the member must have ALL required roles and meet the message
- * requirement (if any).
+ * Checks whether a member (given their current role IDs, message counts, and counter/coin values) is allowed
+ * to enter a giveaway. Blacklisted role always wins, even over a bypass role. A bypass role skips every other
+ * check (required roles, message count, counter, coins) entirely. Otherwise the member must have ALL required
+ * roles and meet every configured requirement.
  */
 export function checkEntryRequirements(
-  giveaway: Pick<Giveaway, "required_role_ids" | "bypass_role_ids" | "blacklisted_role_ids" | "message_requirement">,
+  giveaway: Pick<
+    Giveaway,
+    "required_role_ids" | "bypass_role_ids" | "blacklisted_role_ids" | "message_requirement" | "counter_requirement" | "coins_requirement"
+  >,
   memberRoleIds: string[],
   messageCounts: MessageCounts | null,
+  counterValue: number | null,
+  coinsValue: number | null,
 ): EntryRequirementResult {
   if (giveaway.blacklisted_role_ids.some((roleId) => memberRoleIds.includes(roleId))) {
     return { allowed: false, reason: "You are not allowed to enter this giveaway." };
@@ -35,6 +40,27 @@ export function checkEntryRequirements(
       return {
         allowed: false,
         reason: `You need at least ${count} messages (${period}) to enter this giveaway. You currently have ${actual}.`,
+      };
+    }
+  }
+
+  if (giveaway.counter_requirement) {
+    const { counter_name, count } = giveaway.counter_requirement;
+    const actual = counterValue ?? 0;
+    if (actual < count) {
+      return {
+        allowed: false,
+        reason: `You need at least ${count} ${counter_name} to enter this giveaway. You currently have ${actual}.`,
+      };
+    }
+  }
+
+  if (giveaway.coins_requirement != null) {
+    const actual = coinsValue ?? 0;
+    if (actual < giveaway.coins_requirement) {
+      return {
+        allowed: false,
+        reason: `You need at least ${giveaway.coins_requirement} coins to enter this giveaway. You currently have ${actual}.`,
       };
     }
   }

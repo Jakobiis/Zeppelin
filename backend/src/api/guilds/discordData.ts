@@ -51,6 +51,33 @@ export async function getGuildMemberRoleIds(guildId: string, userId: string): Pr
   }
 }
 
+export interface GuildMemberDisplayInfo {
+  id: string;
+  username: string;
+  displayName: string;
+  avatar: string | null;
+}
+
+// Used by the Giveaways dashboard page to show winner/host names instead of raw IDs. Discord has no bulk
+// "look up several arbitrary users" endpoint, so a caller resolving several IDs (see
+// api/guilds/giveaways.ts's /members route) just calls this once per ID — each call is still cached/de-duped
+// the same as the single-member lookup above. Returns null if the user isn't currently a guild member (e.g.
+// they left after winning) rather than throwing, so one missing member doesn't break the whole batch.
+export async function getGuildMemberDisplayInfo(guildId: string, userId: string): Promise<GuildMemberDisplayInfo | null> {
+  try {
+    const member = await cachedDiscordBotRequest(`member:${guildId}:${userId}`, `guilds/${guildId}/members/${userId}`);
+    const user = member.user ?? {};
+    return {
+      id: userId,
+      username: user.username ?? userId,
+      displayName: member.nick ?? user.global_name ?? user.username ?? userId,
+      avatar: user.avatar ? `https://cdn.discordapp.com/avatars/${userId}/${user.avatar}.${user.avatar.startsWith("a_") ? "gif" : "png"}?size=32` : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function initGuildDiscordDataAPI(router: express.Router) {
   const discordDataRouter = express.Router();
 

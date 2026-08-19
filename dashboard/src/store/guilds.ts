@@ -13,6 +13,7 @@ export const GuildStore: Module<GuildState, RootState> = {
     giveawayAccess: {},
     giveaways: {},
     giveawayTemplates: {},
+    giveawayMemberNames: {},
   },
 
   actions: {
@@ -95,8 +96,8 @@ export const GuildStore: Module<GuildState, RootState> = {
       await dispatch("loadGiveaways", guildId);
     },
 
-    async rerollGiveaway({ dispatch }, { guildId, giveawayId }) {
-      await post(`guilds/${guildId}/giveaways/${giveawayId}/reroll`);
+    async rerollGiveaway({ dispatch }, { guildId, giveawayId, amount }) {
+      await post(`guilds/${guildId}/giveaways/${giveawayId}/reroll`, { amount });
       await dispatch("loadGiveaways", guildId);
     },
 
@@ -113,6 +114,13 @@ export const GuildStore: Module<GuildState, RootState> = {
     async createGiveaway({ dispatch }, { guildId, giveaway }) {
       await post(`guilds/${guildId}/giveaways`, giveaway);
       await dispatch("loadGiveaways", guildId);
+    },
+
+    async loadGiveawayMemberNames({ commit }, { guildId, ids }) {
+      const uniqueIds = [...new Set(ids)];
+      if (!uniqueIds.length) return;
+      const members = await get(`guilds/${guildId}/giveaways/members`, { ids: uniqueIds.join(",") });
+      commit("setGiveawayMemberNames", { guildId, members });
     },
   },
 
@@ -177,6 +185,15 @@ export const GuildStore: Module<GuildState, RootState> = {
 
     setGiveawayTemplates(state: GuildState, { guildId, templates }) {
       state.giveawayTemplates = { ...state.giveawayTemplates, [guildId]: templates };
+    },
+
+    setGiveawayMemberNames(state: GuildState, { guildId, members }) {
+      const existing = state.giveawayMemberNames[guildId] || {};
+      const next = { ...existing };
+      for (const member of members) {
+        next[member.id] = member;
+      }
+      state.giveawayMemberNames = { ...state.giveawayMemberNames, [guildId]: next };
     },
   },
 };

@@ -7,12 +7,13 @@ import { finalizeGiveaway, rerollGiveaway } from "../../plugins/Giveaways/functi
 import { parseMessagePeriod } from "../../plugins/MessageTracker/functions/messagePeriods.js";
 import { convertDelayStringToMS, isValidSnowflake } from "../../utils.js";
 import { loadYamlSafely } from "../../utils/loadYamlSafely.js";
-import { getGuildMemberRoleIds } from "./discordData.js";
+import { getGuildMemberDisplayInfo, getGuildMemberRoleIds } from "./discordData.js";
 import { clientError, notFound, ok, serverError, unauthorized } from "../responses.js";
 
 const RECENT_FINISHED_LIMIT = 20;
 const MAX_ROLES_PER_FIELD = 20;
 const MAX_EXTRA_ENTRY_ROLES = 20;
+const MAX_MEMBER_LOOKUP_IDS = 100;
 
 const configs = new Configs();
 const giveawayEntries = new GiveawayEntries();
@@ -86,6 +87,28 @@ function requireGiveawayManager() {
 
 export function initGuildGiveawaysAPI(router: express.Router) {
   const giveawaysRouter = express.Router();
+
+  // Resolves winner/host user IDs to display names for the dashboard's giveaway list — one bot-token REST call
+  // per ID (Discord has no bulk lookup), each cached/de-duped by getGuildMemberDisplayInfo already. IDs that
+  // aren't currently guild members (e.g. left after winning) are just omitted rather than erroring the batch.
+  giveawaysRouter.get(
+    "/:guildId/giveaways/members",
+    requireGiveawayManager(),
+    async (req: Request, res: Response) => {
+      try {
+        const ids = String(req.query.ids ?? "")
+          .split(",")
+          .map((id) => id.trim())
+          .filter((id) => isValidSnowflake(id))
+          .slice(0, MAX_MEMBER_LOOKUP_IDS);
+
+        const members = await Promise.all(ids.map((id) => getGuildMemberDisplayInfo(req.params.guildId, id)));
+        res.json(members.filter((m) => m != null));
+      } catch (err) {
+        serverError(res, "Failed to resolve member names");
+      }
+    },
+  );
 
   giveawaysRouter.get("/:guildId/giveaways/access", async (req: Request, res: Response) => {
     const isManager = await isGiveawayManager(req.params.guildId, req.user!.userId);
@@ -165,6 +188,25 @@ export function initGuildGiveawaysAPI(router: express.Router) {
         messageRequirement = { period, count };
       }
 
+      let counterRequirement: { counter_name: string; count: number } | null = null;
+      if (body.counter_requirement) {
+        const counterName = typeof body.counter_requirement.counter_name === "string" ? body.counter_requirement.counter_name.trim() : "";
+        const count = Number(body.counter_requirement.count);
+        if (!counterName || !Number.isInteger(count) || count < 1) {
+          return clientError(res, "Invalid counter requirement");
+        }
+        counterRequirement = { counter_name: counterName, count };
+      }
+
+      let coinsRequirement: number | null = null;
+      if (body.coins_requirement != null) {
+        const count = Number(body.coins_requirement);
+        if (!Number.isInteger(count) || count < 1) {
+          return clientError(res, "Coins requirement must be a positive whole number");
+        }
+        coinsRequirement = count;
+      }
+
       try {
         const giveaway = await createGiveawayRecord(req.params.guildId, {
           channel_id: channelId,
@@ -178,6 +220,8 @@ export function initGuildGiveawaysAPI(router: express.Router) {
           blacklisted_role_ids: body.blacklisted_role_ids ? sanitizeRoleIds(body.blacklisted_role_ids) : template?.blacklisted_roles ?? [],
           extra_entries: body.extra_entries ? sanitizeExtraEntries(body.extra_entries) : template?.extra_entries ?? {},
           message_requirement: messageRequirement,
+          counter_requirement: counterRequirement,
+          coins_requirement: coinsRequirement,
           claim_time_ms: (() => {
             if (typeof body.claim_time === "string" && body.claim_time) return convertDelayStringToMS(body.claim_time);
             if (template?.claim_time) return convertDelayStringToMS(template.claim_time);

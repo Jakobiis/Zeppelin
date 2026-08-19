@@ -51,6 +51,13 @@ export class GuildCounters extends BaseGuildRepository {
     this.counterDecayAmountOverrideStates = dataSource.getRepository(CounterDecayAmountOverrideState);
   }
 
+  // Read-only, unlike findOrCreateCounter — used by Giveaways' counter-based entry requirements (see
+  // plugins/Giveaways/functions/counterRequirements.ts), which shouldn't create a counter that doesn't exist
+  // just because someone clicked Enter on a giveaway that references it.
+  findCounterByName(name: string): Promise<Counter | null> {
+    return this.counters.findOne({ where: { guild_id: this.guildId, name } });
+  }
+
   async findOrCreateCounter(name: string, perChannel: boolean, perUser: boolean): Promise<Counter> {
     const existing = await this.counters.findOne({
       where: {

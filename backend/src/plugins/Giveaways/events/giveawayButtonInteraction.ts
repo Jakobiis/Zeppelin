@@ -8,6 +8,7 @@ import { buildParticipantsEmbed } from "../functions/buildParticipantsEmbed.js";
 import { checkEntryRequirements } from "../functions/checkEntryRequirements.js";
 import { markWinnerClaimed } from "../functions/claimGiveaway.js";
 import { computeEntryWeight } from "../functions/computeEntryWeight.js";
+import { getCoinsValueForUser, getNamedCounterValueForUser } from "../functions/counterRequirements.js";
 import { createGiveawayThread } from "../functions/giveawayThread.js";
 import { hasGiveawayManagerRole } from "../functions/requireGiveawayManager.js";
 import { GiveawaysPluginType } from "../types.js";
@@ -138,7 +139,13 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
       ? await GuildMessageTrackerCounts.getGuildInstance(pluginData.guild.id).getForUser(member.id)
       : null;
 
-    const check = checkEntryRequirements(giveaway, memberRoleIds, messageCounts);
+    const counterValue = giveaway.counter_requirement
+      ? await getNamedCounterValueForUser(pluginData.guild.id, giveaway.counter_requirement.counter_name, member.id)
+      : null;
+
+    const coinsValue = giveaway.coins_requirement != null ? await getCoinsValueForUser(pluginData, member.id) : null;
+
+    const check = checkEntryRequirements(giveaway, memberRoleIds, messageCounts, counterValue, coinsValue);
     if (!check.allowed) {
       await args.interaction.reply({ ephemeral: true, content: check.reason }).catch(() => null);
       return;
