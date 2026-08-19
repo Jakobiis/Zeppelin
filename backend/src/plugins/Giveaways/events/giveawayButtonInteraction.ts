@@ -2,7 +2,7 @@ import { GuildMember } from "discord.js";
 import { guildPluginEventListener } from "vety";
 import { GiveawayEntries } from "../../../data/GiveawayEntries.js";
 import { GuildMessageTrackerCounts } from "../../../data/GuildMessageTrackerCounts.js";
-import { parseCustomId } from "../../../utils/parseCustomId.js";
+import { getCustomIdNamespace, parseCustomId } from "../../../utils/parseCustomId.js";
 import { buildGiveawayButtons } from "../functions/buildGiveawayMessage.js";
 import { buildParticipantsEmbed } from "../functions/buildParticipantsEmbed.js";
 import { checkEntryRequirements } from "../functions/checkEntryRequirements.js";
@@ -28,11 +28,14 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
       return;
     }
 
-    const { namespace, data } = parseCustomId(args.interaction.customId);
-    if (!BUTTON_NAMESPACES.includes(namespace)) {
+    // Cheap namespace-only check first — every button click bot-wide reaches this listener, including ones from
+    // features that don't use this codebase's JSON custom-id convention at all, and parseCustomId logs a debug
+    // warning if it tries to JSON-parse one of those (see its comment).
+    if (!BUTTON_NAMESPACES.includes(getCustomIdNamespace(args.interaction.customId))) {
       return;
     }
 
+    const { namespace, data } = parseCustomId(args.interaction.customId);
     const giveawayId: number | undefined = data?.id;
     if (giveawayId == null) {
       return;

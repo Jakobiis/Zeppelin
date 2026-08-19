@@ -2,7 +2,7 @@ import { GuildMember } from "discord.js";
 import { guildPluginEventListener } from "vety";
 import { SECONDS } from "../../../utils.js";
 import { renderRecursively } from "../../../utils.js";
-import { parseCustomId } from "../../../utils/parseCustomId.js";
+import { getCustomIdNamespace, parseCustomId } from "../../../utils/parseCustomId.js";
 import { RoleManagerPlugin } from "../../RoleManager/RoleManagerPlugin.js";
 import { getAllRolesInButtons } from "../functions/getAllRolesInButtons.js";
 import { RoleButtonsPluginType, TRoleButtonOption } from "../types.js";
@@ -18,10 +18,14 @@ export const onButtonInteraction = guildPluginEventListener<RoleButtonsPluginTyp
       return;
     }
 
-    const { namespace, data } = parseCustomId(args.interaction.customId);
-    if (namespace !== "roleButtons") {
+    // Cheap namespace-only check first — every button click bot-wide reaches this listener, including ones from
+    // features that don't use this codebase's JSON custom-id convention at all, and parseCustomId logs a debug
+    // warning if it tries to JSON-parse one of those (see its comment).
+    if (getCustomIdNamespace(args.interaction.customId) !== "roleButtons") {
       return;
     }
+
+    const { data } = parseCustomId(args.interaction.customId);
 
     const config = pluginData.config.get();
     const { name, index: optionIndex } = data;

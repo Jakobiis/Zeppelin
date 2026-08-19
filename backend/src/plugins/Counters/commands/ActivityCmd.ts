@@ -20,6 +20,7 @@ import {
 } from "../../../data/entities/CounterTrigger.js";
 import { humanizeDuration } from "../../../humanizeDuration.js";
 import { MINUTES, convertDelayStringToMS, noop } from "../../../utils.js";
+import { getGuildPrefix } from "../../../utils/getGuildPrefix.js";
 import { CountersPluginType, zCounter } from "../types.js";
 
 export const ACTIVITY_COUNTER_NAME = "activity";
@@ -328,7 +329,8 @@ export async function buildActivityInfoEmbed(
         sections.push(cooldownLines.join("\n"));
     }
     if (earningLines.length) {
-        sections.push(`**Earning Points**\n${earningLines.join("\n")}\n-# **To see active boosts, use \`/boosts\`**`);
+        const prefix = getGuildPrefix(pluginData);
+        sections.push(`**Earning Points**\n${earningLines.join("\n")}\n-# **To see active boosts, use \`${prefix}boosts\`**`);
     }
 
     if (counter.decay) {
