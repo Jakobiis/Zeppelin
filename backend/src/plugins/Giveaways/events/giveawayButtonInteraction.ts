@@ -84,8 +84,9 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
       await args.interaction.deferReply({ ephemeral: true }).catch(() => null);
 
       let thread;
+      let sendError: string | null;
       try {
-        thread = await createGiveawayThread(pluginData, giveaway, member.id);
+        ({ thread, sendError } = await createGiveawayThread(pluginData, giveaway, member.id));
       } catch (err) {
         console.error(`[GIVEAWAYS] Failed to create winner thread for giveaway ${giveaway.id}, winner ${member.id}:`, err);
         await args.interaction.editReply({ content: "Couldn't create the thread — the giveaway's channel may no longer exist or the bot may be missing permissions." }).catch(() => null);
@@ -95,7 +96,10 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
       await pluginData.state.giveaways.update(giveaway.id, {
         winner_thread_ids: { ...giveaway.winner_thread_ids, [member.id]: thread.id },
       });
-      await args.interaction.editReply({ content: `Thread created: <#${thread.id}>` }).catch(() => null);
+      const reply = sendError
+        ? `Thread created: <#${thread.id}> — but I couldn't post the opening message in it (${sendError}).`
+        : `Thread created: <#${thread.id}>`;
+      await args.interaction.editReply({ content: reply }).catch(() => null);
       return;
     }
 

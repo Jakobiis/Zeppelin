@@ -3,6 +3,7 @@ import { guildPluginMessageCommand } from "vety";
 import { humanizeDuration } from "../../../humanizeDuration.js";
 import { getGuildEmbedColor } from "../../../utils/getGuildEmbedColor.js";
 import { EconomyPluginType } from "../types.js";
+import { getGuildPrefix } from "utils/getGuildPrefix.js";
 
 export const ShopStatusCmd = guildPluginMessageCommand<EconomyPluginType>()({
   trigger: ["shop status", "shop boosts"],
@@ -13,14 +14,14 @@ export const ShopStatusCmd = guildPluginMessageCommand<EconomyPluginType>()({
   async run({ pluginData, message }) {
     const config = pluginData.config.get();
     const userId = message.author.id;
-
+    const prefix = getGuildPrefix(pluginData);
     const [coinsBoost, activityBoost] = await Promise.all([
       pluginData.state.shop.getActiveBoost(userId, "coins"),
       pluginData.state.shop.getActiveBoost(userId, "activity"),
     ]);
 
     if (!coinsBoost && !activityBoost) {
-      void message.channel.send("You don't have any active boosts. Check `!shop` to buy one.");
+      void message.channel.send(`You don't have any active boosts. Check \`${prefix}shop\` to buy one.`);
       return;
     }
 

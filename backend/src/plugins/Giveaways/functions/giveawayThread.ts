@@ -13,7 +13,15 @@ import { GiveawaysPluginType } from "../types.js";
  * a "manage giveaways" role is expected to already have Manage Threads on the channel, which is enough for its
  * holders to see/join the private thread without notifying all of them every time a winner opens one.
  */
-export async function createGiveawayThread(pluginData: GuildPluginData<GiveawaysPluginType>, giveaway: Giveaway, winnerId: string): Promise<ThreadChannel> {
+export interface CreateGiveawayThreadResult {
+  thread: ThreadChannel;
+  // Set when the thread itself (and its member access) was created fine but the opening info message failed to
+  // send — the caller still has a usable thread, just one worth surfacing this to the winner/host about instead
+  // of silently swallowing (see the console.error right below where this is set).
+  sendError: string | null;
+}
+
+export async function createGiveawayThread(pluginData: GuildPluginData<GiveawaysPluginType>, giveaway: Giveaway, winnerId: string): Promise<CreateGiveawayThreadResult> {
   // Private threads are a GuildText-only feature — Discord doesn't support them in announcement/forum/etc.
   // channels, so unlike the rest of this codebase's channel handling there's no broader "text-based" check here.
   const channel = pluginData.guild.channels.cache.get(giveaway.channel_id as Snowflake);
@@ -33,8 +41,10 @@ export async function createGiveawayThread(pluginData: GuildPluginData<Giveaways
 
   // Host + this one winner always get in explicitly so they're guaranteed access even if they don't otherwise
   // have Manage Threads on the channel. The holder (if this giveaway is staff-held) joins them, since they're
-  // the one who'll actually be handing the prize over.
-  const memberIds = giveaway.holder_id ? [giveaway.host_id, giveaway.holder_id, winnerId] : [giveaway.host_id, winnerId];
+  // the one who'll actually be handing the prize over. Deduped — the host/holder/winner aren't guaranteed to be
+  // distinct people (e.g. a host who also entered and won their own giveaway), and a duplicate ID in
+  // allowed_mentions.users makes Discord reject the whole request with a 400 (Invalid Form Body).
+  const memberIds = [...new Set(giveaway.holder_id ? [giveaway.host_id, giveaway.holder_id, winnerId] : [giveaway.host_id, winnerId])];
   for (const userId of memberIds) {
     await thread.members.add(userId).catch(() => null);
   }
@@ -56,8 +66,10 @@ export async function createGiveawayThread(pluginData: GuildPluginData<Giveaways
     .setDescription(descriptionLines.join("\n"));
 
   // Best-effort: the thread itself (and who can access it) is already fully set up by this point, so a failure
-  // sending its opening message — e.g. the bot missing "Send Messages in Threads" — shouldn't make the whole
-  // operation look like it failed to the caller.
+  // sending its opening message shouldn't make the whole operation look like it failed to the caller — but it's
+  // still surfaced back (see sendError) rather than only logged, since a silent failure here would otherwise
+  // just look like a normal empty thread with no obvious explanation.
+  let sendError: string | null = null;
   await thread
     .send({
       content: pingMentions,
@@ -65,7 +77,10 @@ export async function createGiveawayThread(pluginData: GuildPluginData<Giveaways
       components: [buildDeleteThreadButtonRow(giveaway.id, winnerId)],
       allowedMentions: { users: memberIds },
     })
-    .catch((err) => console.error(`[GIVEAWAYS] Failed to send opening message in thread ${thread.id}:`, err));
+    .catch((err) => {
+      console.error(`[GIVEAWAYS] Failed to send opening message in thread ${thread.id}:`, err);
+      sendError = err instanceof Error ? err.message : String(err);
+    });
 
-  return thread;
+  return { thread, sendError };
 }
