@@ -1,3 +1,4 @@
+import { Giveaway } from "./entities/Giveaway.js";
 import { Mute } from "./entities/Mute.js";
 import { Reminder } from "./entities/Reminder.js";
 import { ScheduledPost } from "./entities/ScheduledPost.js";
@@ -11,6 +12,7 @@ interface GuildEventArgs extends Record<string, unknown[]> {
   reminder: [Reminder];
   expiredTempban: [Tempban];
   expiredVCAlert: [VCAlert];
+  giveawayEnd: [Giveaway];
 }
 
 type GuildEvent = keyof GuildEventArgs;

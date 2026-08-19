@@ -38,6 +38,19 @@ function cachedDiscordBotRequest(cacheKey: string, path: string): Promise<any> {
   return promise;
 }
 
+// Used by the Giveaways dashboard page's access check (backend/src/api/guilds/giveaways.ts) — the dashboard
+// has no OAuth scope for a user's live guild roles, so this asks Discord for them using the bot's own
+// membership in the guild instead, same cache/error-handling shape as the role/channel/emoji lookups above.
+// Returns null (not an empty array) if the user isn't currently a member of the guild.
+export async function getGuildMemberRoleIds(guildId: string, userId: string): Promise<string[] | null> {
+  try {
+    const member = await cachedDiscordBotRequest(`member:${guildId}:${userId}`, `guilds/${guildId}/members/${userId}`);
+    return (member.roles as string[]) ?? [];
+  } catch {
+    return null;
+  }
+}
+
 export function initGuildDiscordDataAPI(router: express.Router) {
   const discordDataRouter = express.Router();
 

@@ -25,6 +25,8 @@ import { CustomEventsPlugin } from "./CustomEvents/CustomEventsPlugin.js";
 import { customEventsPluginDocs } from "./CustomEvents/docs.js";
 import { EconomyPlugin } from "./Economy/EconomyPlugin.js";
 import { economyPluginDocs } from "./Economy/docs.js";
+import { GiveawaysPlugin } from "./Giveaways/GiveawaysPlugin.js";
+import { giveawaysPluginDocs } from "./Giveaways/docs.js";
 import { GuildAccessMonitorPlugin } from "./GuildAccessMonitor/GuildAccessMonitorPlugin.js";
 import { guildAccessMonitorPluginDocs } from "./GuildAccessMonitor/docs.js";
 import { GuildConfigReloaderPlugin } from "./GuildConfigReloader/GuildConfigReloaderPlugin.js";
@@ -139,6 +141,10 @@ export const availableGuildPlugins: ZeppelinGuildPluginInfo[] = [
   {
     plugin: EconomyPlugin,
     docs: economyPluginDocs,
+  },
+  {
+    plugin: GiveawaysPlugin,
+    docs: giveawaysPluginDocs,
   },
   {
     plugin: GuildInfoSaverPlugin,

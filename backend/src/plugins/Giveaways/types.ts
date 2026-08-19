@@ -1,0 +1,37 @@
+import { BasePluginType, pluginUtils } from "vety";
+import { z } from "zod";
+import { GuildGiveaways } from "../../data/GuildGiveaways.js";
+import { zBoundedCharacters, zBoundedRecord, zSnowflake } from "../../utils.js";
+import { CommonPlugin } from "../Common/CommonPlugin.js";
+
+const MAX_ROLES_PER_LIST = 20;
+const MAX_EXTRA_ENTRY_ROLES = 20;
+const MAX_TEMPLATES = 20;
+
+const zGiveawayTemplate = z.strictObject({
+  channel_id: zSnowflake.optional(),
+  // Same validator as the top-level embed_color field (backend/src/types.ts) — a decimal or hex (0x...) number.
+  embed_color: z.number().int().min(0).max(0xffffff).optional(),
+  bypass_roles: z.array(zSnowflake).max(MAX_ROLES_PER_LIST).default([]),
+  blacklisted_roles: z.array(zSnowflake).max(MAX_ROLES_PER_LIST).default([]),
+  extra_entries: zBoundedRecord(z.record(zSnowflake, z.number().int().min(1).max(100)), 0, MAX_EXTRA_ENTRY_ROLES).default({}),
+});
+
+export const zGiveawaysConfig = z.strictObject({
+  // The whole permission model for this plugin: a member managing giveaways (via chat commands or the
+  // dashboard) just needs one of these role IDs — no level/override machinery like every other plugin, since
+  // this same list is also checked from the API process for the dashboard's Giveaways page, which has no way
+  // to evaluate a guild's full config-override tree. Empty by default: nobody can manage giveaways until a
+  // server explicitly sets this.
+  manager_roles: z.array(zSnowflake).max(MAX_ROLES_PER_LIST).default([]),
+  templates: zBoundedRecord(z.record(zBoundedCharacters(1, 100), zGiveawayTemplate), 0, MAX_TEMPLATES).default({}),
+});
+
+export interface GiveawaysPluginType extends BasePluginType {
+  configSchema: typeof zGiveawaysConfig;
+  state: {
+    common: pluginUtils.PluginPublicInterface<typeof CommonPlugin>;
+    giveaways: GuildGiveaways;
+    unregisterGuildEventListener?: () => void;
+  };
+}

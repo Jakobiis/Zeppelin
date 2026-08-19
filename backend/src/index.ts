@@ -32,6 +32,7 @@ import { runExpiredMemberCacheDeletionLoop } from "./data/loops/expiredMemberCac
 import { runExpiringMutesLoop } from "./data/loops/expiringMutesLoop.js";
 import { runExpiringTempbansLoop } from "./data/loops/expiringTempbansLoop.js";
 import { runExpiringVCAlertsLoop } from "./data/loops/expiringVCAlertsLoop.js";
+import { runUpcomingGiveawaysLoop } from "./data/loops/upcomingGiveawaysLoop.js";
 import { runMemberCacheDeletionLoop } from "./data/loops/memberCacheDeletionLoop.js";
 import { runSavedMessageCleanupLoop } from "./data/loops/savedMessageCleanupLoop.js";
 import { runUpcomingRemindersLoop } from "./data/loops/upcomingRemindersLoop.js";
@@ -441,6 +442,8 @@ connect().then(async () => {
     runUpcomingScheduledPostsLoop();
     await sleep(10 * SECONDS);
     runUpcomingRemindersLoop();
+    await sleep(10 * SECONDS);
+    runUpcomingGiveawaysLoop();
     await sleep(10 * SECONDS);
     runExpiringVCAlertsLoop();
     await sleep(10 * SECONDS);

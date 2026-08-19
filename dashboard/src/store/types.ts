@@ -23,6 +23,20 @@ export interface GuildPermissionAssignment {
   expires_at: string | null;
 }
 
+export interface GiveawayApiItem {
+  id: number;
+  channel_id: string;
+  message_id: string | null;
+  host_id: string;
+  prize: string;
+  winner_count: number;
+  ends_at: string;
+  ended_at: string | null;
+  status: "running" | "ended" | "cancelled";
+  winner_ids: string[];
+  entry_count: number;
+}
+
 export interface GuildState {
   availableGuildsLoadStatus: LoadStatus;
   available: Map<
@@ -38,6 +52,12 @@ export interface GuildState {
   };
   guildPermissionAssignments: {
     [guildId: string]: GuildPermissionAssignment[];
+  };
+  giveawayAccess: {
+    [guildId: string]: boolean;
+  };
+  giveaways: {
+    [guildId: string]: GiveawayApiItem[];
   };
 }
 

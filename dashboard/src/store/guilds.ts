@@ -10,6 +10,8 @@ export const GuildStore: Module<GuildState, RootState> = {
     available: new Map(),
     configs: {},
     guildPermissionAssignments: {},
+    giveawayAccess: {},
+    giveaways: {},
   },
 
   actions: {
@@ -75,6 +77,32 @@ export const GuildStore: Module<GuildState, RootState> = {
     async exportData({ commit }, { guildId }) {
       return post(`guilds/${guildId}/export`);
     },
+
+    async loadGiveawayAccess({ commit }, guildId) {
+      const result = await get(`guilds/${guildId}/giveaways/access`);
+      commit("setGiveawayAccess", { guildId, isManager: result.isManager });
+      return result.isManager;
+    },
+
+    async loadGiveaways({ commit }, guildId) {
+      const giveaways = await get(`guilds/${guildId}/giveaways`);
+      commit("setGiveaways", { guildId, giveaways });
+    },
+
+    async endGiveaway({ dispatch }, { guildId, giveawayId }) {
+      await post(`guilds/${guildId}/giveaways/${giveawayId}/end`);
+      await dispatch("loadGiveaways", guildId);
+    },
+
+    async rerollGiveaway({ dispatch }, { guildId, giveawayId }) {
+      await post(`guilds/${guildId}/giveaways/${giveawayId}/reroll`);
+      await dispatch("loadGiveaways", guildId);
+    },
+
+    async cancelGiveaway({ dispatch }, { guildId, giveawayId }) {
+      await post(`guilds/${guildId}/giveaways/${giveawayId}/cancel`);
+      await dispatch("loadGiveaways", guildId);
+    },
   },
 
   mutations: {
@@ -126,6 +154,14 @@ export const GuildStore: Module<GuildState, RootState> = {
       }
 
       state.guildPermissionAssignments = { ...state.guildPermissionAssignments };
+    },
+
+    setGiveawayAccess(state: GuildState, { guildId, isManager }) {
+      state.giveawayAccess = { ...state.giveawayAccess, [guildId]: isManager };
+    },
+
+    setGiveaways(state: GuildState, { guildId, giveaways }) {
+      state.giveaways = { ...state.giveaways, [guildId]: giveaways };
     },
   },
 };
