@@ -2,8 +2,8 @@ import { EmbedBuilder } from "discord.js";
 import { guildPluginMessageCommand } from "vety";
 import { humanizeDuration } from "../../../humanizeDuration.js";
 import { getGuildEmbedColor } from "../../../utils/getGuildEmbedColor.js";
+import { getGuildPrefix } from "../../../utils/getGuildPrefix.js";
 import { EconomyPluginType } from "../types.js";
-import { getGuildPrefix } from "utils/getGuildPrefix.js";
 
 export const ShopStatusCmd = guildPluginMessageCommand<EconomyPluginType>()({
   trigger: ["shop status", "shop boosts"],
