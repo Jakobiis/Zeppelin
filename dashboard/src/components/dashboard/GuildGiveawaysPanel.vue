@@ -63,7 +63,7 @@
         <RoleListField class="mt-1" :guild-id="guildId" :model-value="form.blacklisted_role_ids" @update:model-value="form.blacklisted_role_ids = $event" />
       </div>
       <div class="mt-4">
-        <label class="font-medium text-sm">Extra entries <span class="text-muted-foreground font-normal">(bonus entries per role, stacking)</span></label>
+        <label class="font-medium text-sm">Extra entries <span class="text-muted-foreground font-normal">(bonus entries per role — highest applicable, not stacked)</span></label>
         <RoleEntryMapField class="mt-1" :guild-id="guildId" :model-value="form.extra_entries" @update:model-value="form.extra_entries = $event" />
       </div>
 

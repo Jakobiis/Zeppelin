@@ -4,12 +4,6 @@ import { Giveaway } from "../../../data/entities/Giveaway.js";
 import { buildCustomId } from "../../../utils/buildCustomId.js";
 import { DEFAULT_EMBED_COLOR } from "../../../utils/getGuildEmbedColor.js";
 
-// "(2x) Prize" for multi-winner giveaways, just "Prize" for a single winner — used for the embed title both
-// while running (buildGiveawayEmbed) and once ended (finalizeGiveaway.ts's buildEndedEmbed).
-export function formatGiveawayTitle(prize: string, winnerCount: number): string {
-  return winnerCount > 1 ? `(${winnerCount}x) ${prize}` : prize;
-}
-
 // winner_ids is append-only full history (every manual/claim-expiry reroll adds to it, never removes) — this
 // is "who actually still has the prize right now", i.e. winner_ids minus anyone whose claim window expired.
 // Used for display anywhere that shouldn't keep listing a forfeited winner as if they still won (GiveawayListCmd,
@@ -34,18 +28,16 @@ export function buildGiveawayEmbed(giveaway: Pick<Giveaway, "prize" | "host_id" 
 
   const extraEntryEntries = Object.entries(giveaway.extra_entries);
   if (extraEntryEntries.length > 0) {
-    const bonusLine = extraEntryEntries.map(([roleId, bonus]) => `<@&${roleId}> +${bonus}`).join(", ");
-    requirementLines.push(`Bonus entries: ${bonusLine}`);
+    requirementLines.push("Bonus entries:", ...extraEntryEntries.map(([roleId, bonus]) => `<@&${roleId}> +${bonus}`));
   }
 
   const endsAtUnix = moment.utc(giveaway.ends_at).unix();
 
   return new EmbedBuilder()
     .setColor(giveaway.embed_color ?? DEFAULT_EMBED_COLOR)
-    .setTitle(formatGiveawayTitle(giveaway.prize, giveaway.winner_count))
+    .setTitle(giveaway.prize)
     .setDescription(
       [
-        `Click 🎉 **Enter** below to join!`,
         `Winners: **${giveaway.winner_count}**`,
         `Host: <@${giveaway.host_id}>`,
         `Ends: <t:${endsAtUnix}:R> (<t:${endsAtUnix}:f>)`,

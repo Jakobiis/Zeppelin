@@ -7,7 +7,7 @@ import { humanizeDuration } from "../../../humanizeDuration.js";
 import { DBDateFormat } from "../../../utils.js";
 import { DEFAULT_EMBED_COLOR } from "../../../utils/getGuildEmbedColor.js";
 import { armClaimDeadlines } from "./claimGiveaway.js";
-import { buildWinnerAnnouncementButtons, formatGiveawayTitle } from "./buildGiveawayMessage.js";
+import { buildWinnerAnnouncementButtons } from "./buildGiveawayMessage.js";
 import { editChannelMessage, sendChannelMessage } from "./discordRest.js";
 import { rollWinners } from "./rollWinners.js";
 
@@ -16,7 +16,7 @@ const giveawayEntries = new GiveawayEntries();
 
 function buildEndedEmbed(giveaway: Giveaway, cancelled: boolean, participantCount: number) {
   const color = giveaway.embed_color ?? DEFAULT_EMBED_COLOR;
-  const title = formatGiveawayTitle(giveaway.prize, giveaway.winner_count);
+  const title = giveaway.prize;
   const infoLines = [`Host: <@${giveaway.host_id}>`, `Participants: **${participantCount}**`];
 
   if (cancelled) {
