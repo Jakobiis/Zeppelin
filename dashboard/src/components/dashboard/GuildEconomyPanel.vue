@@ -14,8 +14,8 @@
     </div>
   </div>
 
-  <div class="columns-1 sm:columns-2 xl:columns-3 gap-4">
-    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+  <div class="grid min-w-0 items-start gap-4 xl:grid-cols-3">
+    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Look up a user</h3>
       <input
         type="text"
@@ -87,7 +87,7 @@
       </div>
     </div>
 
-    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Leaderboard</h3>
       <input
         type="text"
@@ -130,7 +130,7 @@
       </div>
     </div>
 
-    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Recent activity</h3>
       <p class="text-xs text-muted-foreground mb-2">Games, gifts, and trades across the whole server.</p>
       <div v-if="!transactions.items.length" class="text-sm text-muted-foreground">No activity yet.</div>
@@ -156,6 +156,27 @@
         >
           Next
         </button>
+      </div>
+    </div>
+
+    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Top games today</h3>
+      <div v-if="!analytics.topGames.length" class="text-sm text-muted-foreground">No games played yet today.</div>
+      <div class="flex flex-col gap-2">
+        <div
+          v-for="(game, i) in analytics.topGames"
+          :key="game.gameName"
+          class="flex items-center justify-between gap-2 text-sm border border-border rounded-md px-2 py-1.5"
+        >
+          <div class="min-w-0 flex items-center gap-2">
+            <span class="text-xs text-muted-foreground w-4 shrink-0">#{{ i + 1 }}</span>
+            <span class="truncate">{{ game.gameName }}</span>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-xs text-muted-foreground">{{ game.plays.toLocaleString() }} play{{ game.plays === 1 ? "" : "s" }}</span>
+            <span :class="signedClass(game.net)">{{ formatSigned(game.net) }}</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -185,8 +206,8 @@ import moment from "moment";
 import { mapState } from "vuex";
 import { ApiError } from "../../api";
 import {
+  EconomyAnalytics,
   EconomyHistoryEntry,
-  EconomyHistorySummary,
   EconomyLeaderboardEntry,
   EconomyLeaderboardPage,
   EconomyMemberInfo,
@@ -201,7 +222,7 @@ const LEADERBOARD_PAGE_SIZE = 10;
 const HISTORY_PAGE_SIZE = 10;
 const TRANSACTIONS_PAGE_SIZE = 15;
 
-const EMPTY_ANALYTICS: EconomyHistorySummary = { totalEntries: 0, totalWagered: 0, net: 0, totalWon: 0, totalLost: 0 };
+const EMPTY_ANALYTICS: EconomyAnalytics = { totalEntries: 0, totalWagered: 0, net: 0, totalWon: 0, totalLost: 0, topGames: [] };
 const EMPTY_LEADERBOARD: EconomyLeaderboardPage = { items: [], total: 0 };
 const EMPTY_TRANSACTIONS: EconomyTransactionsPage = { items: [], total: 0, page: 1, pageSize: TRANSACTIONS_PAGE_SIZE, members: {} };
 
@@ -245,7 +266,7 @@ export default {
 
   computed: {
     ...mapState("guilds", {
-      analytics(state: GuildState): EconomyHistorySummary {
+      analytics(state: GuildState): EconomyAnalytics {
         return state.economyAnalytics[this.guildId] || EMPTY_ANALYTICS;
       },
       selectedUser(state: GuildState): EconomyUserInfo | null {

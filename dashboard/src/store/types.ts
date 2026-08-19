@@ -137,6 +137,16 @@ export interface EconomyHistorySummary {
   totalLost: number;
 }
 
+export interface EconomyTopGameEntry {
+  gameName: string;
+  plays: number;
+  net: number;
+}
+
+export interface EconomyAnalytics extends EconomyHistorySummary {
+  topGames: EconomyTopGameEntry[];
+}
+
 export interface EconomyUserHistoryPage {
   items: EconomyHistoryEntry[];
   total: number;
@@ -195,7 +205,7 @@ export interface GuildState {
     [guildId: string]: EconomyLeaderboardPage;
   };
   economyAnalytics: {
-    [guildId: string]: EconomyHistorySummary;
+    [guildId: string]: EconomyAnalytics;
   };
   economyUser: {
     [guildId: string]: EconomyUserInfo | null;

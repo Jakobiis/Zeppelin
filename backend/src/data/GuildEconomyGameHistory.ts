@@ -25,6 +25,12 @@ export interface EconomyGameHistorySummary {
   totalLost: number;
 }
 
+export interface EconomyTopGameEntry {
+  gameName: string;
+  plays: number;
+  net: number;
+}
+
 export class GuildEconomyGameHistory extends BaseGuildRepository {
   private history: Repository<EconomyGameHistoryEntry>;
 
@@ -111,5 +117,21 @@ export class GuildEconomyGameHistory extends BaseGuildRepository {
       totalWon: Number(raw?.totalWon ?? 0),
       totalLost: Number(raw?.totalLost ?? 0),
     };
+  }
+
+  // Most-played game names under `filter` (guild-wide analytics uses this for "top games today" — same filter
+  // as getSummary, so it's naturally restricted to real games via excludeGameTypes: NON_GAME_TYPES).
+  async getTopGamesSince(filter: EconomyGameHistoryFilter, limit: number): Promise<EconomyTopGameEntry[]> {
+    const raw = await this.buildFilteredQuery(filter)
+      .select("h.game_name", "gameName")
+      .addSelect("COUNT(*)", "plays")
+      .addSelect("COALESCE(SUM(h.amount_changed), 0)", "net")
+      .groupBy("h.game_name")
+      .orderBy("plays", "DESC")
+      .addOrderBy("h.game_name", "ASC")
+      .limit(limit)
+      .getRawMany<{ gameName: string; plays: string; net: string }>();
+
+    return raw.map((r) => ({ gameName: r.gameName, plays: Number(r.plays), net: Number(r.net) }));
   }
 }

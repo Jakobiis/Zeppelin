@@ -17,6 +17,7 @@ const DEFAULT_HISTORY_PAGE_SIZE = 20;
 const MAX_LOOKUP_MATCHES = 10;
 const MAX_ADJUST_AMOUNT = MAX_COUNTER_VALUE;
 const MAX_SEARCH_LENGTH = 200;
+const MAX_TOP_GAMES = 5;
 
 const configs = new Configs();
 
@@ -280,8 +281,9 @@ export function initGuildEconomyAPI(router: express.Router) {
     try {
       const since = moment.utc().startOf("day").toDate();
       const repo = GuildEconomyGameHistory.getGuildInstance(req.params.guildId);
-      const summary = await repo.getSummary({ since, excludeGameTypes: NON_GAME_TYPES });
-      res.json(summary);
+      const filter = { since, excludeGameTypes: NON_GAME_TYPES };
+      const [summary, topGames] = await Promise.all([repo.getSummary(filter), repo.getTopGamesSince(filter, MAX_TOP_GAMES)]);
+      res.json({ ...summary, topGames });
     } catch (err) {
       serverError(res, "Failed to load analytics");
     }
