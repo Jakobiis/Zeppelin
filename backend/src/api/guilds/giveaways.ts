@@ -305,8 +305,8 @@ export function initGuildGiveawaysAPI(router: express.Router) {
           return clientError(res, "Amount must be a positive whole number");
         }
 
-        await rerollGiveaway(giveaway.id, amount);
-        ok(res);
+        const { newWinnerIds } = await rerollGiveaway(giveaway.id, amount);
+        res.json({ result: "ok", newWinnerCount: newWinnerIds.length });
       } catch (err) {
         serverError(res, "Failed to reroll giveaway");
       }

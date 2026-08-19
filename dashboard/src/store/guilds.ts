@@ -97,8 +97,9 @@ export const GuildStore: Module<GuildState, RootState> = {
     },
 
     async rerollGiveaway({ dispatch }, { guildId, giveawayId, amount }) {
-      await post(`guilds/${guildId}/giveaways/${giveawayId}/reroll`, { amount });
+      const result = await post(`guilds/${guildId}/giveaways/${giveawayId}/reroll`, { amount });
       await dispatch("loadGiveaways", guildId);
+      return result;
     },
 
     async cancelGiveaway({ dispatch }, { guildId, giveawayId }) {

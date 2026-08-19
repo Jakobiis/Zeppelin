@@ -35,12 +35,11 @@ export const GiveawayRerollCmd = guildPluginMessageCommand<GiveawaysPluginType>(
       return;
     }
 
-    const rerolled = await rerollGiveaway(giveaway.id, amount);
-    const newWinners = rerolled.winner_ids.slice(giveaway.winner_ids.length);
+    const { giveaway: rerolled, newWinnerIds } = await rerollGiveaway(giveaway.id, amount);
     void pluginData.state.common.sendSuccessMessage(
       message,
-      newWinners.length > 0
-        ? `Giveaway #${rerolled.id} rerolled. New winner(s): ${newWinners.map((id) => `<@${id}>`).join(", ")}`
+      newWinnerIds.length > 0
+        ? `Giveaway #${rerolled.id} rerolled. New winner(s): ${newWinnerIds.map((id) => `<@${id}>`).join(", ")}`
         : `Giveaway #${rerolled.id} has no more eligible entrants to reroll.`,
     );
   },

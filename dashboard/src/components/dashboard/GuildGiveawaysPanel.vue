@@ -1,8 +1,8 @@
 <template>
   <div>
-    <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4">
-      <h3 class="mb-3">Create giveaway</h3>
-
+    <Expandable>
+      <template v-slot:title>Create giveaway</template>
+      <template v-slot:content>
       <div v-if="createError" class="bg-card border border-destructive/40 border-l-4 border-l-destructive py-2 px-3 rounded-lg text-sm text-destructive mb-3">
         {{ createError }}
       </div>
@@ -76,7 +76,7 @@
           <ComboboxField class="w-40" :options="periodOptions" placeholder="— Select period —" :model-value="form.messagePeriod" @update:model-value="form.messagePeriod = $event" />
           <input type="number" min="0" class="field-input w-24" placeholder="Min" :value="form.messageMin ?? ''" @input="form.messageMin = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">to</span>
-          <input type="number" min="0" class="field-input w-24" placeholder="Max (optional)" :value="form.messageMax ?? ''" @input="form.messageMax = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <input type="number" min="0" class="field-input w-36" placeholder="Max (optional)" :value="form.messageMax ?? ''" @input="form.messageMax = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">messages</span>
         </div>
       </div>
@@ -89,7 +89,7 @@
         <div v-if="form.hasActivityRequirement" class="flex items-center gap-2 mt-2">
           <input type="number" min="0" class="field-input w-24" placeholder="Min" :value="form.activityMin ?? ''" @input="form.activityMin = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">to</span>
-          <input type="number" min="0" class="field-input w-24" placeholder="Max (optional)" :value="form.activityMax ?? ''" @input="form.activityMax = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <input type="number" min="0" class="field-input w-36" placeholder="Max (optional)" :value="form.activityMax ?? ''" @input="form.activityMax = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">activity points</span>
         </div>
       </div>
@@ -102,15 +102,16 @@
         <div v-if="form.hasCoinsRequirement" class="flex items-center gap-2 mt-2">
           <input type="number" min="0" class="field-input w-24" placeholder="Min" :value="form.coinsMin ?? ''" @input="form.coinsMin = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">to</span>
-          <input type="number" min="0" class="field-input w-24" placeholder="Max (optional)" :value="form.coinsMax ?? ''" @input="form.coinsMax = numberOrNull(($event.target as HTMLInputElement).value)" />
+          <input type="number" min="0" class="field-input w-36" placeholder="Max (optional)" :value="form.coinsMax ?? ''" @input="form.coinsMax = numberOrNull(($event.target as HTMLInputElement).value)" />
           <span class="text-sm text-muted-foreground">coins</span>
         </div>
       </div>
 
-      <button class="btn-primary mt-4" :disabled="creating" @click="submit">
+      <button class="btn-primary mt-4 mb-4" :disabled="creating" @click="submit">
         {{ creating ? "Creating…" : "Create Giveaway" }}
       </button>
-    </div>
+      </template>
+    </Expandable>
 
     <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4 mt-4">
       <h3 class="mb-3">Running</h3>
@@ -160,6 +161,13 @@
       @confirm="onConfirmModal"
       @cancel="confirmState = null"
     />
+
+    <div
+      v-if="toastMessage"
+      class="fixed bottom-4 right-4 z-50 bg-card border border-border rounded-lg shadow-lg px-4 py-3 text-sm max-w-sm"
+    >
+      {{ toastMessage }}
+    </div>
   </div>
 </template>
 
@@ -168,6 +176,7 @@ import moment from "moment";
 import { mapState } from "vuex";
 import { ApiError } from "../../api";
 import { GiveawayApiItem, GiveawayMemberInfo, GiveawayTemplate, GuildState } from "../../store/types";
+import Expandable from "../Expandable.vue";
 import ColorPickerField from "./ColorPickerField.vue";
 import ComboboxField from "./ComboboxField.vue";
 import ConfirmModal from "./ConfirmModal.vue";
@@ -211,7 +220,7 @@ function defaultForm() {
 }
 
 export default {
-  components: { RoleChannelPickerField, ColorPickerField, ComboboxField, RoleListField, RoleEntryMapField, ConfirmModal },
+  components: { Expandable, RoleChannelPickerField, ColorPickerField, ComboboxField, RoleListField, RoleEntryMapField, ConfirmModal },
 
   props: {
     guildId: { type: String, required: true },
@@ -224,6 +233,8 @@ export default {
       createError: null as string | null,
       periodOptions: PERIOD_OPTIONS,
       confirmState: null as ConfirmState | null,
+      toastMessage: null as string | null,
+      toastTimeout: null as ReturnType<typeof setTimeout> | null,
     };
   },
 
@@ -424,8 +435,20 @@ export default {
       } else if (state.type === "cancel") {
         await this.$store.dispatch("guilds/cancelGiveaway", { guildId: this.guildId, giveawayId: state.giveaway.id });
       } else {
-        await this.$store.dispatch("guilds/rerollGiveaway", { guildId: this.guildId, giveawayId: state.giveaway.id, amount: amount ?? 1 });
+        const result = await this.$store.dispatch("guilds/rerollGiveaway", { guildId: this.guildId, giveawayId: state.giveaway.id, amount: amount ?? 1 });
+        if (result?.newWinnerCount === 0) {
+          this.showToast(`No other eligible entrants to reroll ${state.giveaway.prize} to.`);
+        }
       }
+    },
+
+    showToast(text: string) {
+      if (this.toastTimeout) clearTimeout(this.toastTimeout);
+      this.toastMessage = text;
+      this.toastTimeout = setTimeout(() => {
+        this.toastMessage = null;
+        this.toastTimeout = null;
+      }, 4000);
     },
   },
 };

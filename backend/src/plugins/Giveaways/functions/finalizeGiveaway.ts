@@ -100,7 +100,7 @@ export async function finalizeGiveaway(giveawayId: number, opts: { cancelled: bo
  * won it before (across all previous rerolls too). Posts a fresh winner announcement; does not touch the
  * original giveaway message. Replacement winners get the same claim window as any other winner, if configured.
  */
-export async function rerollGiveaway(giveawayId: number, amount = 1): Promise<Giveaway> {
+export async function rerollGiveaway(giveawayId: number, amount = 1): Promise<{ giveaway: Giveaway; newWinnerIds: string[] }> {
   const giveaway = await giveaways.find(giveawayId);
   if (!giveaway) {
     throw new Error(`Giveaway ${giveawayId} not found`);
@@ -130,6 +130,8 @@ export async function rerollGiveaway(giveawayId: number, amount = 1): Promise<Gi
       components: buildWinnerAnnouncementButtons(updated.id, hasClaim).map((row) => row.toJSON()),
     }).catch(() => null);
   }
+  // No Discord message when there's no one left to reroll to — callers (the chat command, the dashboard) each
+  // report that through their own feedback channel instead (newWinnerIds.length === 0 tells them to).
 
-  return updated;
+  return { giveaway: updated, newWinnerIds };
 }
