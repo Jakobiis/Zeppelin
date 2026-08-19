@@ -20,7 +20,6 @@
               <router-link class="inline-block bg-secondary text-secondary-foreground rounded px-1 hover:bg-secondary/80" :to="'/dashboard/guilds/' + guild.id + '/config'">Config</router-link>
               <router-link v-if="canManageAccess(guild.id)" class="inline-block bg-secondary text-secondary-foreground rounded px-1 hover:bg-secondary/80" :to="'/dashboard/guilds/' + guild.id + '/access'">Access</router-link>
               <router-link v-if="canManageAccess(guild.id)" class="inline-block bg-secondary text-secondary-foreground rounded px-1 hover:bg-secondary/80" :to="'/dashboard/guilds/' + guild.id + '/import-export'">Import/export</router-link>
-              <router-link v-if="giveawayAccess[guild.id]" class="inline-block bg-secondary text-secondary-foreground rounded px-1 hover:bg-secondary/80" :to="'/dashboard/guilds/' + guild.id + '/giveaways'">Giveaways</router-link>
             </div>
           </div>
         </div>
@@ -39,12 +38,6 @@
       await this.$store.dispatch("guilds/loadAvailableGuilds");
       await this.$store.dispatch("guilds/loadMyPermissionAssignments");
       this.loading = false;
-
-      // Fire off in parallel rather than awaiting — this only gates showing a nav link, so the guild list
-      // itself shouldn't wait on a Discord round-trip per guild.
-      for (const guild of this.guilds) {
-        this.$store.dispatch("guilds/loadGiveawayAccess", guild.id).catch(() => {});
-      }
     },
     data() {
       return { loading: true };
@@ -64,7 +57,6 @@
         },
 
         guildPermissionAssignments: (state: GuildState) => state.guildPermissionAssignments,
-        giveawayAccess: (state: GuildState) => state.giveawayAccess,
       }),
 
       ...mapState('auth', {

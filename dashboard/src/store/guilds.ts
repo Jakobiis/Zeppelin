@@ -12,6 +12,7 @@ export const GuildStore: Module<GuildState, RootState> = {
     guildPermissionAssignments: {},
     giveawayAccess: {},
     giveaways: {},
+    giveawayTemplates: {},
   },
 
   actions: {
@@ -103,6 +104,16 @@ export const GuildStore: Module<GuildState, RootState> = {
       await post(`guilds/${guildId}/giveaways/${giveawayId}/cancel`);
       await dispatch("loadGiveaways", guildId);
     },
+
+    async loadGiveawayTemplates({ commit }, guildId) {
+      const templates = await get(`guilds/${guildId}/giveaways/templates`);
+      commit("setGiveawayTemplates", { guildId, templates });
+    },
+
+    async createGiveaway({ dispatch }, { guildId, giveaway }) {
+      await post(`guilds/${guildId}/giveaways`, giveaway);
+      await dispatch("loadGiveaways", guildId);
+    },
   },
 
   mutations: {
@@ -162,6 +173,10 @@ export const GuildStore: Module<GuildState, RootState> = {
 
     setGiveaways(state: GuildState, { guildId, giveaways }) {
       state.giveaways = { ...state.giveaways, [guildId]: giveaways };
+    },
+
+    setGiveawayTemplates(state: GuildState, { guildId, templates }) {
+      state.giveawayTemplates = { ...state.giveawayTemplates, [guildId]: templates };
     },
   },
 };

@@ -7,7 +7,11 @@ import { Giveaways } from "../Giveaways.js";
 import { emitGuildEvent, hasGuildEventListener } from "../GuildEvents.js";
 import Timeout = NodeJS.Timeout;
 
-const LOOP_INTERVAL = 15 * MINUTES;
+// Shorter than ScheduledPosts/Reminders' 15-minute interval: giveaways created via the dashboard are inserted
+// by the separate API process (see api/guilds/giveaways.ts), which has no way to call registerUpcomingGiveaway
+// on *this* process directly — so a dashboard-created giveaway only gets its setTimeout armed here, on the next
+// periodic poll. A shorter interval bounds how late a short-duration dashboard-created giveaway can end.
+const LOOP_INTERVAL = 2 * MINUTES;
 const MAX_TRIES_PER_SERVER = 3;
 const getGiveawaysRepository = lazyMemoize(() => new Giveaways());
 const timeouts = new Map<number, Timeout>();

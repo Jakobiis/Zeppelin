@@ -22,6 +22,7 @@
     <Tabs class="mt-4">
       <Tab :active="mode === 'yaml'"><a href="javascript:void(0)" v-on:click="setMode('yaml')">Raw YAML</a></Tab>
       <Tab :active="mode === 'interface'"><a href="javascript:void(0)" v-on:click="setMode('interface')">Interface</a></Tab>
+      <Tab v-if="isGiveawayManager" :active="mode === 'giveaways'"><a href="javascript:void(0)" v-on:click="setMode('giveaways')">Giveaways</a></Tab>
     </Tabs>
 
     <v-ace-editor v-show="mode === 'yaml'" class="rounded-lg shadow-lg border border-border"
@@ -104,6 +105,8 @@
         </div>
       </div>
     </div>
+
+    <GuildGiveawaysPanel v-if="mode === 'giveaways' && isGiveawayManager" class="mt-4" :guild-id="String($route.params.guildId)" />
   </div>
 </template>
 
@@ -124,6 +127,7 @@
   import Tab from "../Tab.vue";
   import Tabs from "../Tabs.vue";
   import GeneralConfigForm from "./GeneralConfigForm.vue";
+  import GuildGiveawaysPanel from "./GuildGiveawaysPanel.vue";
   import PluginConfigForm from "./PluginConfigForm.vue";
   import { dereferenceSchema, fillDefaults } from "./pluginConfigSchema";
 
@@ -140,6 +144,7 @@
       Tabs,
       GeneralConfigForm,
       PluginConfigForm,
+      GuildGiveawaysPanel,
     },
     // Reactive provide (Options API needs an explicit computed() to keep it reactive for injecting descendants)
     // so the search bar above the Interface tab can reach every PluginConfigField in the tree without threading
@@ -173,6 +178,12 @@
       // the docs pages use, reused here instead of hardcoding a plugin name.
       await this.$store.dispatch("docs/loadAllPlugins");
 
+      // Whether to offer the Giveaways tab at all — same manager_roles check the standalone giveaways API
+      // guards itself with, so the tab only appears for someone who could actually use it.
+      this.isGiveawayManager = await this.$store
+        .dispatch("guilds/loadGiveawayAccess", this.$route.params.guildId)
+        .catch(() => false);
+
       // Restores which tab/plugin was open from the URL (see updateUrlQuery) so a shared link opens straight to
       // the same spot instead of always landing on Raw YAML / General. Both are resolved before either is
       // assigned so updateUrlQuery (called explicitly, not reactively — see selectPlugin/setMode) never runs
@@ -180,7 +191,8 @@
       const queryPlugin = typeof this.$route.query.plugin === "string" ? this.$route.query.plugin : null;
       const validPluginNames = new Set([this.GENERAL, ...this.formPlugins.map((p) => p.name)]);
       this.selectedPlugin = queryPlugin && validPluginNames.has(queryPlugin) ? queryPlugin : this.GENERAL;
-      this.mode = this.$route.query.mode === "interface" ? "interface" : "yaml";
+      const queryMode = this.$route.query.mode;
+      this.mode = queryMode === "interface" ? "interface" : queryMode === "giveaways" && this.isGiveawayManager ? "giveaways" : "yaml";
 
       this.loading = false;
 
@@ -213,6 +225,7 @@
         editorHeight: 600,
         savedTimeout: null,
         mode: "yaml",
+        isGiveawayManager: false,
         selectedPlugin: null,
         GENERAL,
         // Interface-tab-wide search — filters/auto-expands the current plugin's whole field tree, not just one
@@ -281,6 +294,9 @@
         if (this.mode === "interface" && this.selectedPlugin) {
           query.mode = "interface";
           query.plugin = this.selectedPlugin;
+        } else if (this.mode === "giveaways") {
+          query.mode = "giveaways";
+          delete query.plugin;
         } else {
           delete query.mode;
           delete query.plugin;

@@ -2,25 +2,39 @@ import express, { NextFunction, Request, Response } from "express";
 import { GiveawayEntries } from "../../data/GiveawayEntries.js";
 import { Configs } from "../../data/Configs.js";
 import { GuildGiveaways } from "../../data/GuildGiveaways.js";
+import { createGiveawayRecord } from "../../plugins/Giveaways/functions/createGiveaway.js";
 import { finalizeGiveaway, rerollGiveaway } from "../../plugins/Giveaways/functions/finalizeGiveaway.js";
+import { parseMessagePeriod } from "../../plugins/MessageTracker/functions/messagePeriods.js";
+import { convertDelayStringToMS, isValidSnowflake } from "../../utils.js";
 import { loadYamlSafely } from "../../utils/loadYamlSafely.js";
 import { getGuildMemberRoleIds } from "./discordData.js";
 import { clientError, notFound, ok, serverError, unauthorized } from "../responses.js";
 
 const RECENT_FINISHED_LIMIT = 20;
+const MAX_ROLES_PER_FIELD = 20;
 
 const configs = new Configs();
 const giveawayEntries = new GiveawayEntries();
 
 // Reads the same config the dashboard's YAML/Interface editor already reads and writes
 // (see misc.ts / pluginConfigSchema.ts) — no new config-reading machinery.
-async function getGiveawayManagerRoles(guildId: string): Promise<string[]> {
+async function getGiveawaysPluginConfig(guildId: string): Promise<any> {
   const activeConfig = await configs.getActiveByKey(`guild-${guildId}`);
   if (!activeConfig) {
-    return [];
+    return {};
   }
   const parsed = loadYamlSafely(activeConfig.config);
-  return parsed?.plugins?.giveaways?.config?.manager_roles ?? [];
+  return parsed?.plugins?.giveaways?.config ?? {};
+}
+
+async function getGiveawayManagerRoles(guildId: string): Promise<string[]> {
+  const config = await getGiveawaysPluginConfig(guildId);
+  return config.manager_roles ?? [];
+}
+
+function sanitizeRoleIds(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  return input.filter((id) => typeof id === "string" && isValidSnowflake(id)).slice(0, MAX_ROLES_PER_FIELD);
 }
 
 async function isGiveawayManager(guildId: string, userId: string): Promise<boolean> {
@@ -51,6 +65,92 @@ export function initGuildGiveawaysAPI(router: express.Router) {
     const isManager = await isGiveawayManager(req.params.guildId, req.user!.userId);
     res.json({ isManager });
   });
+
+  // Powers the dashboard create form's template dropdown — just the names + the fields relevant to prefilling
+  // the form (not manager_roles, which isn't a giveaway-creation concern).
+  giveawaysRouter.get(
+    "/:guildId/giveaways/templates",
+    requireGiveawayManager(),
+    async (req: Request, res: Response) => {
+      const config = await getGiveawaysPluginConfig(req.params.guildId);
+      const templates = config.templates ?? {};
+      res.json(
+        Object.entries(templates).map(([name, template]: [string, any]) => ({
+          name,
+          channel_id: template.channel_id ?? null,
+          embed_color: template.embed_color ?? null,
+          bypass_roles: template.bypass_roles ?? [],
+          blacklisted_roles: template.blacklisted_roles ?? [],
+          extra_entries: template.extra_entries ?? {},
+        })),
+      );
+    },
+  );
+
+  giveawaysRouter.post(
+    "/:guildId/giveaways",
+    requireGiveawayManager(),
+    async (req: Request, res: Response) => {
+      const body = req.body ?? {};
+
+      const prize = typeof body.prize === "string" ? body.prize.trim() : "";
+      if (!prize || prize.length > 512) {
+        return clientError(res, "Prize is required and must be at most 512 characters");
+      }
+
+      const durationMs = typeof body.duration === "string" ? convertDelayStringToMS(body.duration) : null;
+      if (!durationMs || durationMs <= 0) {
+        return clientError(res, "Invalid duration — use a delay string like `1d`, `30m`, or `6h`");
+      }
+
+      const winnerCount = Number(body.winners) || 1;
+      if (!Number.isInteger(winnerCount) || winnerCount < 1) {
+        return clientError(res, "Winner count must be a positive whole number");
+      }
+
+      const config = await getGiveawaysPluginConfig(req.params.guildId);
+      const template = typeof body.template === "string" && body.template ? config.templates?.[body.template] : null;
+      if (body.template && !template) {
+        return clientError(res, `Unknown giveaway template \`${body.template}\``);
+      }
+
+      const channelId = typeof body.channel_id === "string" && isValidSnowflake(body.channel_id) ? body.channel_id : template?.channel_id ?? null;
+      if (!channelId) {
+        return clientError(res, "A channel is required, either directly or via a template");
+      }
+
+      const hostId = typeof body.host_id === "string" && isValidSnowflake(body.host_id) ? body.host_id : req.user!.userId;
+
+      let messageRequirement: { period: "daily" | "weekly" | "monthly" | "allTime"; count: number } | null = null;
+      if (body.message_requirement) {
+        const period = parseMessagePeriod(String(body.message_requirement.period ?? ""));
+        const count = Number(body.message_requirement.count);
+        if (!period || !Number.isInteger(count) || count < 1) {
+          return clientError(res, "Invalid message requirement");
+        }
+        messageRequirement = { period, count };
+      }
+
+      try {
+        const giveaway = await createGiveawayRecord(req.params.guildId, {
+          channel_id: channelId,
+          host_id: hostId,
+          prize,
+          winner_count: winnerCount,
+          duration_ms: durationMs,
+          embed_color: typeof body.embed_color === "number" ? body.embed_color : template?.embed_color ?? null,
+          required_role_ids: sanitizeRoleIds(body.required_role_ids),
+          bypass_role_ids: body.bypass_role_ids ? sanitizeRoleIds(body.bypass_role_ids) : template?.bypass_roles ?? [],
+          blacklisted_role_ids: body.blacklisted_role_ids ? sanitizeRoleIds(body.blacklisted_role_ids) : template?.blacklisted_roles ?? [],
+          extra_entries: template?.extra_entries ?? {},
+          message_requirement: messageRequirement,
+        });
+        res.json({ ...giveaway, entry_count: 0 });
+      } catch (err) {
+        serverError(res, "Failed to create giveaway");
+      }
+    },
+  );
 
   giveawaysRouter.get(
     "/:guildId/giveaways",

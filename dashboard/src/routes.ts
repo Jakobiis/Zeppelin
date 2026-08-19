@@ -87,10 +87,6 @@ export const router = createRouter({
           component: () => import("./components/dashboard/GuildAccess.vue"),
         },
         {
-          path: "guilds/:guildId/giveaways",
-          component: () => import("./components/dashboard/GuildGiveaways.vue"),
-        },
-        {
           path: "guilds/:guildId/import-export",
           component: () => import("./components/dashboard/GuildImportExport.vue"),
         },

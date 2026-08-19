@@ -37,6 +37,15 @@ export interface GiveawayApiItem {
   entry_count: number;
 }
 
+export interface GiveawayTemplate {
+  name: string;
+  channel_id: string | null;
+  embed_color: number | null;
+  bypass_roles: string[];
+  blacklisted_roles: string[];
+  extra_entries: Record<string, number>;
+}
+
 export interface GuildState {
   availableGuildsLoadStatus: LoadStatus;
   available: Map<
@@ -58,6 +67,9 @@ export interface GuildState {
   };
   giveaways: {
     [guildId: string]: GiveawayApiItem[];
+  };
+  giveawayTemplates: {
+    [guildId: string]: GiveawayTemplate[];
   };
 }
 

@@ -1,10 +1,7 @@
 import { Snowflake } from "discord.js";
 import { guildPluginMessageCommand } from "vety";
-import moment from "moment-timezone";
 import { commandTypeHelpers as ct } from "../../../commandTypes.js";
-import { DBDateFormat } from "../../../utils.js";
-import { registerUpcomingGiveaway } from "../../../data/loops/upcomingGiveawaysLoop.js";
-import { buildGiveawayButtons, buildGiveawayEmbed } from "../functions/buildGiveawayMessage.js";
+import { createGiveawayRecord } from "../functions/createGiveaway.js";
 import { hasGiveawayManagerRole } from "../functions/requireGiveawayManager.js";
 import { resolveRoleList } from "../functions/resolveRoleList.js";
 import { parseMessagePeriod } from "../../MessageTracker/functions/messagePeriods.js";
@@ -103,38 +100,20 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
       messageRequirement = { period, count };
     }
 
-    const embedColor = template?.embed_color ?? undefined;
-    const extraEntries = template?.extra_entries ?? {};
-
-    const endsAt = moment.utc().add(args.duration, "ms").format(DBDateFormat);
-
-    const giveaway = await pluginData.state.giveaways.create({
+    const giveaway = await createGiveawayRecord(pluginData.guild.id, {
       channel_id: channel.id,
-      message_id: null,
       host_id: hostId,
       prize: args.prize,
       winner_count: winnerCount,
-      ends_at: endsAt,
-      ended_at: null,
-      status: "running",
-      embed_color: embedColor ?? null,
+      duration_ms: args.duration,
+      embed_color: template?.embed_color ?? null,
       required_role_ids: requiredRoleIds,
       bypass_role_ids: bypassRoleIds,
       blacklisted_role_ids: blacklistedRoleIds,
-      extra_entries: extraEntries,
+      extra_entries: template?.extra_entries ?? {},
       message_requirement: messageRequirement,
-      winner_ids: [],
-      created_at: moment.utc().format(DBDateFormat),
     });
 
-    const sentMessage = await channel.send({
-      embeds: [buildGiveawayEmbed(giveaway)],
-      components: [buildGiveawayButtons(giveaway.id, 0)],
-    });
-
-    await pluginData.state.giveaways.update(giveaway.id, { message_id: sentMessage.id });
-    registerUpcomingGiveaway({ ...giveaway, message_id: sentMessage.id });
-
-    void pluginData.state.common.sendSuccessMessage(message, `Giveaway for **${args.prize}** started in <#${channel.id}>!`);
+    void pluginData.state.common.sendSuccessMessage(message, `Giveaway #${giveaway.id} for **${args.prize}** started in <#${channel.id}>!`);
   },
 });
