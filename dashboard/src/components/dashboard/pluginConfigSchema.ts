@@ -371,3 +371,20 @@ export function detectSpecialFieldKind(key: string | undefined, schema: any): Sp
   if (k.includes("channel")) return "channel";
   return null;
 }
+
+// Same idea as detectSpecialFieldKind, but for a record field's *keys* rather than its values (e.g. Giveaways'
+// extra_entries: Record<roleId, bonusEntries> — the picker belongs on the key, since the value is just a plain
+// number). JSON Schema has no way to type an object's key set (property names are inherently strings), so unlike
+// the value case this can never be inferred from the schema itself — it's name-matching only, all the way down.
+// The substring check catches most of these (e.g. Logs' `channels: Record<channelId, ...>`); extra_entries is
+// called out explicitly since "entries" alone isn't a safe enough substring to match generically without risking
+// false positives on unrelated record fields.
+export function detectRecordKeySpecialKind(key: string | undefined): SpecialFieldKind | null {
+  if (!key) return null;
+  const k = key.toLowerCase();
+  if (k === "extra_entries") return "role";
+  if (k.includes("emoji")) return "emoji";
+  if (k.includes("role")) return "role";
+  if (k.includes("channel")) return "channel";
+  return null;
+}

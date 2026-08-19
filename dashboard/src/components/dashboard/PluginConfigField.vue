@@ -147,7 +147,23 @@
         />
         <div v-for="entry in filteredRecordEntries" :key="entry.uid">
           <div v-if="recordValueIsSimple" class="flex items-center gap-2 max-w-[50%]">
+            <RoleChannelPickerField
+              v-if="(recordKeySpecialKind === 'role' || recordKeySpecialKind === 'channel') && guildId"
+              class="w-48 shrink-0"
+              :guild-id="guildId"
+              :entity-type="recordKeySpecialKind"
+              :model-value="entry.key"
+              @update:model-value="(val) => renameRecordKey(entry.key, val ?? '')"
+            />
+            <EmojiPickerField
+              v-else-if="recordKeySpecialKind === 'emoji' && guildId"
+              class="w-48 shrink-0"
+              :guild-id="guildId"
+              :model-value="entry.key"
+              @update:model-value="(val) => renameRecordKey(entry.key, val ?? '')"
+            />
             <input
+              v-else
               type="text"
               class="field-input w-48 shrink-0 font-mono text-sm"
               :value="entry.key"
@@ -174,7 +190,23 @@
                   <path d="M6 4l4 4-4 4" />
                 </svg>
               </button>
+              <RoleChannelPickerField
+                v-if="(recordKeySpecialKind === 'role' || recordKeySpecialKind === 'channel') && guildId"
+                class="flex-1 min-w-0"
+                :guild-id="guildId"
+                :entity-type="recordKeySpecialKind"
+                :model-value="entry.key"
+                @update:model-value="(val) => renameRecordKey(entry.key, val ?? '')"
+              />
+              <EmojiPickerField
+                v-else-if="recordKeySpecialKind === 'emoji' && guildId"
+                class="flex-1 min-w-0"
+                :guild-id="guildId"
+                :model-value="entry.key"
+                @update:model-value="(val) => renameRecordKey(entry.key, val ?? '')"
+              />
               <input
+                v-else
                 type="text"
                 class="field-input flex-1 min-w-0 font-mono text-sm"
                 :value="entry.key"
@@ -372,6 +404,7 @@ import {
   classifyKind,
   defaultForSchema,
   detectMultiLeafSchema,
+  detectRecordKeySpecialKind,
   detectSpecialFieldKind,
   isSimple,
   isWide,
@@ -498,6 +531,7 @@ function numberOrNull(raw: string): number | null {
 // --- records (dynamic string-keyed objects) ---
 
 const recordValueIsSimple = computed(() => isSimple(innerSchema.value?.additionalProperties));
+const recordKeySpecialKind = computed(() => (kind.value === "record" ? detectRecordKeySpecialKind(props.fieldKey) : null));
 
 let recordKeyCounter = 0;
 const recordEntries = computed(() => Object.keys(props.modelValue ?? {}).map((key) => ({ key, uid: key })));
