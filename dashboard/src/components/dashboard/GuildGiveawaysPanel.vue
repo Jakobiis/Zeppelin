@@ -14,8 +14,8 @@
     </div>
   </div>
 
-  <div class="columns-1 sm:columns-2 xl:columns-3 gap-4">
-    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+  <div class="grid min-w-0 items-start gap-4 xl:grid-cols-3">
+    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Create giveaway</h3>
         <div
           v-if="createError"
@@ -250,7 +250,7 @@
         </button>
     </div>
 
-    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Giveaway contributor</h3>
       <input
         type="text"
@@ -305,7 +305,7 @@
       </div>
     </div>
 
-    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Running</h3>
       <div v-if="!running.length" class="text-sm text-muted-foreground">No running giveaways</div>
       <div class="flex flex-col gap-3">
@@ -338,7 +338,7 @@
       </div>
     </div>
 
-    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Recently finished</h3>
       <input
         type="text"
