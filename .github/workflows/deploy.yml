@@ -5,10 +5,48 @@ on:
     branches:
       - master
 
+env:
+  IMAGE: ghcr.io/jakobiis/zeppelin:latest
+
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     if: contains(github.event.head_commit.message, '# build')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            API_URL=${{ secrets.API_URL }}
+            COMMIT_HASH=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '# build')
+    permissions:
+      packages: read
     steps:
       - name: SSH and deploy
         uses: appleboy/ssh-action@v1.0.3
@@ -18,11 +56,15 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
           debug: true
+          envs: GHCR_TOKEN,GHCR_ACTOR
           script: |
             echo "connected successfully"
             set -e
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
             cd Zeppelin/Zeppelin
             git pull
-            docker compose -f docker-compose.lightweight.yml down
-            docker compose -f docker-compose.lightweight.yml build
+            docker compose -f docker-compose.lightweight.yml pull
             docker compose -f docker-compose.lightweight.yml up -d
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}

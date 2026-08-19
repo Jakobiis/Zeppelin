@@ -2,6 +2,7 @@ version: '3'
 name: zeppelin-lightweight
 services:
   migrate:
+    image: &image ghcr.io/jakobiis/zeppelin:latest
     build: &build
       context: .
       args:
@@ -24,6 +25,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    image: *image
     build: *build
     restart: on-failure
     environment: *env
@@ -38,6 +40,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    image: *image
     build: *build
     restart: on-failure
     environment: *env
@@ -50,6 +53,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    image: *image
     build: *build
     restart: on-failure
     environment: *env
