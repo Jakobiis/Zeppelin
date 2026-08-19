@@ -53,16 +53,26 @@ function sanitizeExtraEntries(input: unknown): Record<string, number> {
   return result;
 }
 
+// Deliberately swallows errors and denies access rather than letting one propagate — this is called from every
+// route below (directly or via requireGiveawayManager), and an unhandled rejection anywhere in the API process
+// kills the whole thing (see api/index.ts's process.on("unhandledRejection", ...) -> process.exit(1)), taking
+// down every other route with it, not just this one. A DB hiccup here should mean "access denied", not "the
+// entire API goes down for everyone."
 async function isGiveawayManager(guildId: string, userId: string): Promise<boolean> {
-  const managerRoles = await getGiveawayManagerRoles(guildId);
-  if (managerRoles.length === 0) {
+  try {
+    const managerRoles = await getGiveawayManagerRoles(guildId);
+    if (managerRoles.length === 0) {
+      return false;
+    }
+    const memberRoleIds = await getGuildMemberRoleIds(guildId, userId);
+    if (!memberRoleIds) {
+      return false;
+    }
+    return memberRoleIds.some((roleId) => managerRoles.includes(roleId));
+  } catch (err) {
+    console.error("[GIVEAWAYS API] isGiveawayManager failed:", err); // tslint:disable-line:no-console
     return false;
   }
-  const memberRoleIds = await getGuildMemberRoleIds(guildId, userId);
-  if (!memberRoleIds) {
-    return false;
-  }
-  return memberRoleIds.some((roleId) => managerRoles.includes(roleId));
 }
 
 function requireGiveawayManager() {
@@ -88,19 +98,23 @@ export function initGuildGiveawaysAPI(router: express.Router) {
     "/:guildId/giveaways/templates",
     requireGiveawayManager(),
     async (req: Request, res: Response) => {
-      const config = await getGiveawaysPluginConfig(req.params.guildId);
-      const templates = config.templates ?? {};
-      res.json(
-        Object.entries(templates).map(([name, template]: [string, any]) => ({
-          name,
-          channel_id: template.channel_id ?? null,
-          embed_color: template.embed_color ?? null,
-          bypass_roles: template.bypass_roles ?? [],
-          blacklisted_roles: template.blacklisted_roles ?? [],
-          extra_entries: template.extra_entries ?? {},
-          claim_time: template.claim_time ?? null,
-        })),
-      );
+      try {
+        const config = await getGiveawaysPluginConfig(req.params.guildId);
+        const templates = config.templates ?? {};
+        res.json(
+          Object.entries(templates).map(([name, template]: [string, any]) => ({
+            name,
+            channel_id: template.channel_id ?? null,
+            embed_color: template.embed_color ?? null,
+            bypass_roles: template.bypass_roles ?? [],
+            blacklisted_roles: template.blacklisted_roles ?? [],
+            extra_entries: template.extra_entries ?? {},
+            claim_time: template.claim_time ?? null,
+          })),
+        );
+      } catch (err) {
+        serverError(res, "Failed to load giveaway templates");
+      }
     },
   );
 
@@ -181,20 +195,24 @@ export function initGuildGiveawaysAPI(router: express.Router) {
     "/:guildId/giveaways",
     requireGiveawayManager(),
     async (req: Request, res: Response) => {
-      const repo = GuildGiveaways.getGuildInstance(req.params.guildId);
-      const [running, recentlyFinished] = await Promise.all([
-        repo.getRunning(),
-        repo.getRecentlyFinished(RECENT_FINISHED_LIMIT),
-      ]);
+      try {
+        const repo = GuildGiveaways.getGuildInstance(req.params.guildId);
+        const [running, recentlyFinished] = await Promise.all([
+          repo.getRunning(),
+          repo.getRecentlyFinished(RECENT_FINISHED_LIMIT),
+        ]);
 
-      const withEntryCounts = await Promise.all(
-        [...running, ...recentlyFinished].map(async (giveaway) => ({
-          ...giveaway,
-          entry_count: await giveawayEntries.count(giveaway.id),
-        })),
-      );
+        const withEntryCounts = await Promise.all(
+          [...running, ...recentlyFinished].map(async (giveaway) => ({
+            ...giveaway,
+            entry_count: await giveawayEntries.count(giveaway.id),
+          })),
+        );
 
-      res.json(withEntryCounts);
+        res.json(withEntryCounts);
+      } catch (err) {
+        serverError(res, "Failed to load giveaways");
+      }
     },
   );
 
@@ -202,14 +220,14 @@ export function initGuildGiveawaysAPI(router: express.Router) {
     "/:guildId/giveaways/:id/end",
     requireGiveawayManager(),
     async (req: Request, res: Response) => {
-      const giveaway = await GuildGiveaways.getGuildInstance(req.params.guildId).find(Number(req.params.id));
-      if (!giveaway) return notFound(res);
-      if (giveaway.status !== "running") return clientError(res, "Giveaway isn't running");
-
       try {
+        const giveaway = await GuildGiveaways.getGuildInstance(req.params.guildId).find(Number(req.params.id));
+        if (!giveaway) return notFound(res);
+        if (giveaway.status !== "running") return clientError(res, "Giveaway isn't running");
+
         await finalizeGiveaway(giveaway.id, { cancelled: false });
         ok(res);
-      } catch {
+      } catch (err) {
         serverError(res, "Failed to end giveaway");
       }
     },
@@ -219,19 +237,19 @@ export function initGuildGiveawaysAPI(router: express.Router) {
     "/:guildId/giveaways/:id/reroll",
     requireGiveawayManager(),
     async (req: Request, res: Response) => {
-      const giveaway = await GuildGiveaways.getGuildInstance(req.params.guildId).find(Number(req.params.id));
-      if (!giveaway) return notFound(res);
-      if (giveaway.status !== "ended") return clientError(res, "Giveaway hasn't ended yet");
-
-      const amount = Number(req.body?.amount) || 1;
-      if (!Number.isInteger(amount) || amount < 1) {
-        return clientError(res, "Amount must be a positive whole number");
-      }
-
       try {
+        const giveaway = await GuildGiveaways.getGuildInstance(req.params.guildId).find(Number(req.params.id));
+        if (!giveaway) return notFound(res);
+        if (giveaway.status !== "ended") return clientError(res, "Giveaway hasn't ended yet");
+
+        const amount = Number(req.body?.amount) || 1;
+        if (!Number.isInteger(amount) || amount < 1) {
+          return clientError(res, "Amount must be a positive whole number");
+        }
+
         await rerollGiveaway(giveaway.id, amount);
         ok(res);
-      } catch {
+      } catch (err) {
         serverError(res, "Failed to reroll giveaway");
       }
     },
@@ -241,14 +259,14 @@ export function initGuildGiveawaysAPI(router: express.Router) {
     "/:guildId/giveaways/:id/cancel",
     requireGiveawayManager(),
     async (req: Request, res: Response) => {
-      const giveaway = await GuildGiveaways.getGuildInstance(req.params.guildId).find(Number(req.params.id));
-      if (!giveaway) return notFound(res);
-      if (giveaway.status !== "running") return clientError(res, "Giveaway isn't running");
-
       try {
+        const giveaway = await GuildGiveaways.getGuildInstance(req.params.guildId).find(Number(req.params.id));
+        if (!giveaway) return notFound(res);
+        if (giveaway.status !== "running") return clientError(res, "Giveaway isn't running");
+
         await finalizeGiveaway(giveaway.id, { cancelled: true });
         ok(res);
-      } catch {
+      } catch (err) {
         serverError(res, "Failed to cancel giveaway");
       }
     },
