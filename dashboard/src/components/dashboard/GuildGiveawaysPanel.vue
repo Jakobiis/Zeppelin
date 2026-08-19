@@ -113,39 +113,59 @@
       </template>
     </Expandable>
 
-    <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4 mt-4">
-      <h3 class="mb-3">Running</h3>
-      <div v-if="!running.length" class="text-sm text-muted-foreground">No running giveaways</div>
-      <div v-for="giveaway in running" :key="giveaway.id" class="border-t border-border first:border-t-0 py-3 flex items-center flex-wrap gap-3">
-        <div class="flex-auto min-w-0">
-          <div class="font-medium">{{ giveaway.prize }} <span class="text-muted-foreground font-normal">({{ giveaway.id }})</span></div>
-          <div class="text-sm text-muted-foreground">
-            channel {{ giveaway.channel_id }} · host {{ memberName(giveaway.host_id) }} · {{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner(s) · ends {{ formatDate(giveaway.ends_at) }}
+    <div class="grid gap-4 lg:grid-cols-2 mt-4 items-start">
+      <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4">
+        <h3 class="mb-3">Running</h3>
+        <div v-if="!running.length" class="text-sm text-muted-foreground">No running giveaways</div>
+        <div class="flex flex-col gap-3">
+          <div v-for="giveaway in running" :key="giveaway.id" class="border border-border rounded-lg p-3 flex flex-col gap-2">
+            <div class="flex items-start justify-between gap-2">
+              <div class="font-semibold">{{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span></div>
+              <span class="flex-none text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">Running</span>
+            </div>
+            <div class="text-sm text-muted-foreground">
+              channel {{ giveaway.channel_id }} · host {{ memberName(giveaway.host_id) }}
+            </div>
+            <div class="text-sm text-muted-foreground">
+              {{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner(s) · ends {{ formatDate(giveaway.ends_at) }}
+            </div>
+            <div class="flex gap-2 mt-1">
+              <button type="button" class="btn-secondary" @click="promptEnd(giveaway)">End now</button>
+              <button type="button" class="btn-secondary" @click="promptCancel(giveaway)">Cancel</button>
+            </div>
           </div>
-        </div>
-        <div class="flex-none flex gap-2">
-          <button type="button" class="btn-secondary" @click="promptEnd(giveaway)">End now</button>
-          <button type="button" class="btn-secondary" @click="promptCancel(giveaway)">Cancel</button>
         </div>
       </div>
-    </div>
 
-    <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4 mt-4">
-      <h3 class="mb-3">Recently finished</h3>
-      <div v-if="!recentlyFinished.length" class="text-sm text-muted-foreground">No finished giveaways yet</div>
-      <div v-for="giveaway in recentlyFinished" :key="giveaway.id" class="border-t border-border first:border-t-0 py-3 flex items-center flex-wrap gap-3">
-        <div class="flex-auto min-w-0">
-          <div class="font-medium">{{ giveaway.prize }} <span class="text-muted-foreground font-normal">({{ giveaway.id }})</span></div>
-          <div class="text-sm text-muted-foreground">
-            host {{ memberName(giveaway.host_id) }} ·
-            <span v-if="giveaway.status === 'cancelled'">cancelled</span>
-            <span v-else-if="!currentWinnerIds(giveaway).length">ended, no eligible entries</span>
-            <span v-else>won by {{ currentWinnerIds(giveaway).map(memberName).join(', ') }}</span>
-            · ended {{ formatDate(giveaway.ended_at) }}
+      <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4">
+        <h3 class="mb-3">Recently finished</h3>
+        <div v-if="!recentlyFinished.length" class="text-sm text-muted-foreground">No finished giveaways yet</div>
+        <div class="flex flex-col gap-3">
+          <div v-for="giveaway in recentlyFinished" :key="giveaway.id" class="border border-border rounded-lg p-3 flex flex-col gap-2">
+            <div class="flex items-start justify-between gap-2">
+              <div class="font-semibold">{{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span></div>
+              <span
+                class="flex-none text-xs font-medium px-2 py-0.5 rounded-full"
+                :class="giveaway.status === 'cancelled'
+                  ? 'bg-destructive/10 text-destructive'
+                  : currentWinnerIds(giveaway).length
+                    ? 'bg-secondary text-secondary-foreground'
+                    : 'bg-muted text-muted-foreground'"
+              >
+                {{ giveaway.status === 'cancelled' ? 'Cancelled' : currentWinnerIds(giveaway).length ? 'Ended' : 'No winners' }}
+              </span>
+            </div>
+            <div class="text-sm text-muted-foreground">host {{ memberName(giveaway.host_id) }}</div>
+            <div class="text-sm">
+              <span v-if="giveaway.status === 'cancelled'" class="text-muted-foreground">No winners were picked.</span>
+              <span v-else-if="!currentWinnerIds(giveaway).length" class="text-muted-foreground">Ended, no eligible entries.</span>
+              <span v-else>Won by {{ currentWinnerIds(giveaway).map(memberName).join(', ') }}</span>
+            </div>
+            <div class="text-xs text-muted-foreground">ended {{ formatDate(giveaway.ended_at) }}</div>
+            <div class="mt-1" v-if="giveaway.status === 'ended'">
+              <button type="button" class="btn-secondary" @click="promptReroll(giveaway)">Reroll</button>
+            </div>
           </div>
-        </div>
-        <div class="flex-none" v-if="giveaway.status === 'ended'">
-          <button type="button" class="btn-secondary" @click="promptReroll(giveaway)">Reroll</button>
         </div>
       </div>
     </div>

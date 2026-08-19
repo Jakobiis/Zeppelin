@@ -10,11 +10,11 @@
 
     <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4 flex items-center flex-wrap">
       <h3 class="flex-full md:flex-auto">Config for {{ guild.name }}</h3>
-      <button v-if="!saving" class="flex-none btn-primary" v-on:click="save">
+      <button v-if="canEditConfig && !saving" class="flex-none btn-primary" v-on:click="save">
         <span v-if="saved">Saved!</span>
         <span v-else>Save</span>
       </button>
-      <div v-else class="flex-none btn-secondary">
+      <div v-else-if="canEditConfig" class="flex-none btn-secondary">
         Saving...
       </div>
     </div>
@@ -115,7 +115,8 @@
   import { computed } from "vue";
   import {mapState} from "vuex";
   import {ApiError, get} from "../../api";
-  import { DocsState, GuildState } from "../../store/types";
+  import { ApiPermissions, hasPermission } from "@zeppelinbot/shared/apiPermissions.js";
+  import { DocsState, GuildState, RootState } from "../../store/types";
 
   import { VAceEditor } from "vue3-ace-editor";
 
@@ -170,6 +171,8 @@
         this.$router.push('/dashboard');
         return;
       }
+
+      await this.$store.dispatch("guilds/loadGuildPermissionAssignments", this.$route.params.guildId).catch(() => {});
 
       await this.$store.dispatch("guilds/loadConfig", this.$route.params.guildId);
       this.editableConfig = this.config || "";
@@ -253,6 +256,13 @@
         },
         config(guilds: GuildState) {
           return guilds.configs[this.$route.params.guildId];
+        },
+      }),
+      ...mapState({
+        canEditConfig(state: RootState): boolean {
+          const guildPermissions = state.guilds.guildPermissionAssignments[this.$route.params.guildId] || [];
+          const myPermissions = guildPermissions.find(p => p.type === "USER" && p.target_id === state.auth.userId) || null;
+          return myPermissions && hasPermission(myPermissions.permissions, ApiPermissions.EditConfig);
         },
       }),
       ...mapState("docs", {

@@ -3,6 +3,7 @@ import { GuildGiveaways } from "../../data/GuildGiveaways.js";
 import { onGuildEvent } from "../../data/GuildEvents.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { GiveawayCancelCmd } from "./commands/GiveawayCancelCmd.js";
+import { GiveawayDashboardCmd } from "./commands/GiveawayDashboardCmd.js";
 import { GiveawayEndCmd } from "./commands/GiveawayEndCmd.js";
 import { GiveawayListCmd } from "./commands/GiveawayListCmd.js";
 import { GiveawayRerollCmd } from "./commands/GiveawayRerollCmd.js";
@@ -35,6 +36,7 @@ export const GiveawaysPlugin = guildPlugin<GiveawaysPluginType>()({
     GiveawayRerollCmd,
     GiveawayCancelCmd,
     GiveawayListCmd,
+    GiveawayDashboardCmd,
   ],
 
   events: [onGiveawayButtonInteraction],
