@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="grid items-start gap-4 xl:grid-cols-3">
     <Expandable>
       <template v-slot:title>Create giveaway</template>
       <template v-slot:content>
@@ -113,8 +113,7 @@
       </template>
     </Expandable>
 
-    <div class="grid gap-4 lg:grid-cols-2 mt-4 items-start">
-      <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4">
+    <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4">
         <h3 class="mb-3">Running</h3>
         <div v-if="!running.length" class="text-sm text-muted-foreground">No running giveaways</div>
         <div class="flex flex-col gap-3">
@@ -135,9 +134,9 @@
             </div>
           </div>
         </div>
-      </div>
+    </div>
 
-      <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4">
+    <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4">
         <h3 class="mb-3">Recently finished</h3>
         <div v-if="!recentlyFinished.length" class="text-sm text-muted-foreground">No finished giveaways yet</div>
         <div class="flex flex-col gap-3">
@@ -167,7 +166,6 @@
             </div>
           </div>
         </div>
-      </div>
     </div>
 
     <ConfirmModal

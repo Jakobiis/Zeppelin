@@ -22,7 +22,7 @@ export const GiveawayDashboardCmd = guildPluginMessageCommand<GiveawaysPluginTyp
     const embed = new EmbedBuilder()
       .setColor(getGuildEmbedColor(pluginData))
       .setTitle("Giveaways Dashboard")
-      .setDescription("Create, end, cancel, and reroll giveaways for this server from the web dashboard.");
+      .setDescription("Manage giveaways for this server from the web dashboard.");
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Open Dashboard").setURL(url),
