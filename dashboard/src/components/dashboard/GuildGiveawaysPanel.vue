@@ -197,6 +197,13 @@ export default {
       this.$store.dispatch("guilds/loadGiveaways", this.guildId).catch(() => {}),
       this.$store.dispatch("guilds/loadGiveawayTemplates", this.guildId).catch(() => {}),
     ]);
+
+    // Same auto-apply-"default" behavior as -giveaway start (see GiveawayStartCmd.ts) — prefills the form so
+    // staff don't have to pick it from the dropdown every time. Still just a prefill: changing any field
+    // afterwards overrides it same as picking a different template would.
+    if (this.templates.some((t: GiveawayTemplate) => t.name === "default")) {
+      this.applyTemplate("default");
+    }
   },
 
   methods: {

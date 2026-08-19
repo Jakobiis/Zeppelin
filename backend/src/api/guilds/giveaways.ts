@@ -109,7 +109,10 @@ export function initGuildGiveawaysAPI(router: express.Router) {
       }
 
       const config = await getGiveawaysPluginConfig(req.params.guildId);
-      const template = typeof body.template === "string" && body.template ? config.templates?.[body.template] : null;
+      // Same auto-apply-"default" behavior as the chat command (see GiveawayStartCmd.ts) — an explicit template
+      // in the request body always wins over it.
+      const template =
+        typeof body.template === "string" && body.template ? config.templates?.[body.template] : config.templates?.default;
       if (body.template && !template) {
         return clientError(res, `Unknown giveaway template \`${body.template}\``);
       }

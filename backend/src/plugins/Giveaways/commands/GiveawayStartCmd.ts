@@ -35,7 +35,9 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
       return;
     }
 
-    const template = args.template ? config.templates[args.template] : undefined;
+    // A template named "default" is applied automatically when -template isn't given, so staff don't have to
+    // spell it out on every giveaway — an explicit -template always wins over it.
+    const template = args.template ? config.templates[args.template] : config.templates.default;
     if (args.template && !template) {
       void pluginData.state.common.sendErrorMessage(message, `Unknown giveaway template \`${args.template}\``);
       return;
