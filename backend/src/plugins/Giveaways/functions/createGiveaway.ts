@@ -18,6 +18,8 @@ export interface CreateGiveawayFields {
   blacklisted_role_ids: string[];
   extra_entries: Record<string, number>;
   message_requirement: GiveawayMessageRequirement | null;
+  // Null means no claim requirement — winners aren't rerolled for failing to click Claim Prize.
+  claim_time_ms: number | null;
 }
 
 /**
@@ -48,6 +50,11 @@ export async function createGiveawayRecord(guildId: string, fields: CreateGiveaw
     extra_entries: fields.extra_entries,
     message_requirement: fields.message_requirement,
     winner_ids: [],
+    claim_time_ms: fields.claim_time_ms,
+    claimed_winner_ids: [],
+    expired_winner_ids: [],
+    winner_claim_deadlines: {},
+    winner_thread_ids: {},
     created_at: moment.utc().format(DBDateFormat),
   });
 

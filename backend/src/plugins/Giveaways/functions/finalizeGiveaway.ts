@@ -1,20 +1,28 @@
 import moment from "moment-timezone";
 import { Giveaway } from "../../../data/entities/Giveaway.js";
 import { Giveaways } from "../../../data/Giveaways.js";
+import { GiveawayEntries } from "../../../data/GiveawayEntries.js";
 import { clearUpcomingGiveaway } from "../../../data/loops/upcomingGiveawaysLoop.js";
+import { humanizeDuration } from "../../../humanizeDuration.js";
 import { DBDateFormat } from "../../../utils.js";
 import { DEFAULT_EMBED_COLOR } from "../../../utils/getGuildEmbedColor.js";
+import { armClaimDeadlines } from "./claimGiveaway.js";
+import { buildWinnerAnnouncementButtons, formatGiveawayTitle } from "./buildGiveawayMessage.js";
 import { editChannelMessage, sendChannelMessage } from "./discordRest.js";
 import { rollWinners } from "./rollWinners.js";
 
 const giveaways = new Giveaways();
+const giveawayEntries = new GiveawayEntries();
 
-function buildEndedEmbed(giveaway: Giveaway, cancelled: boolean) {
+function buildEndedEmbed(giveaway: Giveaway, cancelled: boolean, participantCount: number) {
   const color = giveaway.embed_color ?? DEFAULT_EMBED_COLOR;
+  const title = formatGiveawayTitle(giveaway.prize, giveaway.winner_count);
+  const infoLines = [`Host: <@${giveaway.host_id}>`, `Participants: **${participantCount}**`];
+
   if (cancelled) {
     return {
-      title: giveaway.prize,
-      description: "🚫 This giveaway was cancelled.",
+      title,
+      description: [`🚫 This giveaway was cancelled.`, ...infoLines].join("\n"),
       color,
     };
   }
@@ -25,17 +33,22 @@ function buildEndedEmbed(giveaway: Giveaway, cancelled: boolean) {
       : "No valid entries — no winner could be selected.";
 
   return {
-    title: giveaway.prize,
-    description: `🎉 Giveaway ended!\n**Winner(s):** ${winnerLines}`,
+    title,
+    description: [`🎉 Giveaway ended!`, `**Winner(s):** ${winnerLines}`, ...infoLines].join("\n"),
     color,
   };
 }
 
 function buildWinnerAnnouncementPayload(giveaway: Giveaway) {
   const mentions = giveaway.winner_ids.map((id) => `<@${id}>`).join(", ");
+  const hasClaim = giveaway.claim_time_ms != null;
+  const claimLine = hasClaim
+    ? `\nClick ✅ **Claim Prize** within **${humanizeDuration(giveaway.claim_time_ms!)}** or you'll be rerolled!`
+    : "";
   return {
-    content: `🎉 Congratulations ${mentions}! You won **${giveaway.prize}**!`,
+    content: `🎉 Congratulations ${mentions}! You won **${giveaway.prize}**!${claimLine}`,
     allowed_mentions: { users: giveaway.winner_ids },
+    components: buildWinnerAnnouncementButtons(giveaway.id, hasClaim).map((row) => row.toJSON()),
   };
 }
 
@@ -64,16 +77,18 @@ export async function finalizeGiveaway(giveawayId: number, opts: { cancelled: bo
 
   clearUpcomingGiveaway(giveaway);
 
-  const updated = (await giveaways.find(giveawayId))!;
+  let updated = (await giveaways.find(giveawayId))!;
 
   if (updated.message_id) {
+    const participantCount = await giveawayEntries.count(giveawayId);
     await editChannelMessage(updated.channel_id, updated.message_id, {
-      embeds: [buildEndedEmbed(updated, opts.cancelled)],
+      embeds: [buildEndedEmbed(updated, opts.cancelled, participantCount)],
       components: [],
     }).catch(() => null);
   }
 
-  if (!opts.cancelled) {
+  if (!opts.cancelled && updated.winner_ids.length > 0) {
+    updated = await armClaimDeadlines(updated, winnerIds);
     await sendChannelMessage(updated.channel_id, buildWinnerAnnouncementPayload(updated)).catch(() => null);
   }
 
@@ -81,10 +96,11 @@ export async function finalizeGiveaway(giveawayId: number, opts: { cancelled: bo
 }
 
 /**
- * Re-rolls winner(s) for an already-ended giveaway, excluding everyone who has ever won it before (across all
- * previous rerolls too). Posts a fresh winner announcement; does not touch the original giveaway message.
+ * Re-rolls `amount` (default 1) new winner(s) for an already-ended giveaway, excluding everyone who has ever
+ * won it before (across all previous rerolls too). Posts a fresh winner announcement; does not touch the
+ * original giveaway message. Replacement winners get the same claim window as any other winner, if configured.
  */
-export async function rerollGiveaway(giveawayId: number): Promise<Giveaway> {
+export async function rerollGiveaway(giveawayId: number, amount = 1): Promise<Giveaway> {
   const giveaway = await giveaways.find(giveawayId);
   if (!giveaway) {
     throw new Error(`Giveaway ${giveawayId} not found`);
@@ -93,17 +109,25 @@ export async function rerollGiveaway(giveawayId: number): Promise<Giveaway> {
     throw new Error("Only an ended giveaway can be rerolled");
   }
 
-  const newWinnerIds = await rollWinners(giveawayId, giveaway.winner_count, giveaway.winner_ids);
+  const newWinnerIds = await rollWinners(giveawayId, amount, giveaway.winner_ids);
   const allWinnerIds = [...giveaway.winner_ids, ...newWinnerIds];
 
   await giveaways.update(giveawayId, { winner_ids: allWinnerIds });
 
-  const updated = (await giveaways.find(giveawayId))!;
+  let updated = (await giveaways.find(giveawayId))!;
 
   if (newWinnerIds.length > 0) {
+    updated = await armClaimDeadlines(updated, newWinnerIds);
+
+    const hasClaim = updated.claim_time_ms != null;
+    const claimLine = hasClaim
+      ? `\nClick ✅ **Claim Prize** within **${humanizeDuration(updated.claim_time_ms!)}** or you'll be rerolled!`
+      : "";
+
     await sendChannelMessage(updated.channel_id, {
-      content: `🎉 Giveaway rerolled for **${updated.prize}**! New winner(s): ${newWinnerIds.map((id) => `<@${id}>`).join(", ")}`,
+      content: `🎉 Giveaway rerolled for **${updated.prize}**! New winner(s): ${newWinnerIds.map((id) => `<@${id}>`).join(", ")}${claimLine}`,
       allowed_mentions: { users: newWinnerIds },
+      components: buildWinnerAnnouncementButtons(updated.id, hasClaim).map((row) => row.toJSON()),
     }).catch(() => null);
   }
 

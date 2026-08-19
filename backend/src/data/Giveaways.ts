@@ -24,6 +24,17 @@ export class Giveaways extends BaseRepository {
       .getMany();
   }
 
+  // Bounded candidate set for the claim-deadlines loop — ended giveaways with a claim requirement at all.
+  // winner_claim_deadlines is a JSON blob (not a plain column), so it can't be filtered at the SQL level for
+  // "due soon"; the loop does that part in JS against this small, already-filtered set.
+  getGiveawaysWithPendingClaims(): Promise<Giveaway[]> {
+    return this.giveaways
+      .createQueryBuilder()
+      .where("status = :status", { status: "ended" })
+      .andWhere("claim_time_ms IS NOT NULL")
+      .getMany();
+  }
+
   // Looked up by numeric PK alone (no guild filter) — used by the finalize/roll logic in
   // plugins/Giveaways/functions/, which is shared between the bot process and the API process and therefore
   // deliberately doesn't route through the guild-scoped GuildGiveaways.

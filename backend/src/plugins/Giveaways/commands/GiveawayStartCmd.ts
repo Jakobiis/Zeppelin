@@ -1,6 +1,7 @@
 import { Snowflake } from "discord.js";
 import { guildPluginMessageCommand } from "vety";
 import { commandTypeHelpers as ct } from "../../../commandTypes.js";
+import { convertDelayStringToMS } from "../../../utils.js";
 import { createGiveawayRecord } from "../functions/createGiveaway.js";
 import { hasGiveawayManagerRole } from "../functions/requireGiveawayManager.js";
 import { resolveRoleList } from "../functions/resolveRoleList.js";
@@ -25,6 +26,7 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
     blacklist: ct.string({ option: true }),
     messages: ct.string({ option: true }),
     template: ct.string({ option: true, shortcut: "t" }),
+    claim: ct.string({ option: true }),
   },
 
   async run({ pluginData, message, args }) {
@@ -102,6 +104,17 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
       messageRequirement = { period, count };
     }
 
+    let claimTimeMs: number | null = null;
+    if (args.claim) {
+      claimTimeMs = convertDelayStringToMS(args.claim);
+      if (!claimTimeMs || claimTimeMs <= 0) {
+        void pluginData.state.common.sendErrorMessage(message, "`-claim` must be a valid duration, e.g. `1d` or `12h`.");
+        return;
+      }
+    } else if (template?.claim_time) {
+      claimTimeMs = convertDelayStringToMS(template.claim_time);
+    }
+
     const giveaway = await createGiveawayRecord(pluginData.guild.id, {
       channel_id: channel.id,
       host_id: hostId,
@@ -114,6 +127,7 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
       blacklisted_role_ids: blacklistedRoleIds,
       extra_entries: template?.extra_entries ?? {},
       message_requirement: messageRequirement,
+      claim_time_ms: claimTimeMs,
     });
 
     void pluginData.state.common.sendSuccessMessage(message, `Giveaway #${giveaway.id} for **${args.prize}** started in <#${channel.id}>!`);

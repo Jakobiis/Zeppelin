@@ -12,6 +12,7 @@ import { clientError, notFound, ok, serverError, unauthorized } from "../respons
 
 const RECENT_FINISHED_LIMIT = 20;
 const MAX_ROLES_PER_FIELD = 20;
+const MAX_EXTRA_ENTRY_ROLES = 20;
 
 const configs = new Configs();
 const giveawayEntries = new GiveawayEntries();
@@ -35,6 +36,21 @@ async function getGiveawayManagerRoles(guildId: string): Promise<string[]> {
 function sanitizeRoleIds(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
   return input.filter((id) => typeof id === "string" && isValidSnowflake(id)).slice(0, MAX_ROLES_PER_FIELD);
+}
+
+// Same shape/bounds as the config schema's extra_entries validator (Giveaways/types.ts) — a role ID -> bonus
+// entries map, bonus an integer 1-100.
+function sanitizeExtraEntries(input: unknown): Record<string, number> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  const result: Record<string, number> = {};
+  for (const [roleId, bonus] of Object.entries(input as Record<string, unknown>)) {
+    if (!isValidSnowflake(roleId)) continue;
+    const n = Number(bonus);
+    if (!Number.isInteger(n) || n < 1 || n > 100) continue;
+    result[roleId] = n;
+    if (Object.keys(result).length >= MAX_EXTRA_ENTRY_ROLES) break;
+  }
+  return result;
 }
 
 async function isGiveawayManager(guildId: string, userId: string): Promise<boolean> {
@@ -82,6 +98,7 @@ export function initGuildGiveawaysAPI(router: express.Router) {
           bypass_roles: template.bypass_roles ?? [],
           blacklisted_roles: template.blacklisted_roles ?? [],
           extra_entries: template.extra_entries ?? {},
+          claim_time: template.claim_time ?? null,
         })),
       );
     },
@@ -145,8 +162,13 @@ export function initGuildGiveawaysAPI(router: express.Router) {
           required_role_ids: sanitizeRoleIds(body.required_role_ids),
           bypass_role_ids: body.bypass_role_ids ? sanitizeRoleIds(body.bypass_role_ids) : template?.bypass_roles ?? [],
           blacklisted_role_ids: body.blacklisted_role_ids ? sanitizeRoleIds(body.blacklisted_role_ids) : template?.blacklisted_roles ?? [],
-          extra_entries: template?.extra_entries ?? {},
+          extra_entries: body.extra_entries ? sanitizeExtraEntries(body.extra_entries) : template?.extra_entries ?? {},
           message_requirement: messageRequirement,
+          claim_time_ms: (() => {
+            if (typeof body.claim_time === "string" && body.claim_time) return convertDelayStringToMS(body.claim_time);
+            if (template?.claim_time) return convertDelayStringToMS(template.claim_time);
+            return null;
+          })(),
         });
         res.json({ ...giveaway, entry_count: 0 });
       } catch (err) {
@@ -201,8 +223,13 @@ export function initGuildGiveawaysAPI(router: express.Router) {
       if (!giveaway) return notFound(res);
       if (giveaway.status !== "ended") return clientError(res, "Giveaway hasn't ended yet");
 
+      const amount = Number(req.body?.amount) || 1;
+      if (!Number.isInteger(amount) || amount < 1) {
+        return clientError(res, "Amount must be a positive whole number");
+      }
+
       try {
-        await rerollGiveaway(giveaway.id);
+        await rerollGiveaway(giveaway.id, amount);
         ok(res);
       } catch {
         serverError(res, "Failed to reroll giveaway");

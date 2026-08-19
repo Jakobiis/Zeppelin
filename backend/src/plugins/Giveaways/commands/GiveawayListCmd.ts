@@ -2,6 +2,7 @@ import { EmbedBuilder } from "discord.js";
 import { guildPluginMessageCommand } from "vety";
 import { GiveawayEntries } from "../../../data/GiveawayEntries.js";
 import { getGuildEmbedColor } from "../../../utils/getGuildEmbedColor.js";
+import { currentWinnerIds } from "../functions/buildGiveawayMessage.js";
 import { hasGiveawayManagerRole } from "../functions/requireGiveawayManager.js";
 import { GiveawaysPluginType } from "../types.js";
 
@@ -35,7 +36,7 @@ export const GiveawayListCmd = guildPluginMessageCommand<GiveawaysPluginType>()(
     );
 
     const finishedLines = recentlyFinished.map((g) => {
-      const status = g.status === "cancelled" ? "cancelled" : `won by ${g.winner_ids.map((id) => `<@${id}>`).join(", ") || "nobody"}`;
+      const status = g.status === "cancelled" ? "cancelled" : `won by ${currentWinnerIds(g).map((id) => `<@${id}>`).join(", ") || "nobody"}`;
       return `**#${g.id}** ${g.prize} — ${status}`;
     });
 

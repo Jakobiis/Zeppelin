@@ -17,6 +17,14 @@ export class GuildGiveaways extends BaseGuildRepository {
     });
   }
 
+  // Used by `-giveaway reroll <message id>` — staff can right-click the giveaway's own announcement message
+  // (edited in place to the "ended" embed) and copy its ID rather than needing to know the internal numeric one.
+  findByMessageId(messageId: string): Promise<Giveaway | null> {
+    return this.giveaways.findOne({
+      where: { message_id: messageId, guild_id: this.guildId },
+    });
+  }
+
   getRunning(): Promise<Giveaway[]> {
     return this.giveaways
       .createQueryBuilder()

@@ -13,6 +13,7 @@ interface GuildEventArgs extends Record<string, unknown[]> {
   expiredTempban: [Tempban];
   expiredVCAlert: [VCAlert];
   giveawayEnd: [Giveaway];
+  giveawayClaimExpired: [Giveaway];
 }
 
 type GuildEvent = keyof GuildEventArgs;

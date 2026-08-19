@@ -33,7 +33,11 @@ export interface GiveawayApiItem {
   ends_at: string;
   ended_at: string | null;
   status: "running" | "ended" | "cancelled";
+  // Append-only full history (every reroll adds to it, never removes) — expired_winner_ids/claimed_winner_ids
+  // are subsets of it. Filter those out of winner_ids for "who currently has the prize" display.
   winner_ids: string[];
+  expired_winner_ids: string[];
+  claimed_winner_ids: string[];
   entry_count: number;
 }
 

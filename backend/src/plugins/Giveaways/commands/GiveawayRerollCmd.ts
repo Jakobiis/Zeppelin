@@ -9,7 +9,8 @@ export const GiveawayRerollCmd = guildPluginMessageCommand<GiveawaysPluginType>(
   permission: null,
 
   signature: {
-    id: ct.number(),
+    messageId: ct.string(),
+    amount: ct.number({ option: true, shortcut: "a" }),
   },
 
   async run({ pluginData, message, args }) {
@@ -18,17 +19,23 @@ export const GiveawayRerollCmd = guildPluginMessageCommand<GiveawaysPluginType>(
       return;
     }
 
-    const giveaway = await pluginData.state.giveaways.find(args.id);
-    if (!giveaway) {
-      void pluginData.state.common.sendErrorMessage(message, `Unknown giveaway #${args.id}`);
-      return;
-    }
-    if (giveaway.status !== "ended") {
-      void pluginData.state.common.sendErrorMessage(message, `Giveaway #${args.id} hasn't ended yet, so it can't be rerolled.`);
+    const amount = args.amount ?? 1;
+    if (!Number.isInteger(amount) || amount < 1) {
+      void pluginData.state.common.sendErrorMessage(message, "Amount must be a positive whole number.");
       return;
     }
 
-    const rerolled = await rerollGiveaway(giveaway.id);
+    const giveaway = await pluginData.state.giveaways.findByMessageId(args.messageId);
+    if (!giveaway) {
+      void pluginData.state.common.sendErrorMessage(message, `No giveaway found for message ID \`${args.messageId}\``);
+      return;
+    }
+    if (giveaway.status !== "ended") {
+      void pluginData.state.common.sendErrorMessage(message, `Giveaway #${giveaway.id} hasn't ended yet, so it can't be rerolled.`);
+      return;
+    }
+
+    const rerolled = await rerollGiveaway(giveaway.id, amount);
     const newWinners = rerolled.winner_ids.slice(giveaway.winner_ids.length);
     void pluginData.state.common.sendSuccessMessage(
       message,

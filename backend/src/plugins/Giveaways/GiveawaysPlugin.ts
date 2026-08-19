@@ -8,6 +8,7 @@ import { GiveawayListCmd } from "./commands/GiveawayListCmd.js";
 import { GiveawayRerollCmd } from "./commands/GiveawayRerollCmd.js";
 import { GiveawayStartCmd } from "./commands/GiveawayStartCmd.js";
 import { onGiveawayButtonInteraction } from "./events/giveawayButtonInteraction.js";
+import { processExpiredClaims } from "./functions/claimGiveaway.js";
 import { finalizeGiveaway } from "./functions/finalizeGiveaway.js";
 import { GiveawaysPluginType, zGiveawaysConfig } from "./types.js";
 
@@ -49,15 +50,23 @@ export const GiveawaysPlugin = guildPlugin<GiveawaysPluginType>()({
   afterLoad(pluginData) {
     const { state, guild } = pluginData;
 
-    state.unregisterGuildEventListener = onGuildEvent(guild.id, "giveawayEnd", (giveaway) => {
-      finalizeGiveaway(giveaway.id, { cancelled: false }).catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error(`[GIVEAWAYS] Failed to finalize giveaway ${giveaway.id}:`, err);
-      });
-    });
+    state.unregisterGuildEventListeners = [
+      onGuildEvent(guild.id, "giveawayEnd", (giveaway) => {
+        finalizeGiveaway(giveaway.id, { cancelled: false }).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error(`[GIVEAWAYS] Failed to finalize giveaway ${giveaway.id}:`, err);
+        });
+      }),
+      onGuildEvent(guild.id, "giveawayClaimExpired", (giveaway) => {
+        processExpiredClaims(giveaway.id).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error(`[GIVEAWAYS] Failed to process expired claims for giveaway ${giveaway.id}:`, err);
+        });
+      }),
+    ];
   },
 
   beforeUnload(pluginData) {
-    pluginData.state.unregisterGuildEventListener?.();
+    pluginData.state.unregisterGuildEventListeners?.forEach((unregister) => unregister());
   },
 });

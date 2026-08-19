@@ -62,6 +62,10 @@
         <label class="font-medium text-sm">Blacklisted roles <span class="text-muted-foreground font-normal">(can never enter)</span></label>
         <RoleListField class="mt-1" :guild-id="guildId" :model-value="form.blacklisted_role_ids" @update:model-value="form.blacklisted_role_ids = $event" />
       </div>
+      <div class="mt-4">
+        <label class="font-medium text-sm">Extra entries <span class="text-muted-foreground font-normal">(bonus entries per role, stacking)</span></label>
+        <RoleEntryMapField class="mt-1" :guild-id="guildId" :model-value="form.extra_entries" @update:model-value="form.extra_entries = $event" />
+      </div>
 
       <div class="mt-4">
         <label class="flex items-center gap-2 text-sm font-medium">
@@ -105,8 +109,8 @@
           <div class="font-medium">#{{ giveaway.id }} {{ giveaway.prize }}</div>
           <div class="text-sm text-muted-foreground">
             <span v-if="giveaway.status === 'cancelled'">cancelled</span>
-            <span v-else-if="!giveaway.winner_ids.length">ended, no eligible entries</span>
-            <span v-else>won by {{ giveaway.winner_ids.join(', ') }}</span>
+            <span v-else-if="!currentWinnerIds(giveaway).length">ended, no eligible entries</span>
+            <span v-else>won by {{ currentWinnerIds(giveaway).join(', ') }}</span>
             · ended {{ formatDate(giveaway.ended_at) }}
           </div>
         </div>
@@ -126,6 +130,7 @@ import { GiveawayApiItem, GiveawayTemplate, GuildState } from "../../store/types
 import ColorPickerField from "./ColorPickerField.vue";
 import ComboboxField from "./ComboboxField.vue";
 import RoleChannelPickerField from "./RoleChannelPickerField.vue";
+import RoleEntryMapField, { RoleEntryMapRow } from "./RoleEntryMapField.vue";
 import RoleListField from "./RoleListField.vue";
 
 const PERIOD_OPTIONS = [
@@ -147,6 +152,7 @@ function defaultForm() {
     required_role_ids: [] as (string | null)[],
     bypass_role_ids: [] as (string | null)[],
     blacklisted_role_ids: [] as (string | null)[],
+    extra_entries: [] as RoleEntryMapRow[],
     hasMessageRequirement: false,
     messagePeriod: "daily",
     messageCount: 100,
@@ -154,7 +160,7 @@ function defaultForm() {
 }
 
 export default {
-  components: { RoleChannelPickerField, ColorPickerField, ComboboxField, RoleListField },
+  components: { RoleChannelPickerField, ColorPickerField, ComboboxField, RoleListField, RoleEntryMapField },
 
   props: {
     guildId: { type: String, required: true },
@@ -212,6 +218,12 @@ export default {
       return moment.utc(dateStr).local().format("YYYY-MM-DD HH:mm");
     },
 
+    // winner_ids is append-only full history (every reroll adds to it, never removes) — this is who currently
+    // still has the prize, i.e. winner_ids minus anyone whose claim window expired and was rerolled away.
+    currentWinnerIds(giveaway: GiveawayApiItem): string[] {
+      return giveaway.winner_ids.filter((id) => !giveaway.expired_winner_ids.includes(id));
+    },
+
     // Prefills channel/color/bypass/blacklisted from the chosen template, same as `-template` on the chat
     // command — explicit edits after this still win since it's a one-time prefill, not a binding.
     applyTemplate(templateName: string | null) {
@@ -222,6 +234,9 @@ export default {
       if (template.embed_color != null) this.form.embed_color = template.embed_color;
       if (template.bypass_roles?.length) this.form.bypass_role_ids = [...template.bypass_roles];
       if (template.blacklisted_roles?.length) this.form.blacklisted_role_ids = [...template.blacklisted_roles];
+      if (template.extra_entries && Object.keys(template.extra_entries).length) {
+        this.form.extra_entries = Object.entries(template.extra_entries).map(([role_id, bonus]) => ({ role_id, bonus }));
+      }
     },
 
     async submit() {
@@ -255,6 +270,9 @@ export default {
             required_role_ids: this.form.required_role_ids.filter((id) => id),
             bypass_role_ids: this.form.bypass_role_ids.filter((id) => id),
             blacklisted_role_ids: this.form.blacklisted_role_ids.filter((id) => id),
+            extra_entries: Object.fromEntries(
+              this.form.extra_entries.filter((row: RoleEntryMapRow) => row.role_id).map((row: RoleEntryMapRow) => [row.role_id, row.bonus]),
+            ),
             message_requirement: this.form.hasMessageRequirement
               ? { period: this.form.messagePeriod, count: this.form.messageCount }
               : null,
