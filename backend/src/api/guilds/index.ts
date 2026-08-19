@@ -5,6 +5,7 @@ import { initGuildEconomyAPI } from "./economy.js";
 import { initGuildGeneralConfigSchemaAPI } from "./generalConfigSchema.js";
 import { initGuildGiveawaysAPI } from "./giveaways.js";
 import { initGuildsImportExportAPI } from "./importExport.js";
+import { initGuildMessageTrackerAPI } from "./messageTracker.js";
 import { initGuildsMiscAPI } from "./misc.js";
 import { initGuildPluginConfigSchemaAPI } from "./pluginConfigSchema.js";
 
@@ -19,6 +20,7 @@ export function initGuildsAPI(router: express.Router) {
   initGuildDiscordDataAPI(guildRouter);
   initGuildGiveawaysAPI(guildRouter);
   initGuildEconomyAPI(guildRouter);
+  initGuildMessageTrackerAPI(guildRouter);
 
   router.use("/guilds", guildRouter);
 }

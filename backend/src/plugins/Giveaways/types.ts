@@ -32,6 +32,11 @@ export const zGiveawaysConfig = z.strictObject({
   // dashboard's "Giveaway contributor" card (see api/guilds/giveaways.ts); this plugin doesn't otherwise check
   // or care who holds it. Null (default) means the card is unavailable — nothing to grant/revoke.
   contributor_role_id: zSnowflake.nullable().default(null),
+  // A role to grant alongside a giveaway ban (see functions/giveawayBans.ts) — purely cosmetic/optional, same
+  // idea as contributor_role_id above. The ban itself is tracked independently in the giveaway_bans table
+  // (GuildGiveawayBans) regardless of whether this is set, since enforcement (blocking entry, rerolling an
+  // unclaimed win — see events/giveawayButtonInteraction.ts) can't depend on an optional role existing.
+  ban_role_id: zSnowflake.nullable().default(null),
   templates: zBoundedRecord(z.record(zBoundedCharacters(1, 100), zGiveawayTemplate), 0, MAX_TEMPLATES).default({}),
   // Which Counters-plugin counter "activity points" requirements check — same idea as Economy's own
   // counter_name (default "coins"): there's no fixed/guaranteed counter name for this concept, so it's a

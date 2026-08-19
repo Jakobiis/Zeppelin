@@ -4,6 +4,7 @@ import { Configs } from "../../data/Configs.js";
 import { GuildGiveaways } from "../../data/GuildGiveaways.js";
 import { createGiveawayRecord } from "../../plugins/Giveaways/functions/createGiveaway.js";
 import { finalizeGiveaway, rerollGiveaway } from "../../plugins/Giveaways/functions/finalizeGiveaway.js";
+import { banUserFromGiveaways, isUserBannedFromGiveaways, unbanUserFromGiveaways } from "../../plugins/Giveaways/functions/giveawayBans.js";
 import { parseMessagePeriod } from "../../plugins/MessageTracker/functions/messagePeriods.js";
 import { convertDelayStringToMS, isValidSnowflake } from "../../utils.js";
 import { loadYamlSafely } from "../../utils/loadYamlSafely.js";
@@ -204,6 +205,64 @@ export function initGuildGiveawaysAPI(router: express.Router) {
         res.json({ hasRole: grant });
       } catch (err) {
         serverError(res, `Failed to ${req.body?.grant ? "grant" : "revoke"} the contributor role`);
+      }
+    },
+  );
+
+  // Whether `userId` is currently banned from giveaways (see GuildGiveawayBans — independent of ban_role_id,
+  // which is optional and purely cosmetic) plus whether they hold the optional ban role, if one's configured.
+  giveawaysRouter.get(
+    "/:guildId/giveaways/ban/:userId",
+    requireGiveawayManager(),
+    async (req: Request, res: Response) => {
+      try {
+        const { guildId, userId } = req.params;
+        if (!isValidSnowflake(userId)) return clientError(res, "Invalid user ID");
+
+        const config = await getGiveawaysPluginConfig(guildId);
+        const roleId: string | null = config.ban_role_id ?? null;
+
+        const [banned, memberRoleIds, member] = await Promise.all([
+          isUserBannedFromGiveaways(guildId, userId),
+          roleId ? getGuildMemberRoleIds(guildId, userId) : Promise.resolve(null),
+          getGuildMemberDisplayInfo(guildId, userId),
+        ]);
+
+        res.json({
+          banned,
+          roleConfigured: roleId != null,
+          hasRole: roleId != null ? (memberRoleIds?.includes(roleId) ?? false) : false,
+          member,
+        });
+      } catch (err) {
+        serverError(res, "Failed to load ban status");
+      }
+    },
+  );
+
+  giveawaysRouter.post(
+    "/:guildId/giveaways/ban/:userId",
+    requireGiveawayManager(),
+    async (req: Request, res: Response) => {
+      try {
+        const { guildId, userId } = req.params;
+        if (!isValidSnowflake(userId)) return clientError(res, "Invalid user ID");
+
+        const ban = req.body?.ban === true;
+        const config = await getGiveawaysPluginConfig(guildId);
+        const roleId: string | null = config.ban_role_id ?? null;
+
+        if (ban) {
+          const result = await banUserFromGiveaways(guildId, userId);
+          if (roleId) await setGuildMemberRole(guildId, userId, roleId, true).catch(() => null);
+          res.json({ banned: true, ...result });
+        } else {
+          await unbanUserFromGiveaways(guildId, userId);
+          if (roleId) await setGuildMemberRole(guildId, userId, roleId, false).catch(() => null);
+          res.json({ banned: false });
+        }
+      } catch (err) {
+        serverError(res, `Failed to ${req.body?.ban ? "ban" : "unban"} that user`);
       }
     },
   );

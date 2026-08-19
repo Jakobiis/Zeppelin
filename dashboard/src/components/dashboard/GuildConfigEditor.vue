@@ -13,6 +13,7 @@
       <Tab variant="header" v-if="canReadConfig" :active="mode === 'interface'"><a href="javascript:void(0)" v-on:click="setMode('interface')">Interface</a></Tab>
       <Tab variant="header" v-if="isGiveawayManager" :active="mode === 'giveaways'"><a href="javascript:void(0)" v-on:click="setMode('giveaways')">Giveaways</a></Tab>
       <Tab variant="header" v-if="isEconomyManager" :active="mode === 'economy'"><a href="javascript:void(0)" v-on:click="setMode('economy')">Economy</a></Tab>
+      <Tab variant="header" v-if="isMessageTrackerManager" :active="mode === 'messages'"><a href="javascript:void(0)" v-on:click="setMode('messages')">Messages</a></Tab>
     </Tabs>
 
     <v-ace-editor v-if="canReadConfig" v-show="mode === 'yaml'" class="rounded-lg shadow-lg border border-border"
@@ -98,6 +99,7 @@
 
     <GuildGiveawaysPanel v-if="mode === 'giveaways' && isGiveawayManager" class="mt-4" :guild-id="String($route.params.guildId)" />
     <GuildEconomyPanel v-if="mode === 'economy' && isEconomyManager" class="mt-4" :guild-id="String($route.params.guildId)" />
+    <GuildMessagesPanel v-if="mode === 'messages' && isMessageTrackerManager" class="mt-4" :guild-id="String($route.params.guildId)" />
   </div>
 </template>
 
@@ -121,6 +123,7 @@
   import GeneralConfigForm from "./GeneralConfigForm.vue";
   import GuildEconomyPanel from "./GuildEconomyPanel.vue";
   import GuildGiveawaysPanel from "./GuildGiveawaysPanel.vue";
+  import GuildMessagesPanel from "./GuildMessagesPanel.vue";
   import PluginConfigForm from "./PluginConfigForm.vue";
   import { dereferenceSchema, fillDefaults } from "./pluginConfigSchema";
 
@@ -139,6 +142,7 @@
       PluginConfigForm,
       GuildGiveawaysPanel,
       GuildEconomyPanel,
+      GuildMessagesPanel,
     },
     // Reactive provide (Options API needs an explicit computed() to keep it reactive for injecting descendants)
     // so the search bar above the Interface tab can reach every PluginConfigField in the tree without threading
@@ -182,6 +186,11 @@
         .dispatch("guilds/loadEconomyAccess", this.$route.params.guildId)
         .catch(() => false);
 
+      // Same idea again, for MessageTracker's own manager_roles (see MessageTracker/types.ts).
+      this.isMessageTrackerManager = await this.$store
+        .dispatch("guilds/loadMessagesAccess", this.$route.params.guildId)
+        .catch(() => false);
+
       this.canReadConfig = await post(`guilds/${this.$route.params.guildId}/check-permission`, { permission: ApiPermissions.ReadConfig })
         .then((result) => result.result)
         .catch(() => false);
@@ -205,13 +214,17 @@
           ? "giveaways"
           : queryMode === "economy" && this.isEconomyManager
             ? "economy"
-            : this.canReadConfig && queryMode === "interface"
-              ? "interface"
-              : this.canReadConfig
-                ? "yaml"
-                : this.isGiveawayManager
-                  ? "giveaways"
-                  : "economy";
+            : queryMode === "messages" && this.isMessageTrackerManager
+              ? "messages"
+              : this.canReadConfig && queryMode === "interface"
+                ? "interface"
+                : this.canReadConfig
+                  ? "yaml"
+                  : this.isGiveawayManager
+                    ? "giveaways"
+                    : this.isEconomyManager
+                      ? "economy"
+                      : "messages";
 
       this.loading = false;
 
@@ -246,6 +259,7 @@
         mode: "yaml",
         isGiveawayManager: false,
         isEconomyManager: false,
+        isMessageTrackerManager: false,
         canReadConfig: false,
         selectedPlugin: null,
         GENERAL,
@@ -327,6 +341,9 @@
           delete query.plugin;
         } else if (this.mode === "economy") {
           query.mode = "economy";
+          delete query.plugin;
+        } else if (this.mode === "messages") {
+          query.mode = "messages";
           delete query.plugin;
         } else {
           delete query.mode;

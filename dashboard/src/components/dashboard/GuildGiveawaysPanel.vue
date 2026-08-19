@@ -250,7 +250,8 @@
         </button>
     </div>
 
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 flex flex-col gap-4">
+    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Giveaway contributor</h3>
       <input
         type="text"
@@ -305,7 +306,61 @@
       </div>
     </div>
 
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Giveaway ban</h3>
+      <input
+        type="text"
+        class="field-input"
+        placeholder="Username or user ID…"
+        :value="banLookupQuery"
+        @input="onBanLookupInput(($event.target as HTMLInputElement).value)"
+      />
+      <div v-if="banLookupResults.length" class="mt-2 border border-border rounded-lg overflow-hidden">
+        <button
+          v-for="m in banLookupResults"
+          :key="m.id"
+          type="button"
+          class="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+          @click="selectBanUser(m)"
+        >
+          {{ m.displayName }} <span class="text-xs text-muted-foreground font-mono">{{ m.id }}</span>
+        </button>
+      </div>
+
+      <div v-if="giveawayBan" class="mt-4 border-t border-border pt-4">
+        <div class="font-semibold">{{ giveawayBan.member?.displayName ?? giveawayBan.userId }}</div>
+        <div class="text-xs text-muted-foreground font-mono">{{ giveawayBan.userId }}</div>
+
+        <div class="mt-2 text-sm" :class="giveawayBan.banned ? 'text-destructive' : 'text-muted-foreground'">
+          {{ giveawayBan.banned ? "Banned from giveaways" : "Not banned" }}
+        </div>
+        <div v-if="!giveawayBan.roleConfigured" class="mt-1 text-xs text-muted-foreground">
+          No ban role is configured — set <code class="font-mono">ban_role_id</code> in this plugin's YAML config to
+          also grant/revoke a role on ban.
+        </div>
+
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="btn-secondary"
+            :disabled="giveawayBan.banned || banUpdating"
+            @click="setBanStatus(true)"
+          >
+            Ban
+          </button>
+          <button
+            type="button"
+            class="btn-secondary"
+            :disabled="!giveawayBan.banned || banUpdating"
+            @click="setBanStatus(false)"
+          >
+            Unban
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Running</h3>
       <div v-if="!running.length" class="text-sm text-muted-foreground">No running giveaways</div>
       <div class="flex flex-col gap-3">
@@ -336,6 +391,7 @@
           </div>
         </div>
       </div>
+    </div>
     </div>
 
     <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
@@ -448,6 +504,7 @@ import {
   FinishedGiveawaysPage,
   GiveawayAnalytics,
   GiveawayApiItem,
+  GiveawayBanStatus,
   GiveawayContributorStatus,
   GiveawayMemberInfo,
   GiveawayTemplate,
@@ -539,6 +596,10 @@ export default {
       contributorLookupResults: [] as GiveawayMemberInfo[],
       contributorLookupTimeout: null as ReturnType<typeof setTimeout> | null,
       contributorUpdating: false,
+      banLookupQuery: "",
+      banLookupResults: [] as GiveawayMemberInfo[],
+      banLookupTimeout: null as ReturnType<typeof setTimeout> | null,
+      banUpdating: false,
     };
   },
 
@@ -561,6 +622,9 @@ export default {
       },
       giveawayContributor(state: GuildState): GiveawayContributorStatus | null {
         return state.giveawayContributor[this.guildId] || null;
+      },
+      giveawayBan(state: GuildState): GiveawayBanStatus | null {
+        return state.giveawayBan[this.guildId] || null;
       },
     }),
 
@@ -900,6 +964,60 @@ export default {
         this.showToast(err instanceof ApiError && err.body?.error ? err.body.error : "Failed to update the contributor role.");
       } finally {
         this.contributorUpdating = false;
+      }
+    },
+
+    onBanLookupInput(value: string) {
+      this.banLookupQuery = value;
+      if (this.banLookupTimeout) clearTimeout(this.banLookupTimeout);
+      if (!value.trim()) {
+        this.banLookupResults = [];
+        return;
+      }
+      this.banLookupTimeout = setTimeout(async () => {
+        try {
+          this.banLookupResults = await this.$store.dispatch("guilds/lookupGiveawayMembers", {
+            guildId: this.guildId,
+            query: value.trim(),
+          });
+        } catch {
+          this.banLookupResults = [];
+        }
+      }, 300);
+    },
+
+    async selectBanUser(member: GiveawayMemberInfo) {
+      this.banLookupQuery = "";
+      this.banLookupResults = [];
+      await this.$store.dispatch("guilds/loadGiveawayBanStatus", { guildId: this.guildId, userId: member.id }).catch(() => {});
+    },
+
+    async setBanStatus(ban: boolean) {
+      if (!this.giveawayBan) return;
+      this.banUpdating = true;
+      try {
+        const result = await this.$store.dispatch("guilds/setGiveawayBanned", {
+          guildId: this.guildId,
+          userId: this.giveawayBan.userId,
+          ban,
+        });
+
+        const details: string[] = [];
+        if (ban && result?.removedFromRunning > 0) {
+          details.push(`removed from ${result.removedFromRunning} running giveaway${result.removedFromRunning === 1 ? "" : "s"}`);
+        }
+        if (ban && result?.rerolledFromGiveawayIds?.length > 0) {
+          details.push(`rerolled out of ${result.rerolledFromGiveawayIds.length} unclaimed win${result.rerolledFromGiveawayIds.length === 1 ? "" : "s"}`);
+        }
+        this.showToast(`${ban ? "Banned" : "Unbanned"}.${details.length ? ` (${details.join("; ")})` : ""}`);
+
+        await this.$store
+          .dispatch("guilds/loadGiveawayBanStatus", { guildId: this.guildId, userId: this.giveawayBan.userId })
+          .catch(() => {});
+      } catch (err) {
+        this.showToast(err instanceof ApiError && err.body?.error ? err.body.error : "Failed to update the ban.");
+      } finally {
+        this.banUpdating = false;
       }
     },
   },

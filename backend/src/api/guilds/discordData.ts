@@ -130,6 +130,19 @@ export async function searchGuildMembersByUsername(guildId: string, query: strin
   }
 }
 
+// Bulk channel name lookup, sharing the same 30s cache as the /discord-data/channels route below (same cache
+// key) — used server-side by callers that want a few channel names without a round trip through that route
+// themselves (e.g. the Messages dashboard's "top channels" widget, see api/guilds/messageTracker.ts). Returns an
+// id -> name map; channel IDs with no match (deleted since, or just never fetched) are simply absent.
+export async function getGuildChannelNameMap(guildId: string): Promise<Record<string, string>> {
+  try {
+    const channels = await cachedDiscordBotRequest(`channels:${guildId}`, `guilds/${guildId}/channels`);
+    return Object.fromEntries((channels as any[]).map((c) => [c.id, c.name]));
+  } catch {
+    return {};
+  }
+}
+
 // Giveaway managers need role and channel names to create a giveaway, even when they are not allowed to view
 // the guild's full configuration. Other dashboard users retain the normal ReadConfig requirement.
 async function hasDiscordDataAccess(userId: string, guildId: string): Promise<boolean> {

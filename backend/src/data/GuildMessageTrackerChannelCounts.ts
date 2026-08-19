@@ -117,4 +117,39 @@ export class GuildMessageTrackerChannelCounts extends BaseGuildRepository {
 
     return query.getCount();
   }
+
+  // Top channels by message volume for the given period — unlike getTop (top *users within one channel*), this
+  // sums across all users *per channel* to rank the channels themselves. Rolling periods only sum rows whose
+  // bucket key matches the current one (same "stale = 0" semantics as readCounts) by excluding stale rows from
+  // the SUM entirely rather than including them at a wrong value.
+  async getTopChannels(
+    period: "daily" | "weekly" | "monthly" | "allTime",
+    limit: number,
+  ): Promise<Array<{ channelId: string; count: number }>> {
+    const qb = this.counts.createQueryBuilder("mtcc").where("mtcc.guild_id = :guildId", { guildId: this.guildId });
+
+    let countColumn: string;
+    if (period === "allTime") {
+      countColumn = "mtcc.all_time_count";
+    } else if (period === "daily") {
+      qb.andWhere("mtcc.daily_date = :key", { key: currentDailyKey() });
+      countColumn = "mtcc.daily_count";
+    } else if (period === "weekly") {
+      qb.andWhere("mtcc.weekly_start = :key", { key: currentWeeklyKey() });
+      countColumn = "mtcc.weekly_count";
+    } else {
+      qb.andWhere("mtcc.monthly_month = :key", { key: currentMonthlyKey() });
+      countColumn = "mtcc.monthly_count";
+    }
+
+    const raw = await qb
+      .select("mtcc.channel_id", "channelId")
+      .addSelect(`SUM(${countColumn})`, "count")
+      .groupBy("mtcc.channel_id")
+      .orderBy("count", "DESC")
+      .limit(limit)
+      .getRawMany<{ channelId: string; count: string }>();
+
+    return raw.map((r) => ({ channelId: r.channelId, count: Number(r.count) }));
+  }
 }

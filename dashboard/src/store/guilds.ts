@@ -23,6 +23,10 @@ export const GuildStore: Module<GuildState, RootState> = {
     economyUserHistory: {},
     economyTransactions: {},
     giveawayContributor: {},
+    giveawayBan: {},
+    messagesAccess: {},
+    messagesUser: {},
+    messagesAnalytics: {},
   },
 
   actions: {
@@ -204,6 +208,41 @@ export const GuildStore: Module<GuildState, RootState> = {
       const result = await post(`guilds/${guildId}/giveaways/contributor/${userId}`, { grant });
       commit("setGiveawayContributor", { guildId, status: { userId, member, configured: true, hasRole: result.hasRole } });
     },
+
+    async loadGiveawayBanStatus({ commit }, { guildId, userId }) {
+      const status = await get(`guilds/${guildId}/giveaways/ban/${userId}`);
+      commit("setGiveawayBan", { guildId, status: { userId, ...status } });
+    },
+
+    // Returns the raw result (removedFromRunning/rerolledFromGiveawayIds on a ban) so the component can surface
+    // it in a toast — loadGiveawayBanStatus is dispatched separately afterward to refresh the full card state.
+    setGiveawayBanned(_ctx, { guildId, userId, ban }) {
+      return post(`guilds/${guildId}/giveaways/ban/${userId}`, { ban });
+    },
+
+    async loadMessagesAccess({ commit }, guildId) {
+      const result = await get(`guilds/${guildId}/messages/access`);
+      commit("setMessagesAccess", { guildId, isManager: result.isManager });
+      return result.isManager;
+    },
+
+    lookupMessagesMembers(_ctx, { guildId, query }) {
+      return get(`guilds/${guildId}/messages/lookup`, { query });
+    },
+
+    async loadMessagesUser({ commit }, { guildId, userId }) {
+      const user = await get(`guilds/${guildId}/messages/user/${userId}`);
+      commit("setMessagesUser", { guildId, user });
+    },
+
+    async adjustMessagesCount(_ctx, { guildId, userId, action, amount }) {
+      return post(`guilds/${guildId}/messages/user/${userId}`, { action, amount });
+    },
+
+    async loadMessagesAnalytics({ commit }, guildId) {
+      const analytics = await get(`guilds/${guildId}/messages/analytics`);
+      commit("setMessagesAnalytics", { guildId, analytics });
+    },
   },
 
   mutations: {
@@ -312,6 +351,22 @@ export const GuildStore: Module<GuildState, RootState> = {
 
     setGiveawayContributor(state: GuildState, { guildId, status }) {
       state.giveawayContributor = { ...state.giveawayContributor, [guildId]: status };
+    },
+
+    setGiveawayBan(state: GuildState, { guildId, status }) {
+      state.giveawayBan = { ...state.giveawayBan, [guildId]: status };
+    },
+
+    setMessagesAccess(state: GuildState, { guildId, isManager }) {
+      state.messagesAccess = { ...state.messagesAccess, [guildId]: isManager };
+    },
+
+    setMessagesUser(state: GuildState, { guildId, user }) {
+      state.messagesUser = { ...state.messagesUser, [guildId]: user };
+    },
+
+    setMessagesAnalytics(state: GuildState, { guildId, analytics }) {
+      state.messagesAnalytics = { ...state.messagesAnalytics, [guildId]: analytics };
     },
   },
 };

@@ -2,6 +2,7 @@ import { guildPlugin } from "vety";
 import { GuildGiveaways } from "../../data/GuildGiveaways.js";
 import { onGuildEvent } from "../../data/GuildEvents.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
+import { GiveawayBanCmd } from "./commands/GiveawayBanCmd.js";
 import { GiveawayCancelCmd } from "./commands/GiveawayCancelCmd.js";
 import { GiveawayContributorCmd } from "./commands/GiveawayContributorCmd.js";
 import { GiveawayDashboardCmd } from "./commands/GiveawayDashboardCmd.js";
@@ -9,6 +10,7 @@ import { GiveawayEndCmd } from "./commands/GiveawayEndCmd.js";
 import { GiveawayListCmd } from "./commands/GiveawayListCmd.js";
 import { GiveawayRerollCmd } from "./commands/GiveawayRerollCmd.js";
 import { GiveawayStartCmd } from "./commands/GiveawayStartCmd.js";
+import { GiveawayUnbanCmd } from "./commands/GiveawayUnbanCmd.js";
 import { onGiveawayButtonInteraction } from "./events/giveawayButtonInteraction.js";
 import { processExpiredClaims } from "./functions/claimGiveaway.js";
 import { finalizeGiveaway } from "./functions/finalizeGiveaway.js";
@@ -39,6 +41,8 @@ export const GiveawaysPlugin = guildPlugin<GiveawaysPluginType>()({
     GiveawayListCmd,
     GiveawayDashboardCmd,
     GiveawayContributorCmd,
+    GiveawayBanCmd,
+    GiveawayUnbanCmd,
   ],
 
   events: [onGiveawayButtonInteraction],

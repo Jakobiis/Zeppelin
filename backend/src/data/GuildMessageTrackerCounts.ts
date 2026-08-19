@@ -183,4 +183,22 @@ export class GuildMessageTrackerCounts extends BaseGuildRepository {
 
     return query.getCount();
   }
+
+  // Guild-wide totals for the dashboard's Messages tab — same raw-SQL-subquery style as GuildGiveaways.getAnalytics.
+  async getSummary(): Promise<{ totalTrackedUsers: number; totalAllTimeMessages: number; totalToday: number }> {
+    const [row] = await dataSource.query(
+      `SELECT
+        COUNT(*) AS totalTrackedUsers,
+        COALESCE(SUM(all_time_count), 0) AS totalAllTimeMessages,
+        COALESCE(SUM(CASE WHEN daily_date = ? THEN daily_count ELSE 0 END), 0) AS totalToday
+      FROM message_tracker_counts WHERE guild_id = ?`,
+      [currentDailyKey(), this.guildId],
+    );
+
+    return {
+      totalTrackedUsers: Number(row?.totalTrackedUsers ?? 0),
+      totalAllTimeMessages: Number(row?.totalAllTimeMessages ?? 0),
+      totalToday: Number(row?.totalToday ?? 0),
+    };
+  }
 }

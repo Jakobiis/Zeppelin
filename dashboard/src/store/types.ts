@@ -73,6 +73,17 @@ export interface GiveawayContributorStatus {
   hasRole: boolean;
 }
 
+export interface GiveawayBanStatus {
+  userId: string;
+  member: GiveawayMemberInfo | null;
+  banned: boolean;
+  // Whether ban_role_id is configured — unlike GiveawayContributorStatus's "configured", a ban can still be
+  // applied/enforced with no role set (the role is purely an optional cosmetic add-on here), so this only
+  // affects whether hasRole means anything.
+  roleConfigured: boolean;
+  hasRole: boolean;
+}
+
 export interface FinishedGiveawaysPage {
   items: GiveawayApiItem[];
   total: number;
@@ -164,6 +175,47 @@ export interface EconomyTransactionsPage {
   members: { [userId: string]: EconomyMemberInfo };
 }
 
+export interface MessagesMemberInfo {
+  id: string;
+  username: string;
+  displayName: string;
+  avatar: string | null;
+}
+
+export interface MessageCounts {
+  daily: number;
+  weekly: number;
+  monthly: number;
+  allTime: number;
+}
+
+export interface MessagesUserInfo {
+  userId: string;
+  member: MessagesMemberInfo | null;
+  counts: MessageCounts;
+}
+
+export interface MessagesTopEntry {
+  userId: string;
+  count: number;
+  member: MessagesMemberInfo | null;
+}
+
+export interface MessagesTopChannelEntry {
+  channelId: string;
+  count: number;
+  name: string | null;
+}
+
+export interface MessagesAnalytics {
+  totalTrackedUsers: number;
+  totalAllTimeMessages: number;
+  totalToday: number;
+  topToday: MessagesTopEntry[];
+  topAllTime: MessagesTopEntry[];
+  topChannelsToday: MessagesTopChannelEntry[];
+}
+
 export interface GuildState {
   availableGuildsLoadStatus: LoadStatus;
   available: Map<
@@ -218,6 +270,18 @@ export interface GuildState {
   };
   giveawayContributor: {
     [guildId: string]: GiveawayContributorStatus | null;
+  };
+  giveawayBan: {
+    [guildId: string]: GiveawayBanStatus | null;
+  };
+  messagesAccess: {
+    [guildId: string]: boolean;
+  };
+  messagesUser: {
+    [guildId: string]: MessagesUserInfo | null;
+  };
+  messagesAnalytics: {
+    [guildId: string]: MessagesAnalytics | null;
   };
 }
 

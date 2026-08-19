@@ -1,7 +1,8 @@
-import { GuildMember } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember } from "discord.js";
 import { guildPluginEventListener } from "vety";
 import { GiveawayEntries } from "../../../data/GiveawayEntries.js";
 import { GuildMessageTrackerCounts } from "../../../data/GuildMessageTrackerCounts.js";
+import { buildCustomId } from "../../../utils/buildCustomId.js";
 import { getCustomIdNamespace, parseCustomId } from "../../../utils/parseCustomId.js";
 import { buildGiveawayButtons, buildGiveawayThreadActionRows } from "../functions/buildGiveawayMessage.js";
 import { buildParticipantsEmbed } from "../functions/buildParticipantsEmbed.js";
@@ -9,6 +10,8 @@ import { checkEntryRequirements } from "../functions/checkEntryRequirements.js";
 import { confirmWinnerClaimed, pauseClaimDeadline } from "../functions/claimGiveaway.js";
 import { computeEntryWeight } from "../functions/computeEntryWeight.js";
 import { getCoinsValueForUser, getNamedCounterValueForUser } from "../functions/counterRequirements.js";
+import { editChannelMessage } from "../functions/discordRest.js";
+import { isUserBannedFromGiveaways } from "../functions/giveawayBans.js";
 import { createGiveawayThread } from "../functions/giveawayThread.js";
 import { hasGiveawayManagerRole } from "../functions/requireGiveawayManager.js";
 import { GiveawaysPluginType } from "../types.js";
@@ -17,6 +20,7 @@ const giveawayEntries = new GiveawayEntries();
 
 const BUTTON_NAMESPACES = [
   "giveaway",
+  "giveawayLeave",
   "giveawayParticipants",
   "giveawayThread",
   "giveawayThreadDelete",
@@ -58,6 +62,33 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
     if (namespace === "giveawayParticipants") {
       const embed = await buildParticipantsEmbed(giveaway);
       await args.interaction.reply({ ephemeral: true, embeds: [embed] }).catch(() => null);
+      return;
+    }
+
+    if (namespace === "giveawayLeave") {
+      if (giveaway.status !== "running") {
+        await args.interaction.reply({ ephemeral: true, content: "This giveaway has already ended." }).catch(() => null);
+        return;
+      }
+
+      const existingEntry = await giveawayEntries.getForUser(giveaway.id, member.id);
+      if (!existingEntry) {
+        await args.interaction.reply({ ephemeral: true, content: "You're not entered in this giveaway." }).catch(() => null);
+        return;
+      }
+
+      await giveawayEntries.remove(giveaway.id, member.id);
+      await args.interaction.reply({ ephemeral: true, content: "You've left the giveaway." }).catch(() => null);
+
+      // This click happened on the ephemeral "already entered" follow-up, not the giveaway's own message, so
+      // the entry-count button on the public message needs a separate fetch-by-ID edit rather than
+      // interaction.message.edit() (see the Enter path below, which *is* on that message).
+      if (giveaway.message_id) {
+        const newCount = await giveawayEntries.count(giveaway.id);
+        await editChannelMessage(giveaway.channel_id, giveaway.message_id, {
+          components: [buildGiveawayButtons(giveaway.id, newCount).toJSON()],
+        }).catch(() => null);
+      }
       return;
     }
 
@@ -177,7 +208,21 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
 
     const existingEntry = await giveawayEntries.getForUser(giveaway.id, member.id);
     if (existingEntry) {
-      await args.interaction.reply({ ephemeral: true, content: "You've already entered this giveaway! 🎉" }).catch(() => null);
+      const leaveRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setStyle(ButtonStyle.Danger)
+          .setEmoji("🚪")
+          .setLabel("Leave Giveaway")
+          .setCustomId(buildCustomId("giveawayLeave", { id: giveaway.id })),
+      );
+      await args.interaction
+        .reply({ ephemeral: true, content: "You've already entered this giveaway! 🎉", components: [leaveRow] })
+        .catch(() => null);
+      return;
+    }
+
+    if (await isUserBannedFromGiveaways(pluginData.guild.id, member.id)) {
+      await args.interaction.reply({ ephemeral: true, content: "You're banned from entering giveaways in this server." }).catch(() => null);
       return;
     }
 

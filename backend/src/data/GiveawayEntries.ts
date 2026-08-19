@@ -38,4 +38,11 @@ export class GiveawayEntries extends BaseRepository {
 
     return (await this.getForUser(giveawayId, userId))!;
   }
+
+  // Used when a user is banned from giveaways (see functions/giveawayBans.ts) to pull them out of every running
+  // giveaway they'd entered — a plain delete, since there's no "undo" concept for an entry the way a win has a
+  // reroll.
+  async remove(giveawayId: number, userId: string): Promise<void> {
+    await this.entries.delete({ giveaway_id: giveawayId, user_id: userId });
+  }
 }

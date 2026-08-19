@@ -76,6 +76,24 @@ export class GuildGiveaways extends BaseGuildRepository {
     return { items, total };
   }
 
+  // Ended giveaways where `userId` is still a current, unclaimed winner — i.e. eligible to be rerolled away from
+  // (see functions/giveawayBans.ts, which uses this to reroll a banned user out of any prize they won but never
+  // got confirmed as claimed). Deliberately requires claim_time_ms to be set: "unclaimed" is only a meaningful,
+  // checkable state for giveaways that actually track claims (claimed_winner_ids is never populated otherwise —
+  // see the Confirm Claimed button's own claim_time_ms gate in buildGiveawayThreadActionRows), so a giveaway
+  // with no claim requirement at all is left alone here rather than guessing.
+  findUnclaimedWinsForUser(userId: string): Promise<Giveaway[]> {
+    return this.giveaways
+      .createQueryBuilder("g")
+      .where("g.guild_id = :guildId", { guildId: this.guildId })
+      .andWhere("g.status = :status", { status: "ended" })
+      .andWhere("g.claim_time_ms IS NOT NULL")
+      .andWhere("JSON_CONTAINS(g.winner_ids, JSON_QUOTE(:userId))", { userId })
+      .andWhere("NOT JSON_CONTAINS(g.expired_winner_ids, JSON_QUOTE(:userId))", { userId })
+      .andWhere("NOT JSON_CONTAINS(g.claimed_winner_ids, JSON_QUOTE(:userId))", { userId })
+      .getMany();
+  }
+
   async getAnalytics(): Promise<{ totalGiveaways: number; claimedPrizes: number; totalEntries: number }> {
     const [row] = await dataSource.query(
       `SELECT
