@@ -80,7 +80,10 @@ export async function createGiveawayThread(pluginData: GuildPluginData<Giveaways
     .send({
       content: pingMentions,
       embeds: [infoEmbed],
-      components: buildGiveawayThreadActionRows(giveaway.id, winnerId, giveaway.claim_time_ms != null),
+      // Confirm Claimed always shows here regardless of claim_time_ms — that setting only controls the reroll
+      // deadline, not whether the host/holder can mark the handoff done (see confirmWinnerClaimed, which has no
+      // claim_time_ms dependency at all).
+      components: buildGiveawayThreadActionRows(giveaway.id, winnerId, true),
       allowedMentions: { users: memberIds },
     })
     .catch((err) => {

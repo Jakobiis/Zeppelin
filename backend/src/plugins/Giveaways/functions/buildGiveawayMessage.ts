@@ -98,10 +98,12 @@ export function buildWinnerAnnouncementButtons(giveawayId: number): ActionRowBui
 
 // Posted as part of the thread's first message (see functions/giveawayThread.ts). Neither button's permission is
 // enforced here (a button alone can't restrict who clicks it) — see giveawayButtonInteraction.ts:
-// "Confirm Claimed" is restricted to the giveaway's host/holder (whoever actually hands the prize over) and only
-// shown when the giveaway has a claim requirement at all; "Delete Thread" is restricted to manager_roles, giving
-// them a final look before closing things out. Both carry the winner ID since each winner's thread is tracked
-// separately in winner_thread_ids.
+// "Confirm Claimed" is restricted to the giveaway's host/holder (whoever actually hands the prize over) — shown
+// on every winner thread regardless of claim_time_ms, since that setting only controls the reroll deadline, not
+// whether a handoff can be confirmed; "Delete Thread" is restricted to manager_roles, giving them a final look
+// before closing things out. Both carry the winner ID since each winner's thread is tracked separately in
+// winner_thread_ids. includeConfirmClaim is only false once the claim's already been confirmed (see
+// giveawayButtonInteraction.ts's "giveawayThreadConfirmClaim" handler re-rendering without it).
 export function buildGiveawayThreadActionRows(giveawayId: number, winnerId: string, includeConfirmClaim: boolean): ActionRowBuilder<ButtonBuilder>[] {
   const row = new ActionRowBuilder<ButtonBuilder>();
   if (includeConfirmClaim) {

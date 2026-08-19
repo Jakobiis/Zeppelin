@@ -38,6 +38,17 @@
             <input type="number" min="1" class="field-input mt-1" v-model.number="form.winners" />
           </div>
           <div>
+            <label class="font-medium text-sm"
+              >Claim time <span class="text-muted-foreground font-normal">(optional)</span></label
+            >
+            <input
+              type="text"
+              class="field-input mt-1"
+              v-model="form.claim_time"
+              placeholder="e.g. 1d, 12h — blank means no claim requirement"
+            />
+          </div>
+          <div>
             <label class="font-medium text-sm">Channel</label>
             <RoleChannelPickerField
               class="mt-1"
@@ -540,6 +551,7 @@ function defaultForm() {
   return {
     prize: "",
     duration: "",
+    claim_time: "",
     winners: 1,
     channel_id: null as string | null,
     host_id: "",
@@ -773,6 +785,7 @@ export default {
       if (!template) return;
       if (template.channel_id) this.form.channel_id = template.channel_id;
       if (template.embed_color != null) this.form.embed_color = template.embed_color;
+      if (template.claim_time) this.form.claim_time = template.claim_time;
       if (template.bypass_roles?.length) {
         this.form.bypass_role_ids = [...template.bypass_roles];
         this.addRoleField("bypass_role_ids");
@@ -838,6 +851,7 @@ export default {
           giveaway: {
             prize: this.form.prize.trim(),
             duration: this.form.duration.trim(),
+            claim_time: this.form.claim_time.trim() || undefined,
             winners: this.form.winners,
             channel_id: this.form.channel_id,
             host_id: this.form.host_id.trim() || undefined,

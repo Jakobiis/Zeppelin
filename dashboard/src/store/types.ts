@@ -49,6 +49,7 @@ export interface GiveawayTemplate {
   bypass_roles: string[];
   blacklisted_roles: string[];
   extra_entries: Record<string, number>;
+  claim_time: string | null;
 }
 
 export interface GiveawayMemberInfo {
