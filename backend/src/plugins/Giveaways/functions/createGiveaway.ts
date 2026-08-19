@@ -9,6 +9,9 @@ import { sendChannelMessage } from "./discordRest.js";
 export interface CreateGiveawayFields {
   channel_id: string;
   host_id: string;
+  // Set when a staff member is physically holding the prize — they get added to each winner's thread alongside
+  // the host. Null means the giveaway isn't staff-held.
+  holder_id: string | null;
   prize: string;
   winner_count: number;
   duration_ms: number;
@@ -40,6 +43,7 @@ export async function createGiveawayRecord(guildId: string, fields: CreateGiveaw
     channel_id: fields.channel_id,
     message_id: null,
     host_id: fields.host_id,
+    holder_id: fields.holder_id,
     prize: fields.prize,
     winner_count: fields.winner_count,
     ends_at: endsAt,

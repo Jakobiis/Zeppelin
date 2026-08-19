@@ -200,6 +200,8 @@ export function initGuildGiveawaysAPI(router: express.Router) {
     }
 
     const hostId = typeof body.host_id === "string" && isValidSnowflake(body.host_id) ? body.host_id : req.user!.userId;
+    const holderId =
+      body.staff_held && typeof body.holder_id === "string" && isValidSnowflake(body.holder_id) ? body.holder_id : null;
 
     let messageRequirement: {
       period: "daily" | "weekly" | "monthly" | "allTime";
@@ -239,6 +241,7 @@ export function initGuildGiveawaysAPI(router: express.Router) {
       const giveaway = await createGiveawayRecord(req.params.guildId, {
         channel_id: channelId,
         host_id: hostId,
+        holder_id: holderId,
         prize,
         winner_count: winnerCount,
         duration_ms: durationMs,

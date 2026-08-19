@@ -22,6 +22,7 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
     winners: ct.number({ option: true, shortcut: "w" }),
     channel: ct.textChannel({ option: true, shortcut: "c" }),
     host: ct.resolvedUser({ option: true, shortcut: "h" }),
+    holder: ct.resolvedUser({ option: true }),
     role: ct.string({ option: true, shortcut: "r" }),
     bypass: ct.string({ option: true }),
     blacklist: ct.string({ option: true }),
@@ -64,6 +65,7 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
     }
 
     const hostId = args.host ? args.host.id : message.author.id;
+    const holderId = args.holder ? args.holder.id : null;
 
     let requiredRoleIds: string[] = [];
     if (args.role) {
@@ -141,6 +143,7 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
     const giveaway = await createGiveawayRecord(pluginData.guild.id, {
       channel_id: channel.id,
       host_id: hostId,
+      holder_id: holderId,
       prize: args.prize,
       winner_count: winnerCount,
       duration_ms: args.duration,

@@ -57,6 +57,19 @@
               placeholder="User ID — leave blank to use yourself"
             />
           </div>
+          <div class="sm:col-span-2">
+            <label class="flex items-center gap-2 text-sm font-medium">
+              <input type="checkbox" class="checkbox" v-model="form.staff_held" />
+              Prize is staff-held
+            </label>
+            <input
+              v-if="form.staff_held"
+              type="text"
+              class="field-input mt-2 font-mono text-sm"
+              v-model="form.holder_id"
+              placeholder="User ID of the staff member holding the prize"
+            />
+          </div>
           <div v-if="templates.length">
             <label class="font-medium text-sm">Template</label>
             <ComboboxField
@@ -238,6 +251,7 @@
           </div>
           <div class="text-sm text-muted-foreground">
             channel {{ giveaway.channel_id }} · host {{ memberName(giveaway.host_id) }}
+            <template v-if="giveaway.holder_id"> · held by {{ memberName(giveaway.holder_id) }}</template>
           </div>
           <div class="text-sm text-muted-foreground">
             {{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner(s) · ends
@@ -283,7 +297,10 @@
               }}
             </span>
           </div>
-          <div class="text-sm text-muted-foreground">host {{ memberName(giveaway.host_id) }}</div>
+          <div class="text-sm text-muted-foreground">
+            host {{ memberName(giveaway.host_id) }}
+            <template v-if="giveaway.holder_id"> · held by {{ memberName(giveaway.holder_id) }}</template>
+          </div>
           <div class="text-sm">
             <span v-if="giveaway.status === 'cancelled'" class="text-muted-foreground">No winners were picked.</span>
             <span v-else-if="!currentWinnerIds(giveaway).length" class="text-muted-foreground"
@@ -354,6 +371,8 @@ function defaultForm() {
     winners: 1,
     channel_id: null as string | null,
     host_id: "",
+    staff_held: false,
+    holder_id: "",
     template: null as string | null,
     embed_color: null as number | null,
     required_role_ids: [] as (string | null)[],
@@ -467,7 +486,9 @@ export default {
       this.applyTemplate("default");
     }
 
-    const ids = this.allGiveaways.flatMap((g: GiveawayApiItem) => [g.host_id, ...g.winner_ids]);
+    const ids = this.allGiveaways.flatMap((g: GiveawayApiItem) =>
+      g.holder_id ? [g.host_id, g.holder_id, ...g.winner_ids] : [g.host_id, ...g.winner_ids],
+    );
     this.$store.dispatch("guilds/loadGiveawayMemberNames", { guildId: this.guildId, ids }).catch(() => {});
   },
 
@@ -539,6 +560,10 @@ export default {
         this.createError = "Enter a minimum for the coins requirement, or untick it.";
         return;
       }
+      if (this.form.staff_held && !this.form.holder_id.trim()) {
+        this.createError = "Enter the holder's user ID, or untick staff-held.";
+        return;
+      }
       for (const [label, min, max] of [
         ["Message", this.form.messageMin, this.form.messageMax],
         ["Activity points", this.form.activityMin, this.form.activityMax],
@@ -560,6 +585,8 @@ export default {
             winners: this.form.winners,
             channel_id: this.form.channel_id,
             host_id: this.form.host_id.trim() || undefined,
+            staff_held: this.form.staff_held,
+            holder_id: this.form.staff_held ? this.form.holder_id.trim() : undefined,
             template: this.form.template || undefined,
             embed_color: this.form.embed_color,
             required_role_ids: this.form.required_role_ids.filter((id) => id),

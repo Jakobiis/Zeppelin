@@ -32,6 +32,11 @@ export class Giveaway {
 
   @Column() host_id: string;
 
+  // Non-null means a staff member is physically holding the prize rather than it being handed out directly —
+  // set when staff_held is toggled on at creation. That staff member gets added to each winner's thread
+  // alongside the host (see functions/giveawayThread.ts) so they can coordinate handoff.
+  @Column({ type: String, nullable: true }) holder_id: string | null;
+
   @Column() prize: string;
 
   @Column() winner_count: number;

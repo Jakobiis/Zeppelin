@@ -28,6 +28,7 @@ export interface GiveawayApiItem {
   channel_id: string;
   message_id: string | null;
   host_id: string;
+  holder_id: string | null;
   prize: string;
   winner_count: number;
   ends_at: string;
