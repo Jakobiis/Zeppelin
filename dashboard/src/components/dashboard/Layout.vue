@@ -17,19 +17,21 @@
           <a href="javascript:void(0)" class="navbar-item hover:text-destructive mr-2" v-on:click="logout()">Log out</a>
         </ul>
 
-        <div class="flex-1 flex items-center md:justify-end">
-          <router-link
-            to="/docs"
-            role="menuitem"
-            class="py-1 px-2 rounded hover:bg-accent hover:text-accent-foreground">
-            Go to documentation
-          </router-link>
+        <div v-if="activeGuild" class="flex-1 flex items-center justify-end gap-3">
+          <h3 class="min-w-0 truncate">{{ activeGuild.name }}</h3>
+          <button v-if="isConfigPage && canEditConfig" class="flex-none btn-primary" :disabled="configSaving" @click="saveConfig">
+            <span v-if="configSaving">Saving...</span>
+            <span v-else-if="configSaved">Saved!</span>
+            <span v-else>Save</span>
+          </button>
         </div>
       </div>
     </nav>
 
     <div class="main-content">
-      <router-view></router-view>
+      <router-view v-slot="{ Component }">
+        <component :is="Component" ref="activeRoute" @config-save-state="configSaveState = $event" />
+      </router-view>
     </div>
   </div>
 </template>
@@ -47,13 +49,43 @@
 </style>
 
 <script>
+  import { ApiPermissions, hasPermission } from "@zeppelinbot/shared/apiPermissions.js";
   import Title from "../Title.vue";
 
   export default {
     components: {
       Title,
     },
+    data() {
+      return {
+        configSaveState: { saving: false, saved: false },
+      };
+    },
+    computed: {
+      activeGuild() {
+        const guildId = this.$route.params.guildId;
+        return guildId ? this.$store.state.guilds.available.get(guildId) : null;
+      },
+      isConfigPage() {
+        return /^\/dashboard\/guilds\/[^/]+\/config$/.test(this.$route.path);
+      },
+      canEditConfig() {
+        const guildId = this.$route.params.guildId;
+        const assignments = this.$store.state.guilds.guildPermissionAssignments[guildId] || [];
+        const mine = assignments.find((assignment) => assignment.type === "USER" && assignment.target_id === this.$store.state.auth.userId);
+        return mine && hasPermission(mine.permissions, ApiPermissions.EditConfig);
+      },
+      configSaving() {
+        return this.configSaveState.saving;
+      },
+      configSaved() {
+        return this.configSaveState.saved;
+      },
+    },
     methods: {
+      saveConfig() {
+        this.$refs.activeRoute?.save();
+      },
       async logout() {
         await this.$store.dispatch("auth/logout");
         window.location.pathname = '/';

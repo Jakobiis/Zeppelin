@@ -173,9 +173,8 @@
       :title="confirmTitle"
       :message="confirmMessage"
       :confirm-label="confirmLabel"
-      :show-number-input="confirmState?.type === 'reroll' && confirmState.giveaway.winner_count > 1"
-      number-label="How many times to reroll?"
-      :number-default="1"
+      :selection-options="rerollWinnerOptions"
+      selection-label="Replace these winner(s)"
       @confirm="onConfirmModal"
       @cancel="confirmState = null"
     />
@@ -298,6 +297,11 @@ export default {
     confirmLabel() {
       if (!this.confirmState) return "Confirm";
       return { end: "End now", cancel: "Cancel giveaway", reroll: "Reroll" }[this.confirmState.type];
+    },
+
+    rerollWinnerOptions() {
+      if (this.confirmState?.type !== "reroll") return [];
+      return this.currentWinnerIds(this.confirmState.giveaway).map((id) => ({ value: id, label: this.memberName(id) }));
     },
   },
 
@@ -443,7 +447,7 @@ export default {
       this.confirmState = { type: "reroll", giveaway };
     },
 
-    async onConfirmModal(amount: number | undefined) {
+    async onConfirmModal({ selectedValues }: { amount: number | undefined; selectedValues: string[] }) {
       const state = this.confirmState;
       if (!state) return;
       this.confirmState = null;
@@ -453,7 +457,15 @@ export default {
       } else if (state.type === "cancel") {
         await this.$store.dispatch("guilds/cancelGiveaway", { guildId: this.guildId, giveawayId: state.giveaway.id });
       } else {
-        const result = await this.$store.dispatch("guilds/rerollGiveaway", { guildId: this.guildId, giveawayId: state.giveaway.id, amount: amount ?? 1 });
+        if (selectedValues.length === 0) {
+          this.showToast("Select at least one winner to reroll.");
+          return;
+        }
+        const result = await this.$store.dispatch("guilds/rerollGiveaway", {
+          guildId: this.guildId,
+          giveawayId: state.giveaway.id,
+          replaceWinnerIds: selectedValues,
+        });
         if (result?.newWinnerCount === 0) {
           this.showToast(`No other eligible entrants to reroll ${state.giveaway.prize} to.`);
         }

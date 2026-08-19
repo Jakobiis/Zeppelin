@@ -8,18 +8,7 @@
       <pre v-for="error in errors" class="text-sm whitespace-pre-wrap font-mono text-foreground/90">{{ error }}</pre>
     </div>
 
-    <div class="bg-card border border-border rounded-lg shadow-md px-6 py-4 flex items-center flex-wrap">
-      <h3 class="flex-full md:flex-auto">Config for {{ guild.name }}</h3>
-      <button v-if="canEditConfig && !saving" class="flex-none btn-primary" v-on:click="save">
-        <span v-if="saved">Saved!</span>
-        <span v-else>Save</span>
-      </button>
-      <div v-else-if="canEditConfig" class="flex-none btn-secondary">
-        Saving...
-      </div>
-    </div>
-
-    <Tabs class="mt-4">
+    <Tabs>
       <Tab v-if="canReadConfig" :active="mode === 'yaml'"><a href="javascript:void(0)" v-on:click="setMode('yaml')">Raw YAML</a></Tab>
       <Tab v-if="canReadConfig" :active="mode === 'interface'"><a href="javascript:void(0)" v-on:click="setMode('interface')">Interface</a></Tab>
       <Tab v-if="isGiveawayManager" :active="mode === 'giveaways'"><a href="javascript:void(0)" v-on:click="setMode('giveaways')">Giveaways</a></Tab>
@@ -541,6 +530,7 @@
 
         this.saved = false;
         this.saving = true;
+        this.$emit("config-save-state", { saving: true, saved: false });
         this.errors = [];
 
         if (this.savedTimeout) {
@@ -558,11 +548,16 @@
 
           this.saving = false;
           this.saved = true;
-          this.savedTimeout = setTimeout(() => this.saved = false, 3000);
+          this.$emit("config-save-state", { saving: false, saved: true });
+          this.savedTimeout = setTimeout(() => {
+            this.saved = false;
+            this.$emit("config-save-state", { saving: false, saved: false });
+          }, 3000);
         } catch (e) {
           if (e instanceof ApiError && (e.status === 400 || e.status === 422)) {
             this.errors = e.body.errors || ['Error while saving config'];
             this.saving = false;
+            this.$emit("config-save-state", { saving: false, saved: false });
             return;
           }
 

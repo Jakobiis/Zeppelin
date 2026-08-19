@@ -4,6 +4,7 @@ import { Giveaways } from "../../../data/Giveaways.js";
 import { clearUpcomingClaimDeadline, registerUpcomingClaimDeadline } from "../../../data/loops/upcomingClaimDeadlinesLoop.js";
 import { DBDateFormat } from "../../../utils.js";
 import { buildWinnerAnnouncementButtons } from "./buildGiveawayMessage.js";
+import { cleanupRerolledWinnerThreads } from "./cleanupGiveawayThreads.js";
 import { sendChannelMessage } from "./discordRest.js";
 import { rollWinners } from "./rollWinners.js";
 
@@ -79,11 +80,13 @@ export async function processExpiredClaims(giveawayId: number): Promise<void> {
   }
 
   const replacementWinnerIds = await rollWinners(giveawayId, overdueWinnerIds.length, giveaway.winner_ids);
+  const winnerThreadIds = await cleanupRerolledWinnerThreads(giveaway, overdueWinnerIds);
 
   await giveaways.update(giveawayId, {
     winner_ids: [...giveaway.winner_ids, ...replacementWinnerIds],
     expired_winner_ids: [...giveaway.expired_winner_ids, ...overdueWinnerIds],
     winner_claim_deadlines: remainingDeadlines,
+    winner_thread_ids: winnerThreadIds,
   });
 
   clearUpcomingClaimDeadline(giveaway);

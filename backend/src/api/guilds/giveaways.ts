@@ -300,12 +300,14 @@ export function initGuildGiveawaysAPI(router: express.Router) {
         if (!giveaway) return notFound(res);
         if (giveaway.status !== "ended") return clientError(res, "Giveaway hasn't ended yet");
 
-        const amount = Number(req.body?.amount) || 1;
-        if (!Number.isInteger(amount) || amount < 1) {
-          return clientError(res, "Amount must be a positive whole number");
+        const replaceWinnerIds = sanitizeRoleIds(req.body?.replaceWinnerIds);
+        const currentWinnerIds = giveaway.winner_ids.filter((id) => !giveaway.expired_winner_ids.includes(id));
+        if (replaceWinnerIds.length === 0 || replaceWinnerIds.length !== new Set(replaceWinnerIds).size) {
+          return clientError(res, "Select one or more current winners to reroll");
         }
+        if (replaceWinnerIds.some((id) => !currentWinnerIds.includes(id))) return clientError(res, "Invalid winner selection");
 
-        const { newWinnerIds } = await rerollGiveaway(giveaway.id, amount);
+        const { newWinnerIds } = await rerollGiveaway(giveaway.id, replaceWinnerIds);
         res.json({ result: "ok", newWinnerCount: newWinnerIds.length });
       } catch (err) {
         serverError(res, "Failed to reroll giveaway");

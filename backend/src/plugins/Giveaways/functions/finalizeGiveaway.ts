@@ -3,11 +3,13 @@ import { Giveaway } from "../../../data/entities/Giveaway.js";
 import { Giveaways } from "../../../data/Giveaways.js";
 import { GiveawayEntries } from "../../../data/GiveawayEntries.js";
 import { clearUpcomingGiveaway } from "../../../data/loops/upcomingGiveawaysLoop.js";
+import { clearUpcomingClaimDeadline } from "../../../data/loops/upcomingClaimDeadlinesLoop.js";
 import { humanizeDuration } from "../../../humanizeDuration.js";
 import { DBDateFormat } from "../../../utils.js";
 import { DEFAULT_EMBED_COLOR } from "../../../utils/getGuildEmbedColor.js";
 import { armClaimDeadlines } from "./claimGiveaway.js";
 import { buildWinnerAnnouncementButtons } from "./buildGiveawayMessage.js";
+import { cleanupRerolledWinnerThreads } from "./cleanupGiveawayThreads.js";
 import { editChannelMessage, sendChannelMessage } from "./discordRest.js";
 import { rollWinners } from "./rollWinners.js";
 
@@ -96,11 +98,10 @@ export async function finalizeGiveaway(giveawayId: number, opts: { cancelled: bo
 }
 
 /**
- * Re-rolls `amount` (default 1) new winner(s) for an already-ended giveaway, excluding everyone who has ever
- * won it before (across all previous rerolls too). Posts a fresh winner announcement; does not touch the
- * original giveaway message. Replacement winners get the same claim window as any other winner, if configured.
+ * Replaces the selected current winners on an already-ended giveaway. Every historical winner remains excluded
+ * from the new draw, while replaced winners are marked inactive so the dashboard shows only the replacements.
  */
-export async function rerollGiveaway(giveawayId: number, amount = 1): Promise<{ giveaway: Giveaway; newWinnerIds: string[] }> {
+export async function rerollGiveaway(giveawayId: number, replaceWinnerIds: string[]): Promise<{ giveaway: Giveaway; newWinnerIds: string[] }> {
   const giveaway = await giveaways.find(giveawayId);
   if (!giveaway) {
     throw new Error(`Giveaway ${giveawayId} not found`);
@@ -109,10 +110,19 @@ export async function rerollGiveaway(giveawayId: number, amount = 1): Promise<{ 
     throw new Error("Only an ended giveaway can be rerolled");
   }
 
-  const newWinnerIds = await rollWinners(giveawayId, amount, giveaway.winner_ids);
+  const newWinnerIds = await rollWinners(giveawayId, replaceWinnerIds.length, giveaway.winner_ids);
   const allWinnerIds = [...giveaway.winner_ids, ...newWinnerIds];
+  const remainingDeadlines = { ...giveaway.winner_claim_deadlines };
+  for (const winnerId of replaceWinnerIds) delete remainingDeadlines[winnerId];
+  const winnerThreadIds = await cleanupRerolledWinnerThreads(giveaway, replaceWinnerIds);
 
-  await giveaways.update(giveawayId, { winner_ids: allWinnerIds });
+  await giveaways.update(giveawayId, {
+    winner_ids: allWinnerIds,
+    expired_winner_ids: [...new Set([...giveaway.expired_winner_ids, ...replaceWinnerIds])],
+    winner_claim_deadlines: remainingDeadlines,
+    winner_thread_ids: winnerThreadIds,
+  });
+  clearUpcomingClaimDeadline(giveaway);
 
   let updated = (await giveaways.find(giveawayId))!;
 

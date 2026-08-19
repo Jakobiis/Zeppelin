@@ -40,3 +40,7 @@ export function editChannelMessage(channelId: string, messageId: string, payload
     body: JSON.stringify(payload),
   });
 }
+
+export function deleteChannel(channelId: string): Promise<void> {
+  return discordBotRequest(`channels/${channelId}`, { method: "DELETE" }).then(() => undefined);
+}

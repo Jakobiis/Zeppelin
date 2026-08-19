@@ -35,7 +35,10 @@ export const GiveawayRerollCmd = guildPluginMessageCommand<GiveawaysPluginType>(
       return;
     }
 
-    const { giveaway: rerolled, newWinnerIds } = await rerollGiveaway(giveaway.id, amount);
+    const winnerIdsToReplace = giveaway.winner_ids
+      .filter((winnerId) => !giveaway.expired_winner_ids.includes(winnerId))
+      .slice(0, amount);
+    const { giveaway: rerolled, newWinnerIds } = await rerollGiveaway(giveaway.id, winnerIdsToReplace);
     void pluginData.state.common.sendSuccessMessage(
       message,
       newWinnerIds.length > 0

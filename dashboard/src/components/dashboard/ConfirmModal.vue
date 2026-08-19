@@ -15,6 +15,14 @@
         />
       </div>
 
+      <fieldset v-if="selectionOptions?.length" class="mt-4">
+        <legend class="text-sm font-medium">{{ selectionLabel }}</legend>
+        <label v-for="option in selectionOptions" :key="option.value" class="mt-2 flex items-center gap-2 text-sm">
+          <input v-model="selectedValues" class="checkbox" type="checkbox" :value="option.value" />
+          {{ option.label }}
+        </label>
+      </fieldset>
+
       <div class="flex justify-end gap-2 mt-5">
         <button type="button" class="btn-secondary" @click="$emit('cancel')">Cancel</button>
         <button type="button" class="btn-primary" @click="onConfirm">{{ confirmLabel || "Confirm" }}</button>
@@ -34,25 +42,31 @@ const props = defineProps<{
   showNumberInput?: boolean;
   numberLabel?: string;
   numberDefault?: number;
+  selectionOptions?: Array<{ value: string; label: string }>;
+  selectionLabel?: string;
 }>();
 
 const emit = defineEmits<{
-  (e: "confirm", value: number | undefined): void;
+  (e: "confirm", value: { amount: number | undefined; selectedValues: string[] }): void;
   (e: "cancel"): void;
 }>();
 
 const numberValue = ref(props.numberDefault ?? 1);
+const selectedValues = ref<string[]>([]);
 
 // Reset to the default every time the modal opens, so a leftover value from a previous confirmation
 // (e.g. a different giveaway's reroll count) doesn't carry over.
 watch(
   () => props.open,
   (isOpen) => {
-    if (isOpen) numberValue.value = props.numberDefault ?? 1;
+    if (isOpen) {
+      numberValue.value = props.numberDefault ?? 1;
+      selectedValues.value = [];
+    }
   },
 );
 
 function onConfirm() {
-  emit("confirm", props.showNumberInput ? numberValue.value : undefined);
+  emit("confirm", { amount: props.showNumberInput ? numberValue.value : undefined, selectedValues: selectedValues.value });
 }
 </script>
