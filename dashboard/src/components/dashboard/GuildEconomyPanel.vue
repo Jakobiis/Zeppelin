@@ -87,7 +87,8 @@
       </div>
     </div>
 
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 flex flex-col gap-4">
+    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Leaderboard</h3>
       <input
         type="text"
@@ -130,6 +131,28 @@
       </div>
     </div>
 
+    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Top games today</h3>
+      <div v-if="!analytics.topGames.length" class="text-sm text-muted-foreground">No games played yet today.</div>
+      <div class="flex flex-col gap-2">
+        <div
+          v-for="(game, i) in analytics.topGames"
+          :key="game.gameName"
+          class="flex items-center justify-between gap-2 text-sm border border-border rounded-md px-2 py-1.5"
+        >
+          <div class="min-w-0 flex items-center gap-2">
+            <span class="text-xs text-muted-foreground w-4 shrink-0">#{{ i + 1 }}</span>
+            <span class="truncate">{{ game.gameName }}</span>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-xs text-muted-foreground">{{ game.plays.toLocaleString() }} play{{ game.plays === 1 ? "" : "s" }}</span>
+            <span :class="signedClass(game.net)">{{ formatSigned(game.net) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
     <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Recent activity</h3>
       <p class="text-xs text-muted-foreground mb-2">Games, gifts, and trades across the whole server.</p>
@@ -156,27 +179,6 @@
         >
           Next
         </button>
-      </div>
-    </div>
-
-    <div class="min-w-0 xl:col-start-2 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
-      <h3 class="mb-3">Top games today</h3>
-      <div v-if="!analytics.topGames.length" class="text-sm text-muted-foreground">No games played yet today.</div>
-      <div class="flex flex-col gap-2">
-        <div
-          v-for="(game, i) in analytics.topGames"
-          :key="game.gameName"
-          class="flex items-center justify-between gap-2 text-sm border border-border rounded-md px-2 py-1.5"
-        >
-          <div class="min-w-0 flex items-center gap-2">
-            <span class="text-xs text-muted-foreground w-4 shrink-0">#{{ i + 1 }}</span>
-            <span class="truncate">{{ game.gameName }}</span>
-          </div>
-          <div class="flex items-center gap-3 shrink-0">
-            <span class="text-xs text-muted-foreground">{{ game.plays.toLocaleString() }} play{{ game.plays === 1 ? "" : "s" }}</span>
-            <span :class="signedClass(game.net)">{{ formatSigned(game.net) }}</span>
-          </div>
-        </div>
       </div>
     </div>
   </div>
