@@ -3,8 +3,8 @@ import { Giveaway } from "../../../data/entities/Giveaway.js";
 import { Giveaways } from "../../../data/Giveaways.js";
 import { clearUpcomingClaimDeadline, registerUpcomingClaimDeadline } from "../../../data/loops/upcomingClaimDeadlinesLoop.js";
 import { DBDateFormat } from "../../../utils.js";
-import { buildWinnerAnnouncementButtons } from "./buildGiveawayMessage.js";
-import { cleanupRerolledWinnerThreads } from "./cleanupGiveawayThreads.js";
+import { buildWinnerAnnouncementButtons, currentWinnerIds } from "./buildGiveawayMessage.js";
+import { deleteWinnerThreads } from "./cleanupGiveawayThreads.js";
 import { sendChannelMessage } from "./discordRest.js";
 import { rollWinners } from "./rollWinners.js";
 
@@ -33,7 +33,8 @@ export async function armClaimDeadlines(giveaway: Giveaway, winnerIds: string[])
 
 /**
  * Marks `winnerId` as having claimed their prize, if they currently have a pending claim on this giveaway.
- * Returns false (no-op) if they don't — already claimed, already expired, or never had a claim requirement.
+ * Returns false (no-op) if they don't — already claimed, already expired, or never had a claim requirement. If
+ * this was the last current winner still owed a claim, closes the giveaway out (see closeOutFullyClaimedGiveaway).
  */
 export async function markWinnerClaimed(giveawayId: number, winnerId: string): Promise<boolean> {
   const giveaway = await giveaways.find(giveawayId);
@@ -51,7 +52,32 @@ export async function markWinnerClaimed(giveawayId: number, winnerId: string): P
 
   const updated = (await giveaways.find(giveawayId))!;
   registerUpcomingClaimDeadline(updated);
+
+  const stillHeldWinnerIds = currentWinnerIds(updated);
+  const allClaimed = stillHeldWinnerIds.length > 0 && stillHeldWinnerIds.every((id) => updated.claimed_winner_ids.includes(id));
+  if (allClaimed) {
+    await closeOutFullyClaimedGiveaway(updated, stillHeldWinnerIds);
+  }
+
   return true;
+}
+
+/**
+ * Once every current winner of a giveaway has claimed their prize, there's nothing left to coordinate — deletes
+ * everyone's remaining private thread, marks them all closed (see the entity comment on
+ * winner_thread_closed_ids — this blocks re-creating one afterward, same as the manual "Delete Thread" button),
+ * and announces the giveaway is fully wrapped up.
+ */
+async function closeOutFullyClaimedGiveaway(giveaway: Giveaway, winnerIds: string[]): Promise<void> {
+  const nextThreadIds = await deleteWinnerThreads(giveaway, winnerIds);
+  await giveaways.update(giveaway.id, {
+    winner_thread_ids: nextThreadIds,
+    winner_thread_closed_ids: [...new Set([...giveaway.winner_thread_closed_ids, ...winnerIds])],
+  });
+
+  await sendChannelMessage(giveaway.channel_id, {
+    content: `✅ All prizes for **${giveaway.prize}** have been claimed! Winner threads have been closed.`,
+  }).catch(() => null);
 }
 
 /**
@@ -80,7 +106,7 @@ export async function processExpiredClaims(giveawayId: number): Promise<void> {
   }
 
   const replacementWinnerIds = await rollWinners(giveawayId, overdueWinnerIds.length, giveaway.winner_ids);
-  const winnerThreadIds = await cleanupRerolledWinnerThreads(giveaway, overdueWinnerIds);
+  const winnerThreadIds = await deleteWinnerThreads(giveaway, overdueWinnerIds);
 
   await giveaways.update(giveawayId, {
     winner_ids: [...giveaway.winner_ids, ...replacementWinnerIds],

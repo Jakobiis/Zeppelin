@@ -9,7 +9,7 @@ import { DBDateFormat } from "../../../utils.js";
 import { DEFAULT_EMBED_COLOR } from "../../../utils/getGuildEmbedColor.js";
 import { armClaimDeadlines } from "./claimGiveaway.js";
 import { buildWinnerAnnouncementButtons } from "./buildGiveawayMessage.js";
-import { cleanupRerolledWinnerThreads } from "./cleanupGiveawayThreads.js";
+import { deleteWinnerThreads } from "./cleanupGiveawayThreads.js";
 import { editChannelMessage, sendChannelMessage } from "./discordRest.js";
 import { rollWinners } from "./rollWinners.js";
 
@@ -114,7 +114,7 @@ export async function rerollGiveaway(giveawayId: number, replaceWinnerIds: strin
   const allWinnerIds = [...giveaway.winner_ids, ...newWinnerIds];
   const remainingDeadlines = { ...giveaway.winner_claim_deadlines };
   for (const winnerId of replaceWinnerIds) delete remainingDeadlines[winnerId];
-  const winnerThreadIds = await cleanupRerolledWinnerThreads(giveaway, replaceWinnerIds);
+  const winnerThreadIds = await deleteWinnerThreads(giveaway, replaceWinnerIds);
 
   await giveaways.update(giveawayId, {
     winner_ids: allWinnerIds,

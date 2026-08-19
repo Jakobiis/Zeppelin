@@ -52,6 +52,14 @@ export class Giveaway {
   // ID -> thread ID; a winner with no entry here hasn't created theirs yet.
   @Column("simple-json") winner_thread_ids: Record<string, string>;
 
+  // Winner IDs whose thread was closed on purpose — via the "Delete Thread" button, or automatically once every
+  // current winner has claimed (see claimGiveaway.ts) — as opposed to just having no entry in winner_thread_ids
+  // (never created one) or losing it to a reroll (cleanupGiveawayThreads.ts already deletes those without
+  // marking this, since a rerolled winner isn't done, they no longer hold the prize at all). Checked before
+  // letting a winner create a new thread: a deliberate close means "the handoff is finished," not "go make
+  // another one" the way a thread that just went missing for some other reason would.
+  @Column("simple-json") winner_thread_closed_ids: string[];
+
   @Column({ type: Number, nullable: true }) embed_color: number | null;
 
   @Column("simple-json") required_role_ids: string[];

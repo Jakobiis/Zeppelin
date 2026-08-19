@@ -75,10 +75,28 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
         return;
       }
 
-      const existingThreadId = giveaway.winner_thread_ids[member.id];
-      if (existingThreadId) {
-        await args.interaction.reply({ ephemeral: true, content: `You already have a thread: <#${existingThreadId}>` }).catch(() => null);
+      // A deliberately-closed thread (the "Delete Thread" button, or everyone claiming — see
+      // winner_thread_closed_ids' entity comment) means the handoff is done, full stop — unlike a thread that's
+      // merely missing for some other reason (checked below), this doesn't get a replacement.
+      if (giveaway.winner_thread_closed_ids.includes(member.id)) {
+        await args.interaction.reply({ ephemeral: true, content: "Your prize thread has already been closed out — this giveaway's handoff is complete." }).catch(() => null);
         return;
+      }
+
+      let winnerThreadIds = giveaway.winner_thread_ids;
+      const existingThreadId = winnerThreadIds[member.id];
+      if (existingThreadId) {
+        const existingThread = await pluginData.guild.channels.fetch(existingThreadId).catch(() => null);
+        if (existingThread) {
+          await args.interaction.reply({ ephemeral: true, content: `You already have a thread: <#${existingThreadId}>` }).catch(() => null);
+          return;
+        }
+        // The recorded thread is gone for some other reason (manually deleted outside the bot, channel purge,
+        // etc.) rather than a deliberate close (ruled out above) — drop the stale record instead of permanently
+        // telling the winner they already have a thread that no longer exists, and fall through to create them
+        // a new one below.
+        winnerThreadIds = Object.fromEntries(Object.entries(winnerThreadIds).filter(([winnerId]) => winnerId !== member.id));
+        await pluginData.state.giveaways.update(giveaway.id, { winner_thread_ids: winnerThreadIds });
       }
 
       await args.interaction.deferReply({ ephemeral: true }).catch(() => null);
@@ -94,7 +112,7 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
       }
 
       await pluginData.state.giveaways.update(giveaway.id, {
-        winner_thread_ids: { ...giveaway.winner_thread_ids, [member.id]: thread.id },
+        winner_thread_ids: { ...winnerThreadIds, [member.id]: thread.id },
       });
       const reply = sendError
         ? `Thread created: <#${thread.id}> — but I couldn't post the opening message in it (${sendError}).`
@@ -112,10 +130,18 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
       const winnerId: string | undefined = data?.winner;
       await args.interaction.reply({ ephemeral: true, content: "Deleting thread…" }).catch(() => null);
 
-      if (winnerId && giveaway.winner_thread_ids[winnerId]) {
+      if (winnerId) {
         const nextThreadIds = { ...giveaway.winner_thread_ids };
         delete nextThreadIds[winnerId];
-        await pluginData.state.giveaways.update(giveaway.id, { winner_thread_ids: nextThreadIds }).catch(() => null);
+        // A manager deleting the thread on purpose means the handoff is done — block the winner from creating
+        // a replacement (see winner_thread_closed_ids' entity comment), same as the auto-close once everyone
+        // claims.
+        await pluginData.state.giveaways
+          .update(giveaway.id, {
+            winner_thread_ids: nextThreadIds,
+            winner_thread_closed_ids: [...new Set([...giveaway.winner_thread_closed_ids, winnerId])],
+          })
+          .catch(() => null);
       }
 
       const channel = args.interaction.channel;

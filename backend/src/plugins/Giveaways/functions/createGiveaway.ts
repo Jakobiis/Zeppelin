@@ -63,6 +63,7 @@ export async function createGiveawayRecord(guildId: string, fields: CreateGiveaw
     expired_winner_ids: [],
     winner_claim_deadlines: {},
     winner_thread_ids: {},
+    winner_thread_closed_ids: [],
     created_at: moment.utc().format(DBDateFormat),
   });
 
