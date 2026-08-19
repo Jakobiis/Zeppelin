@@ -17,7 +17,7 @@ const DEFAULT_HISTORY_PAGE_SIZE = 20;
 const MAX_LOOKUP_MATCHES = 10;
 const MAX_ADJUST_AMOUNT = MAX_COUNTER_VALUE;
 const MAX_SEARCH_LENGTH = 200;
-const MAX_TOP_GAMES = 5;
+const MAX_TOP_GAMES = 10;
 
 const configs = new Configs();
 

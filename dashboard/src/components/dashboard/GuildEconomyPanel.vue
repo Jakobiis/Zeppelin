@@ -159,7 +159,7 @@
       </div>
     </div>
 
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 xl:col-start-2 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Top games today</h3>
       <div v-if="!analytics.topGames.length" class="text-sm text-muted-foreground">No games played yet today.</div>
       <div class="flex flex-col gap-2">
