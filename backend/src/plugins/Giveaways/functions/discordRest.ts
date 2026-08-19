@@ -44,3 +44,7 @@ export function editChannelMessage(channelId: string, messageId: string, payload
 export function deleteChannel(channelId: string): Promise<void> {
   return discordBotRequest(`channels/${channelId}`, { method: "DELETE" }).then(() => undefined);
 }
+
+export function deleteChannelMessage(channelId: string, messageId: string): Promise<void> {
+  return discordBotRequest(`channels/${channelId}/messages/${messageId}`, { method: "DELETE" }).then(() => undefined);
+}

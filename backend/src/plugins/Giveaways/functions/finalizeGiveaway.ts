@@ -91,7 +91,13 @@ export async function finalizeGiveaway(giveawayId: number, opts: { cancelled: bo
 
   if (!opts.cancelled && updated.winner_ids.length > 0) {
     updated = await armClaimDeadlines(updated, winnerIds);
-    await sendChannelMessage(updated.channel_id, buildWinnerAnnouncementPayload(updated)).catch(() => null);
+    const announcement = await sendChannelMessage(updated.channel_id, buildWinnerAnnouncementPayload(updated)).catch(() => null);
+    if (announcement?.id) {
+      await giveaways.update(giveawayId, {
+        winner_announcement_message_ids: [...updated.winner_announcement_message_ids, announcement.id],
+      });
+      updated = (await giveaways.find(giveawayId))!;
+    }
   }
 
   return updated;
@@ -134,11 +140,17 @@ export async function rerollGiveaway(giveawayId: number, replaceWinnerIds: strin
         ? `\nClick 🎉 **Claim Prize** within **${humanizeDuration(updated.claim_time_ms)}** or you'll be rerolled!`
         : "";
 
-    await sendChannelMessage(updated.channel_id, {
+    const announcement = await sendChannelMessage(updated.channel_id, {
       content: `🎉 Giveaway rerolled for **${updated.prize}**! New winner(s): ${newWinnerIds.map((id) => `<@${id}>`).join(", ")}${claimLine}`,
       allowed_mentions: { users: newWinnerIds },
       components: buildWinnerAnnouncementButtons(updated.id).map((row) => row.toJSON()),
     }).catch(() => null);
+    if (announcement?.id) {
+      await giveaways.update(giveawayId, {
+        winner_announcement_message_ids: [...updated.winner_announcement_message_ids, announcement.id],
+      });
+      updated = (await giveaways.find(giveawayId))!;
+    }
   }
   // No Discord message when there's no one left to reroll to — callers (the chat command, the dashboard) each
   // report that through their own feedback channel instead (newWinnerIds.length === 0 tells them to).

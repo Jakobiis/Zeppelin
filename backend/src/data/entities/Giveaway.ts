@@ -96,5 +96,12 @@ export class Giveaway {
   // Pending winner user ID -> claim deadline (DBDateFormat). See data/loops/upcomingClaimDeadlinesLoop.ts.
   @Column("simple-json") winner_claim_deadlines: Record<string, string>;
 
+  // IDs of every "🎉 Congratulations, you won..." message posted for this giveaway (the initial announcement in
+  // finalizeGiveaway.ts, plus one more per reroll in rerollGiveaway/processExpiredClaims) — each one carries a
+  // "Claim Prize" button. Cleared out (see claimGiveaway.ts's confirmWinnerClaimed) once every current winner has
+  // confirmed their claim, since a lingering Claim Prize button on an old announcement would otherwise still let
+  // someone open a thread for a giveaway that's already fully wrapped up.
+  @Column("simple-json") winner_announcement_message_ids: string[];
+
   @Column() created_at: string;
 }

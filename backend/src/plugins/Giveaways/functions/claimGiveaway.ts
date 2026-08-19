@@ -5,7 +5,7 @@ import { clearUpcomingClaimDeadline, registerUpcomingClaimDeadline } from "../..
 import { DBDateFormat } from "../../../utils.js";
 import { buildWinnerAnnouncementButtons, currentWinnerIds } from "./buildGiveawayMessage.js";
 import { deleteWinnerThreads } from "./cleanupGiveawayThreads.js";
-import { sendChannelMessage } from "./discordRest.js";
+import { deleteChannelMessage, sendChannelMessage } from "./discordRest.js";
 import { rollWinners } from "./rollWinners.js";
 
 const giveaways = new Giveaways();
@@ -80,9 +80,21 @@ export async function confirmWinnerClaimed(giveawayId: number, winnerId: string)
   const stillHeldWinnerIds = currentWinnerIds(updated);
   const allClaimed = stillHeldWinnerIds.length > 0 && stillHeldWinnerIds.every((id) => updated.claimed_winner_ids.includes(id));
   if (allClaimed) {
+    // A reply on the original giveaway embed rather than a standalone message — the prize is already right there
+    // in that embed's title, so repeating it here would be redundant.
     await sendChannelMessage(updated.channel_id, {
-      content: `✅ All prizes for **${updated.prize}** have been claimed!`,
+      content: "✅ All prizes have been claimed!",
+      message_reference: updated.message_id ? { message_id: updated.message_id, fail_if_not_exists: false } : undefined,
     }).catch(() => null);
+
+    // Every "🎉 Congratulations..." announcement (initial + any rerolls) still carries a Claim Prize button —
+    // with the handoff fully wrapped up, a lingering one of those would otherwise still let someone open a
+    // thread for a giveaway that's already done. Cleared regardless of individual delete success/failure so a
+    // stale ID (already-deleted message, etc.) can't get stuck here forever.
+    await Promise.all(
+      updated.winner_announcement_message_ids.map((messageId) => deleteChannelMessage(updated.channel_id, messageId).catch(() => null)),
+    );
+    await giveaways.update(giveawayId, { winner_announcement_message_ids: [] });
   }
 
   return true;
@@ -135,11 +147,16 @@ export async function processExpiredClaims(giveawayId: number): Promise<void> {
   const expiredMentions = overdueWinnerIds.map((id) => `<@${id}>`).join(", ");
   if (replacementWinnerIds.length > 0) {
     const newMentions = replacementWinnerIds.map((id) => `<@${id}>`).join(", ");
-    await sendChannelMessage(updated.channel_id, {
+    const announcement = await sendChannelMessage(updated.channel_id, {
       content: `⌛ ${expiredMentions} didn't claim **${updated.prize}** in time and ${overdueWinnerIds.length === 1 ? "was" : "were"} rerolled. New winner(s): ${newMentions}`,
       allowed_mentions: { users: [...overdueWinnerIds, ...replacementWinnerIds] },
       components: buildWinnerAnnouncementButtons(updated.id).map((row) => row.toJSON()),
     }).catch(() => null);
+    if (announcement?.id) {
+      await giveaways.update(giveawayId, {
+        winner_announcement_message_ids: [...updated.winner_announcement_message_ids, announcement.id],
+      });
+    }
   } else {
     await sendChannelMessage(updated.channel_id, {
       content: `⌛ ${expiredMentions} didn't claim **${updated.prize}** in time, but there were no other eligible entries to reroll to.`,
