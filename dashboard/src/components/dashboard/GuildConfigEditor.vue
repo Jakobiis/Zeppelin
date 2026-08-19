@@ -20,12 +20,12 @@
     </div>
 
     <Tabs class="mt-4">
-      <Tab :active="mode === 'yaml'"><a href="javascript:void(0)" v-on:click="setMode('yaml')">Raw YAML</a></Tab>
-      <Tab :active="mode === 'interface'"><a href="javascript:void(0)" v-on:click="setMode('interface')">Interface</a></Tab>
+      <Tab v-if="canReadConfig" :active="mode === 'yaml'"><a href="javascript:void(0)" v-on:click="setMode('yaml')">Raw YAML</a></Tab>
+      <Tab v-if="canReadConfig" :active="mode === 'interface'"><a href="javascript:void(0)" v-on:click="setMode('interface')">Interface</a></Tab>
       <Tab v-if="isGiveawayManager" :active="mode === 'giveaways'"><a href="javascript:void(0)" v-on:click="setMode('giveaways')">Giveaways</a></Tab>
     </Tabs>
 
-    <v-ace-editor v-show="mode === 'yaml'" class="rounded-lg shadow-lg border border-border"
+    <v-ace-editor v-if="canReadConfig" v-show="mode === 'yaml'" class="rounded-lg shadow-lg border border-border"
                v-model:value="editableConfig"
                @init="editorInit"
                lang="yaml"
@@ -41,7 +41,7 @@
                   height: editorHeight + 'px',
                 }" />
 
-    <div v-if="mode === 'interface'" class="mt-4">
+    <div v-if="canReadConfig && mode === 'interface'" class="mt-4">
       <input
         type="text"
         class="field-input"
@@ -50,7 +50,7 @@
       />
     </div>
 
-    <div v-if="mode === 'interface'" class="flex flex-wrap lg:flex-nowrap items-start gap-6 mt-4">
+    <div v-if="canReadConfig && mode === 'interface'" class="flex flex-wrap lg:flex-nowrap items-start gap-6 mt-4">
       <nav class="w-full lg:w-56 flex-none border border-border rounded-lg bg-card shadow-md p-3">
         <ul v-if="generalMatchesSearch" class="list-none space-y-0.5 mb-3 pb-3 border-b border-border">
           <li>
@@ -114,7 +114,7 @@
   import yaml from "js-yaml";
   import { computed } from "vue";
   import {mapState} from "vuex";
-  import {ApiError, get} from "../../api";
+  import {ApiError, get, post} from "../../api";
   import { ApiPermissions, hasPermission } from "@zeppelinbot/shared/apiPermissions.js";
   import { DocsState, GuildState, RootState } from "../../store/types";
 
@@ -174,18 +174,24 @@
 
       await this.$store.dispatch("guilds/loadGuildPermissionAssignments", this.$route.params.guildId).catch(() => {});
 
-      await this.$store.dispatch("guilds/loadConfig", this.$route.params.guildId);
-      this.editableConfig = this.config || "";
-
       // Fetch the full plugin list so we know what to offer in the Interface tab's sidebar — the same registry
       // the docs pages use, reused here instead of hardcoding a plugin name.
-      await this.$store.dispatch("docs/loadAllPlugins");
 
       // Whether to offer the Giveaways tab at all — same manager_roles check the standalone giveaways API
       // guards itself with, so the tab only appears for someone who could actually use it.
       this.isGiveawayManager = await this.$store
         .dispatch("guilds/loadGiveawayAccess", this.$route.params.guildId)
         .catch(() => false);
+
+      this.canReadConfig = await post(`guilds/${this.$route.params.guildId}/check-permission`, { permission: ApiPermissions.ReadConfig })
+        .then((result) => result.result)
+        .catch(() => false);
+
+      if (this.canReadConfig) {
+        await this.$store.dispatch("guilds/loadConfig", this.$route.params.guildId);
+        this.editableConfig = this.config || "";
+        await this.$store.dispatch("docs/loadAllPlugins");
+      }
 
       // Restores which tab/plugin was open from the URL (see updateUrlQuery) so a shared link opens straight to
       // the same spot instead of always landing on Raw YAML / General. Both are resolved before either is
@@ -195,7 +201,7 @@
       const validPluginNames = new Set([this.GENERAL, ...this.formPlugins.map((p) => p.name)]);
       this.selectedPlugin = queryPlugin && validPluginNames.has(queryPlugin) ? queryPlugin : this.GENERAL;
       const queryMode = this.$route.query.mode;
-      this.mode = queryMode === "interface" ? "interface" : queryMode === "giveaways" && this.isGiveawayManager ? "giveaways" : "yaml";
+      this.mode = queryMode === "giveaways" && this.isGiveawayManager ? "giveaways" : this.canReadConfig && queryMode === "interface" ? "interface" : this.canReadConfig ? "yaml" : "giveaways";
 
       this.loading = false;
 
@@ -229,6 +235,7 @@
         savedTimeout: null,
         mode: "yaml",
         isGiveawayManager: false,
+        canReadConfig: false,
         selectedPlugin: null,
         GENERAL,
         // Interface-tab-wide search — filters/auto-expands the current plugin's whole field tree, not just one

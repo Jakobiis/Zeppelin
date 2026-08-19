@@ -10,6 +10,7 @@ import { ApiUserInfo } from "../data/ApiUserInfo.js";
 import { ApiUserInfoData } from "../data/entities/ApiUserInfo.js";
 import { env } from "../env.js";
 import { ok } from "./responses.js";
+import { getGiveawayManagerGuildIds } from "./guilds/giveawayAccess.js";
 
 interface IPassportApiUser {
   apiKey: string;
@@ -95,7 +96,8 @@ export function initAuth(router: express.Router) {
 
         // Make sure the user is able to access at least 1 guild
         const permissions = await apiPermissionAssignments.getByUserId(user.id);
-        if (permissions.length === 0) {
+        const giveawayGuildIds = permissions.length === 0 ? await getGiveawayManagerGuildIds(user.id) : [];
+        if (permissions.length === 0 && giveawayGuildIds.length === 0) {
           cb(null, {});
           return;
         }

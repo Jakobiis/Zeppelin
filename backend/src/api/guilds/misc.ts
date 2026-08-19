@@ -13,6 +13,7 @@ import { isSnowflake } from "../../utils.js";
 import { loadYamlSafely } from "../../utils/loadYamlSafely.js";
 import { ObjectAliasError } from "../../utils/validateNoObjectAliases.js";
 import { hasGuildPermission, requireGuildPermission } from "../permissions.js";
+import { getGiveawayManagerGuildIds, isGiveawayManager } from "./giveawayAccess.js";
 import { clientError, ok, serverError, unauthorized } from "../responses.js";
 
 const apiPermissionAssignments = new ApiPermissionAssignments();
@@ -25,8 +26,14 @@ export function initGuildsMiscAPI(router: express.Router) {
   const miscRouter = express.Router();
 
   miscRouter.get("/available", async (req: Request, res: Response) => {
-    const guilds = await allowedGuilds.getForApiUser(req.user!.userId);
-    res.json(guilds);
+    const [permissionGuilds, giveawayGuildIds] = await Promise.all([
+      allowedGuilds.getForApiUser(req.user!.userId),
+      getGiveawayManagerGuildIds(req.user!.userId),
+    ]);
+    const giveawayGuilds = await Promise.all(giveawayGuildIds.map((guildId) => allowedGuilds.find(guildId)));
+    const guilds = new Map(permissionGuilds.map((guild) => [guild.id, guild]));
+    for (const guild of giveawayGuilds) if (guild) guilds.set(guild.id, guild);
+    res.json([...guilds.values()]);
   });
 
   miscRouter.get(
@@ -38,7 +45,10 @@ export function initGuildsMiscAPI(router: express.Router) {
   );
 
   miscRouter.get("/:guildId", async (req: Request, res: Response) => {
-    if (!(await hasGuildPermission(req.user!.userId, req.params.guildId, ApiPermissions.ViewGuild))) {
+    if (
+      !(await hasGuildPermission(req.user!.userId, req.params.guildId, ApiPermissions.ViewGuild)) &&
+      !(await isGiveawayManager(req.params.guildId, req.user!.userId))
+    ) {
       return unauthorized(res);
     }
 
