@@ -677,24 +677,33 @@ export class GuildCounters extends BaseGuildRepository {
     return value?.value;
   }
 
-  async getTopValues(counterId: number, limit: number = 10, offset: number = 0): Promise<CounterValue[]> {
-    return this.counterValues
+  // `userIds`, when given, restricts to those specific users (e.g. the dashboard's Economy leaderboard search —
+  // counter_values has no username to search against directly, so the caller resolves a typed search term to
+  // candidate IDs itself, via Discord's member search, before calling this).
+  async getTopValues(counterId: number, limit: number = 10, offset: number = 0, userIds?: string[]): Promise<CounterValue[]> {
+    const qb = this.counterValues
       .createQueryBuilder("cv")
       .where("cv.counter_id = :counterId", { counterId })
-      .andWhere("cv.user_id != :zero", { zero: "0" }) // exclude the "no user" aggregate row
-      .orderBy("cv.value", "DESC")
-      .addOrderBy("cv.id", "ASC")
-      .limit(limit)
-      .offset(offset)
-      .getMany();
+      .andWhere("cv.user_id != :zero", { zero: "0" }); // exclude the "no user" aggregate row
+
+    if (userIds?.length) {
+      qb.andWhere("cv.user_id IN (:...userIds)", { userIds });
+    }
+
+    return qb.orderBy("cv.value", "DESC").addOrderBy("cv.id", "ASC").limit(limit).offset(offset).getMany();
   }
 
-  async getValueCount(counterId: number): Promise<number> {
-    return this.counterValues
+  async getValueCount(counterId: number, userIds?: string[]): Promise<number> {
+    const qb = this.counterValues
       .createQueryBuilder("cv")
       .where("cv.counter_id = :counterId", { counterId })
-      .andWhere("cv.user_id != :zero", { zero: "0" }) // exclude the "no user" aggregate row
-      .getCount();
+      .andWhere("cv.user_id != :zero", { zero: "0" }); // exclude the "no user" aggregate row
+
+    if (userIds?.length) {
+      qb.andWhere("cv.user_id IN (:...userIds)", { userIds });
+    }
+
+    return qb.getCount();
   }
 
   async resetAllCounterValues(counterId: number): Promise<void> {

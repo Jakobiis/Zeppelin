@@ -155,8 +155,8 @@ export const GuildStore: Module<GuildState, RootState> = {
       return result.isManager;
     },
 
-    async loadEconomyLeaderboard({ commit }, { guildId, limit, offset }) {
-      const page = await get(`guilds/${guildId}/economy/leaderboard`, { limit, offset });
+    async loadEconomyLeaderboard({ commit }, { guildId, limit, offset, search }) {
+      const page = await get(`guilds/${guildId}/economy/leaderboard`, { limit, offset, search: search || "" });
       commit("setEconomyLeaderboard", { guildId, page });
     },
 

@@ -4,18 +4,19 @@ import { Configs } from "../../data/Configs.js";
 import { GuildCounters, MAX_COUNTER_VALUE, MIN_COUNTER_VALUE } from "../../data/GuildCounters.js";
 import { GuildEconomyGameHistory } from "../../data/GuildEconomyGameHistory.js";
 import { GuildEconomyShop } from "../../data/GuildEconomyShop.js";
-import { TRANSACTION_GAME_TYPES } from "../../plugins/Economy/functions/gameHistory.js";
+import { NON_GAME_TYPES } from "../../plugins/Economy/functions/gameHistory.js";
 import { isValidSnowflake } from "../../utils.js";
 import { loadYamlSafely } from "../../utils/loadYamlSafely.js";
 import { getGuildMemberDisplayInfo, getGuildMemberRoleIds, searchGuildMembersByUsername } from "./discordData.js";
 import { clientError, notFound, ok, serverError, unauthorized } from "../responses.js";
 
 const MAX_LEADERBOARD_PAGE_SIZE = 50;
-const DEFAULT_LEADERBOARD_PAGE_SIZE = 20;
+const DEFAULT_LEADERBOARD_PAGE_SIZE = 10;
 const MAX_HISTORY_PAGE_SIZE = 50;
 const DEFAULT_HISTORY_PAGE_SIZE = 20;
 const MAX_LOOKUP_MATCHES = 10;
 const MAX_ADJUST_AMOUNT = MAX_COUNTER_VALUE;
+const MAX_SEARCH_LENGTH = 200;
 
 const configs = new Configs();
 
@@ -90,6 +91,7 @@ export function initGuildEconomyAPI(router: express.Router) {
     try {
       const limit = Math.min(MAX_LEADERBOARD_PAGE_SIZE, Math.max(1, Math.trunc(Number(req.query.limit)) || DEFAULT_LEADERBOARD_PAGE_SIZE));
       const offset = Math.max(0, Math.trunc(Number(req.query.offset)) || 0);
+      const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, MAX_SEARCH_LENGTH) : "";
 
       const counterName = await getCounterName(req.params.guildId);
       const countersRepo = GuildCounters.getGuildInstance(req.params.guildId);
@@ -98,9 +100,24 @@ export function initGuildEconomyAPI(router: express.Router) {
         return res.json({ items: [], total: 0 });
       }
 
+      // Same "resolve a typed username/ID to candidate member IDs" approach as everywhere else here —
+      // counter_values has no username to search against directly. An empty match list (a search that found
+      // nobody) short-circuits to an empty page rather than an unfiltered getTopValues call.
+      let userIds: string[] | undefined;
+      if (search) {
+        userIds = isValidSnowflake(search) ? [search] : [];
+        const usernameMatches = await searchGuildMembersByUsername(req.params.guildId, search, MAX_LOOKUP_MATCHES);
+        for (const id of usernameMatches) {
+          if (!userIds.includes(id)) userIds.push(id);
+        }
+        if (userIds.length === 0) {
+          return res.json({ items: [], total: 0 });
+        }
+      }
+
       const [values, total] = await Promise.all([
-        countersRepo.getTopValues(counter.id, limit, offset),
-        countersRepo.getValueCount(counter.id),
+        countersRepo.getTopValues(counter.id, limit, offset, userIds),
+        countersRepo.getValueCount(counter.id, userIds),
       ]);
 
       const members = await Promise.all(values.map((v) => getGuildMemberDisplayInfo(req.params.guildId, v.user_id)));
@@ -220,15 +237,34 @@ export function initGuildEconomyAPI(router: express.Router) {
         const countersRepo = GuildCounters.getGuildInstance(guildId);
         const counter = await countersRepo.findOrCreateCounter(counterName, false, true);
 
+        const before = (await countersRepo.getCurrentValue(counter.id, null, userId)) ?? 0;
+
         if (action === "set") {
           await countersRepo.setCounterValue(counter.id, null, userId, amount, counterSettings.maxValue);
         } else {
-          const current = (await countersRepo.getCurrentValue(counter.id, null, userId)) ?? 0;
           const change = action === "give" ? amount : -amount;
-          await countersRepo.changeCounterValue(counter.id, null, userId, change, current, counterSettings.maxValue);
+          await countersRepo.changeCounterValue(counter.id, null, userId, change, before, counterSettings.maxValue);
         }
 
         const newBalance = Math.max(MIN_COUNTER_VALUE, (await countersRepo.getCurrentValue(counter.id, null, userId)) ?? 0);
+
+        // Logged into the same table as real games (see NON_GAME_TYPES) so it shows up in this user's history
+        // and the dashboard's guild-wide activity feed — an audit trail of who adjusted whose balance and by how
+        // much. opponent_id carries the *acting manager's* ID here, not another player. Best-effort: a logging
+        // failure shouldn't block the balance change the manager already asked for and already got applied.
+        await GuildEconomyGameHistory.getGuildInstance(guildId)
+          .addEntry({
+            userId,
+            gameName: `admin_${action}`,
+            gameType: "admin_adjust",
+            outcome: newBalance > before ? "win" : newBalance < before ? "loss" : "push",
+            betAmount: 0,
+            amountChanged: newBalance - before,
+            balanceAfter: newBalance,
+            opponentId: req.user!.userId,
+          })
+          .catch(() => null);
+
         res.json({ balance: newBalance });
       } catch (err) {
         serverError(res, "Failed to update balance");
@@ -236,29 +272,31 @@ export function initGuildEconomyAPI(router: express.Router) {
     },
   );
 
-  // Guild-wide totals for today (UTC) — restricted to actual games (excludes give/trade/tradeback, see
-  // TRANSACTION_GAME_TYPES), since mixing in transfers would muddy "how much was won/lost" with money that just
-  // moved between two players rather than being gained/lost against the house.
+  // Guild-wide totals for today (UTC) — restricted to actual games (excludes give/trade/tradeback/admin_adjust,
+  // see NON_GAME_TYPES), since mixing in transfers/manual adjustments would muddy "how much was won/lost" with
+  // money that just moved between players (or was granted outright) rather than being gained/lost against the
+  // house.
   economyRouter.get("/:guildId/economy/analytics", requireEconomyManager(), async (req: Request, res: Response) => {
     try {
       const since = moment.utc().startOf("day").toDate();
       const repo = GuildEconomyGameHistory.getGuildInstance(req.params.guildId);
-      const summary = await repo.getSummary({ since, excludeGameTypes: TRANSACTION_GAME_TYPES });
+      const summary = await repo.getSummary({ since, excludeGameTypes: NON_GAME_TYPES });
       res.json(summary);
     } catch (err) {
       serverError(res, "Failed to load analytics");
     }
   });
 
-  // Guild-wide give/trade/tradeback feed, most recent first — the dashboard equivalent of a user's own history,
-  // but across everyone, so staff can audit transfer activity without looking up one user at a time.
+  // Guild-wide activity feed (games and give/trade/tradeback transfers alike), most recent first — the
+  // dashboard equivalent of a user's own history, but across everyone, so staff can watch/audit activity
+  // without looking up one user at a time.
   economyRouter.get("/:guildId/economy/transactions", requireEconomyManager(), async (req: Request, res: Response) => {
     try {
       const page = Math.max(1, Math.trunc(Number(req.query.page)) || 1);
       const pageSize = Math.min(MAX_HISTORY_PAGE_SIZE, Math.max(1, Math.trunc(Number(req.query.pageSize)) || DEFAULT_HISTORY_PAGE_SIZE));
 
       const repo = GuildEconomyGameHistory.getGuildInstance(req.params.guildId);
-      const filter = { gameTypes: TRANSACTION_GAME_TYPES };
+      const filter = {};
       const [items, total] = await Promise.all([
         repo.getEntries(filter, pageSize, (page - 1) * pageSize),
         repo.getCount(filter),

@@ -14,8 +14,8 @@
     </div>
   </div>
 
-  <div class="grid min-w-0 items-start gap-4 xl:grid-cols-3">
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+  <div class="columns-1 sm:columns-2 xl:columns-3 gap-4">
+    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Look up a user</h3>
       <input
         type="text"
@@ -87,9 +87,18 @@
       </div>
     </div>
 
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Leaderboard</h3>
-      <div v-if="!leaderboard.items.length" class="text-sm text-muted-foreground">No balances yet.</div>
+      <input
+        type="text"
+        class="field-input mb-2"
+        placeholder="Search by username or user ID…"
+        :value="leaderboardSearchInput"
+        @input="onLeaderboardSearchInput(($event.target as HTMLInputElement).value)"
+      />
+      <div v-if="!leaderboard.items.length" class="text-sm text-muted-foreground">
+        {{ leaderboardSearchInput.trim() ? "No matching balances." : "No balances yet." }}
+      </div>
       <div class="flex flex-col gap-2">
         <div
           v-for="(entry, i) in leaderboard.items"
@@ -121,14 +130,14 @@
       </div>
     </div>
 
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
-      <h3 class="mb-3">Recent transactions</h3>
-      <p class="text-xs text-muted-foreground mb-2">Gifts and point trades across the whole server.</p>
-      <div v-if="!transactions.items.length" class="text-sm text-muted-foreground">No transactions yet.</div>
+    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Recent activity</h3>
+      <p class="text-xs text-muted-foreground mb-2">Games, gifts, and trades across the whole server.</p>
+      <div v-if="!transactions.items.length" class="text-sm text-muted-foreground">No activity yet.</div>
       <div class="flex flex-col gap-2">
         <div v-for="entry in transactions.items" :key="entry.id" class="text-sm border border-border rounded-md px-2 py-1.5">
           <div class="flex items-center justify-between gap-2">
-            <span class="font-medium min-w-0 truncate">{{ transactionLabel(entry) }}</span>
+            <span class="font-medium min-w-0 truncate">{{ activityLabel(entry) }}</span>
             <span class="shrink-0" :class="signedClass(entry.amount_changed)">{{ formatSigned(entry.amount_changed) }}</span>
           </div>
           <div class="text-xs text-muted-foreground">{{ formatDate(entry.created_at) }}</div>
@@ -149,25 +158,25 @@
         </button>
       </div>
     </div>
+  </div>
 
-    <ConfirmModal
-      :open="!!adjustState"
-      :title="adjustTitle"
-      :message="adjustMessage"
-      :confirm-label="adjustConfirmLabel"
-      show-number-input
-      number-label="Amount"
-      :number-default="adjustState?.defaultAmount ?? 1"
-      @confirm="onAdjustConfirm"
-      @cancel="adjustState = null"
-    />
+  <ConfirmModal
+    :open="!!adjustState"
+    :title="adjustTitle"
+    :message="adjustMessage"
+    :confirm-label="adjustConfirmLabel"
+    show-number-input
+    number-label="Amount"
+    :number-default="adjustState?.defaultAmount ?? 1"
+    @confirm="onAdjustConfirm"
+    @cancel="adjustState = null"
+  />
 
-    <div
-      v-if="toastMessage"
-      class="fixed bottom-4 right-4 z-50 bg-card border border-border rounded-lg shadow-lg px-4 py-3 text-sm max-w-sm"
-    >
-      {{ toastMessage }}
-    </div>
+  <div
+    v-if="toastMessage"
+    class="fixed bottom-4 right-4 z-50 bg-card border border-border rounded-lg shadow-lg px-4 py-3 text-sm max-w-sm"
+  >
+    {{ toastMessage }}
   </div>
 </template>
 
@@ -188,7 +197,7 @@ import {
 } from "../../store/types";
 import ConfirmModal from "./ConfirmModal.vue";
 
-const LEADERBOARD_PAGE_SIZE = 20;
+const LEADERBOARD_PAGE_SIZE = 10;
 const HISTORY_PAGE_SIZE = 10;
 const TRANSACTIONS_PAGE_SIZE = 15;
 
@@ -204,6 +213,7 @@ const GAME_TYPE_LABELS: Record<string, string> = {
   tradeback: "Traded coins for points",
   blackjack: "Blackjack",
   hol: "Higher or Lower",
+  admin_adjust: "Balance adjusted by staff",
 };
 
 type AdjustAction = "give" | "subtract" | "set";
@@ -225,6 +235,8 @@ export default {
       userHistoryPage: 1,
       adjustState: null as AdjustState | null,
       leaderboardPage: 1,
+      leaderboardSearchInput: "",
+      leaderboardSearchTimeout: null as ReturnType<typeof setTimeout> | null,
       transactionsPage: 1,
       toastMessage: null as string | null,
       toastTimeout: null as ReturnType<typeof setTimeout> | null,
@@ -390,6 +402,7 @@ export default {
         guildId: this.guildId,
         limit: LEADERBOARD_PAGE_SIZE,
         offset: this.leaderboardOffset,
+        search: this.leaderboardSearchInput.trim(),
       });
     },
 
@@ -397,6 +410,13 @@ export default {
       if (page < 1 || page > this.leaderboardTotalPages) return;
       this.leaderboardPage = page;
       this.loadLeaderboard();
+    },
+
+    onLeaderboardSearchInput(value: string) {
+      this.leaderboardSearchInput = value;
+      this.leaderboardPage = 1;
+      if (this.leaderboardSearchTimeout) clearTimeout(this.leaderboardSearchTimeout);
+      this.leaderboardSearchTimeout = setTimeout(() => this.loadLeaderboard(), 300);
     },
 
     async loadTransactions() {
@@ -421,17 +441,40 @@ export default {
       if (!entry.opponent_id) return "";
       if (entry.opponent_id === "bot") return " · vs bot";
       const name = members?.[entry.opponent_id]?.displayName ?? entry.opponent_id;
-      return entry.game_type === "give" ? ` · with ${name}` : ` · vs ${name}`;
+      if (entry.game_type === "give") return ` · with ${name}`;
+      if (entry.game_type === "admin_adjust") return ` · by ${name}`;
+      return ` · vs ${name}`;
     },
 
-    transactionLabel(entry: EconomyHistoryEntry): string {
-      const who = this.transactions.members[entry.user_id]?.displayName ?? entry.user_id;
+    // Used by the guild-wide "Recent activity" feed — unlike entryLabel (a user's own history, where "who" is
+    // implied), this names the player since the feed spans everyone. Covers transfers (give/trade/tradeback),
+    // manual balance adjustments (admin_adjust — opponent_id is the acting manager here, not another player),
+    // and actual games (win/loss/push, with an opponent for pvp).
+    activityLabel(entry: EconomyHistoryEntry): string {
+      const members = this.transactions.members;
+      const who = members[entry.user_id]?.displayName ?? entry.user_id;
+
       if (entry.game_type === "give") {
         const otherId = entry.opponent_id;
-        const other = otherId ? (this.transactions.members[otherId]?.displayName ?? otherId) : "someone";
+        const other = otherId ? (members[otherId]?.displayName ?? otherId) : "someone";
         return entry.amount_changed < 0 ? `${who} gave ${other}` : `${who} received a gift from ${other}`;
       }
-      return `${who} ${entry.game_type === "trade" ? "traded points for coins" : "traded coins for points"}`;
+      if (entry.game_type === "trade" || entry.game_type === "tradeback") {
+        return `${who} ${entry.game_type === "trade" ? "traded points for coins" : "traded coins for points"}`;
+      }
+      if (entry.game_type === "admin_adjust") {
+        const managerId = entry.opponent_id;
+        const manager = managerId ? (members[managerId]?.displayName ?? managerId) : "a manager";
+        return `${who}'s balance was adjusted by ${manager}`;
+      }
+
+      const gameLabel = this.entryLabel(entry);
+      const outcomeWord = entry.outcome === "win" ? "won" : entry.outcome === "loss" ? "lost" : "pushed on";
+      if (entry.opponent_id) {
+        const opponent = entry.opponent_id === "bot" ? "the bot" : (members[entry.opponent_id]?.displayName ?? entry.opponent_id);
+        return `${who} ${outcomeWord} ${gameLabel} vs ${opponent}`;
+      }
+      return `${who} ${outcomeWord} ${gameLabel}`;
     },
 
     showToast(text: string) {

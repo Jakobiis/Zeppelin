@@ -14,8 +14,8 @@
     </div>
   </div>
 
-  <div class="grid min-w-0 items-start gap-4 xl:grid-cols-3">
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+  <div class="columns-1 sm:columns-2 xl:columns-3 gap-4">
+    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Create giveaway</h3>
         <div
           v-if="createError"
@@ -250,7 +250,7 @@
         </button>
     </div>
 
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Running</h3>
       <div v-if="!running.length" class="text-sm text-muted-foreground">No running giveaways</div>
       <div class="flex flex-col gap-3">
@@ -283,7 +283,62 @@
       </div>
     </div>
 
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Giveaway contributor</h3>
+      <input
+        type="text"
+        class="field-input"
+        placeholder="Username or user ID…"
+        :value="contributorLookupQuery"
+        @input="onContributorLookupInput(($event.target as HTMLInputElement).value)"
+      />
+      <div v-if="contributorLookupResults.length" class="mt-2 border border-border rounded-lg overflow-hidden">
+        <button
+          v-for="m in contributorLookupResults"
+          :key="m.id"
+          type="button"
+          class="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+          @click="selectContributorUser(m)"
+        >
+          {{ m.displayName }} <span class="text-xs text-muted-foreground font-mono">{{ m.id }}</span>
+        </button>
+      </div>
+
+      <div v-if="giveawayContributor" class="mt-4 border-t border-border pt-4">
+        <div class="font-semibold">{{ giveawayContributor.member?.displayName ?? giveawayContributor.userId }}</div>
+        <div class="text-xs text-muted-foreground font-mono">{{ giveawayContributor.userId }}</div>
+
+        <div v-if="!giveawayContributor.configured" class="mt-2 text-sm text-muted-foreground">
+          No contributor role is configured — set <code class="font-mono">contributor_role_id</code> in this plugin's
+          YAML config first.
+        </div>
+        <template v-else>
+          <div class="mt-2 text-sm" :class="giveawayContributor.hasRole ? 'text-green-500' : 'text-muted-foreground'">
+            {{ giveawayContributor.hasRole ? "Has the contributor role" : "Doesn't have the contributor role" }}
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="btn-secondary"
+              :disabled="giveawayContributor.hasRole || contributorUpdating"
+              @click="setContributorRole(true)"
+            >
+              Grant
+            </button>
+            <button
+              type="button"
+              class="btn-secondary"
+              :disabled="!giveawayContributor.hasRole || contributorUpdating"
+              @click="setContributorRole(false)"
+            >
+              Revoke
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <div class="min-w-0 break-inside-avoid mb-4 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Recently finished</h3>
       <input
         type="text"
@@ -364,79 +419,24 @@
         </button>
       </div>
     </div>
+  </div>
 
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
-      <h3 class="mb-3">Giveaway contributor</h3>
-      <input
-        type="text"
-        class="field-input"
-        placeholder="Username or user ID…"
-        :value="contributorLookupQuery"
-        @input="onContributorLookupInput(($event.target as HTMLInputElement).value)"
-      />
-      <div v-if="contributorLookupResults.length" class="mt-2 border border-border rounded-lg overflow-hidden">
-        <button
-          v-for="m in contributorLookupResults"
-          :key="m.id"
-          type="button"
-          class="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
-          @click="selectContributorUser(m)"
-        >
-          {{ m.displayName }} <span class="text-xs text-muted-foreground font-mono">{{ m.id }}</span>
-        </button>
-      </div>
+  <ConfirmModal
+    :open="!!confirmState"
+    :title="confirmTitle"
+    :message="confirmMessage"
+    :confirm-label="confirmLabel"
+    :selection-options="rerollWinnerOptions"
+    selection-label="Replace these winner(s)"
+    @confirm="onConfirmModal"
+    @cancel="confirmState = null"
+  />
 
-      <div v-if="giveawayContributor" class="mt-4 border-t border-border pt-4">
-        <div class="font-semibold">{{ giveawayContributor.member?.displayName ?? giveawayContributor.userId }}</div>
-        <div class="text-xs text-muted-foreground font-mono">{{ giveawayContributor.userId }}</div>
-
-        <div v-if="!giveawayContributor.configured" class="mt-2 text-sm text-muted-foreground">
-          No contributor role is configured — set <code class="font-mono">contributor_role_id</code> in this plugin's
-          YAML config first.
-        </div>
-        <template v-else>
-          <div class="mt-2 text-sm" :class="giveawayContributor.hasRole ? 'text-green-500' : 'text-muted-foreground'">
-            {{ giveawayContributor.hasRole ? "Has the contributor role" : "Doesn't have the contributor role" }}
-          </div>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="btn-secondary"
-              :disabled="giveawayContributor.hasRole || contributorUpdating"
-              @click="setContributorRole(true)"
-            >
-              Grant
-            </button>
-            <button
-              type="button"
-              class="btn-secondary"
-              :disabled="!giveawayContributor.hasRole || contributorUpdating"
-              @click="setContributorRole(false)"
-            >
-              Revoke
-            </button>
-          </div>
-        </template>
-      </div>
-    </div>
-
-    <ConfirmModal
-      :open="!!confirmState"
-      :title="confirmTitle"
-      :message="confirmMessage"
-      :confirm-label="confirmLabel"
-      :selection-options="rerollWinnerOptions"
-      selection-label="Replace these winner(s)"
-      @confirm="onConfirmModal"
-      @cancel="confirmState = null"
-    />
-
-    <div
-      v-if="toastMessage"
-      class="fixed bottom-4 right-4 z-50 bg-card border border-border rounded-lg shadow-lg px-4 py-3 text-sm max-w-sm"
-    >
-      {{ toastMessage }}
-    </div>
+  <div
+    v-if="toastMessage"
+    class="fixed bottom-4 right-4 z-50 bg-card border border-border rounded-lg shadow-lg px-4 py-3 text-sm max-w-sm"
+  >
+    {{ toastMessage }}
   </div>
 </template>
 

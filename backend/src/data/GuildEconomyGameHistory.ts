@@ -9,7 +9,7 @@ export interface EconomyGameHistoryFilter {
   userId?: string | null;
   gameName?: string | null;
   // Restricts to (or excludes) specific game_type values — e.g. the dashboard's guild-wide analytics excludes
-  // TRANSACTION_GAME_TYPES (give/trade/tradeback aren't games), while its transaction feed includes only those.
+  // NON_GAME_TYPES (give/trade/tradeback/admin_adjust aren't games).
   gameTypes?: string[];
   excludeGameTypes?: string[];
   since?: Date | null;

@@ -91,6 +91,24 @@ export async function getGuildMemberDisplayInfo(guildId: string, userId: string)
       avatar: user.avatar ? `https://cdn.discordapp.com/avatars/${userId}/${user.avatar}.${user.avatar.startsWith("a_") ? "gif" : "png"}?size=32` : null,
     };
   } catch {
+    // Not a current guild member (they left, or were never one) — Discord's per-guild member endpoint 404s for
+    // that. The plain per-user endpoint still resolves anyone with a valid account regardless of guild
+    // membership, just without a guild nickname — this is what was making leaderboard/history/finished-giveaway
+    // entries for anyone who'd left the server show their raw ID instead of a name.
+    return getGlobalUserDisplayInfo(userId);
+  }
+}
+
+async function getGlobalUserDisplayInfo(userId: string): Promise<GuildMemberDisplayInfo | null> {
+  try {
+    const user = await cachedDiscordBotRequest(`user:${userId}`, `users/${userId}`);
+    return {
+      id: userId,
+      username: user.username ?? userId,
+      displayName: user.global_name ?? user.username ?? userId,
+      avatar: user.avatar ? `https://cdn.discordapp.com/avatars/${userId}/${user.avatar}.${user.avatar.startsWith("a_") ? "gif" : "png"}?size=32` : null,
+    };
+  } catch {
     return null;
   }
 }
