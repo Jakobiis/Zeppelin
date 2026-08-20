@@ -12,6 +12,7 @@ export const GuildStore: Module<GuildState, RootState> = {
     guildPermissionAssignments: {},
     giveawayAccess: {},
     giveawayAnalytics: {},
+    giveawayTopHosters: {},
     giveaways: {},
     finishedGiveaways: {},
     giveawayTemplates: {},
@@ -116,6 +117,11 @@ export const GuildStore: Module<GuildState, RootState> = {
       commit("setGiveawayAnalytics", { guildId, analytics });
     },
 
+    async loadGiveawayTopHosters({ commit }, guildId) {
+      const topHosters = await get(`guilds/${guildId}/giveaways/top-hosters`);
+      commit("setGiveawayTopHosters", { guildId, topHosters });
+    },
+
     async endGiveaway({ dispatch }, { guildId, giveawayId }) {
       await post(`guilds/${guildId}/giveaways/${giveawayId}/end`);
       await dispatch("loadGiveaways", guildId);
@@ -144,6 +150,7 @@ export const GuildStore: Module<GuildState, RootState> = {
       await post(`guilds/${guildId}/giveaways`, giveaway);
       await dispatch("loadGiveaways", guildId);
       await dispatch("loadGiveawayAnalytics", guildId);
+      await dispatch("loadGiveawayTopHosters", guildId);
     },
 
     async loadGiveawayMemberNames({ commit }, { guildId, ids }) {
@@ -216,8 +223,8 @@ export const GuildStore: Module<GuildState, RootState> = {
 
     // Returns the raw result (removedFromRunning/rerolledFromGiveawayIds on a ban) so the component can surface
     // it in a toast — loadGiveawayBanStatus is dispatched separately afterward to refresh the full card state.
-    setGiveawayBanned(_ctx, { guildId, userId, ban }) {
-      return post(`guilds/${guildId}/giveaways/ban/${userId}`, { ban });
+    setGiveawayBanned(_ctx, { guildId, userId, ban, reason }) {
+      return post(`guilds/${guildId}/giveaways/ban/${userId}`, { ban, reason });
     },
 
     async loadMessagesAccess({ commit }, guildId) {
@@ -302,6 +309,10 @@ export const GuildStore: Module<GuildState, RootState> = {
 
     setGiveawayAnalytics(state: GuildState, { guildId, analytics }) {
       state.giveawayAnalytics = { ...state.giveawayAnalytics, [guildId]: analytics };
+    },
+
+    setGiveawayTopHosters(state: GuildState, { guildId, topHosters }) {
+      state.giveawayTopHosters = { ...state.giveawayTopHosters, [guildId]: topHosters };
     },
 
     setGiveaways(state: GuildState, { guildId, giveaways }) {

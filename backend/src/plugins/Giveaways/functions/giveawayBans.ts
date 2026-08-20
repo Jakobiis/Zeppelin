@@ -21,8 +21,8 @@ export interface GiveawayBanResult {
  * GuildMember to work with; the dashboard API route only has bot-token REST — see GiveawayBanCmd.ts and
  * api/guilds/giveaways.ts respectively), same split as contributor_role_id.
  */
-export async function banUserFromGiveaways(guildId: string, userId: string): Promise<GiveawayBanResult> {
-  await GuildGiveawayBans.getGuildInstance(guildId).ban(userId);
+export async function banUserFromGiveaways(guildId: string, userId: string, reason: string | null = null): Promise<GiveawayBanResult> {
+  await GuildGiveawayBans.getGuildInstance(guildId).ban(userId, reason);
 
   const giveawaysRepo = GuildGiveaways.getGuildInstance(guildId);
 

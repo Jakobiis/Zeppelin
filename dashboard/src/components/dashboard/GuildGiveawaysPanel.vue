@@ -1,30 +1,309 @@
 <template>
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-4">
-    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-3">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-3">
       <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Hosted giveaways</div>
       <div class="mt-1 text-2xl font-semibold">{{ analytics.totalGiveaways }}</div>
     </div>
-    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-3">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-3">
       <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Claimed prizes</div>
       <div class="mt-1 text-2xl font-semibold">{{ analytics.claimedPrizes }}</div>
     </div>
-    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-3">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-3">
       <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total entries</div>
       <div class="mt-1 text-2xl font-semibold">{{ analytics.totalEntries }}</div>
     </div>
   </div>
 
-  <div class="grid min-w-0 items-start gap-4 xl:grid-cols-3">
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
-      <h3 class="mb-3">Create giveaway</h3>
-        <div
-          v-if="createError"
-          class="bg-card border border-destructive/40 border-l-4 border-l-destructive py-2 px-3 rounded-lg text-sm text-destructive mb-3"
+  <!-- Anchored to the corner of the screen rather than the top of this tab's content — stays reachable no
+       matter how far down you've scrolled the running/finished lists, instead of needing a scroll back up.
+       Icon-only squared FAB (no label) — aria-label carries what "+ Create giveaway" used to say visibly. -->
+  <button
+    type="button"
+    class="btn-primary fixed bottom-6 right-6 z-40 shadow-lg w-16 h-16 !rounded-xl !p-0 text-3xl leading-none"
+    aria-label="Create giveaway"
+    @click="openCreateModal"
+  >
+    +
+  </button>
+
+  <div class="grid min-w-0 items-start gap-4 lg:grid-cols-2 xl:grid-cols-3">
+    <div class="min-w-0 flex flex-col gap-4">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Giveaway contributor</h3>
+      <input
+        type="text"
+        class="field-input"
+        placeholder="Username or user ID…"
+        :value="contributorLookupQuery"
+        @input="onContributorLookupInput(($event.target as HTMLInputElement).value)"
+      />
+      <div v-if="contributorLookupResults.length" class="mt-2 border border-border rounded-lg overflow-hidden">
+        <button
+          v-for="m in contributorLookupResults"
+          :key="m.id"
+          type="button"
+          class="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+          @click="selectContributorUser(m)"
         >
-          {{ createError }}
+          {{ m.displayName }} <span class="text-xs text-muted-foreground font-mono">{{ m.id }}</span>
+        </button>
+      </div>
+
+      <div v-if="giveawayContributor" class="mt-4 border-t border-border pt-4">
+        <div class="font-semibold">{{ giveawayContributor.member?.displayName ?? giveawayContributor.userId }}</div>
+        <div class="text-xs text-muted-foreground font-mono">{{ giveawayContributor.userId }}</div>
+
+        <div v-if="!giveawayContributor.configured" class="mt-2 text-sm text-muted-foreground">
+          No contributor role is configured — set <code class="font-mono">contributor_role_id</code> in this plugin's
+          YAML config first.
+        </div>
+        <template v-else>
+          <div class="mt-2 text-sm" :class="giveawayContributor.hasRole ? 'text-green-500' : 'text-muted-foreground'">
+            {{ giveawayContributor.hasRole ? "Has the contributor role" : "Doesn't have the contributor role" }}
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="btn-secondary"
+              :disabled="giveawayContributor.hasRole || contributorUpdating"
+              @click="setContributorRole(true)"
+            >
+              Grant
+            </button>
+            <button
+              type="button"
+              class="btn-secondary"
+              :disabled="!giveawayContributor.hasRole || contributorUpdating"
+              @click="setContributorRole(false)"
+            >
+              Revoke
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Giveaway ban</h3>
+      <input
+        type="text"
+        class="field-input"
+        placeholder="Username or user ID…"
+        :value="banLookupQuery"
+        @input="onBanLookupInput(($event.target as HTMLInputElement).value)"
+      />
+      <div v-if="banLookupResults.length" class="mt-2 border border-border rounded-lg overflow-hidden">
+        <button
+          v-for="m in banLookupResults"
+          :key="m.id"
+          type="button"
+          class="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+          @click="selectBanUser(m)"
+        >
+          {{ m.displayName }} <span class="text-xs text-muted-foreground font-mono">{{ m.id }}</span>
+        </button>
+      </div>
+
+      <div v-if="giveawayBan" class="mt-4 border-t border-border pt-4">
+        <div class="font-semibold">{{ giveawayBan.member?.displayName ?? giveawayBan.userId }}</div>
+        <div class="text-xs text-muted-foreground font-mono">{{ giveawayBan.userId }}</div>
+
+        <div class="mt-2 text-sm" :class="giveawayBan.banned ? 'text-destructive' : 'text-muted-foreground'">
+          {{ giveawayBan.banned ? "Banned from giveaways" : "Not banned" }}
+        </div>
+        <div v-if="giveawayBan.banned && giveawayBan.reason" class="mt-1 text-sm text-muted-foreground">
+          Reason: {{ giveawayBan.reason }}
+        </div>
+        <div v-if="!giveawayBan.roleConfigured" class="mt-1 text-xs text-muted-foreground">
+          No ban role is configured — set <code class="font-mono">ban_role_id</code> in this plugin's YAML config to
+          also grant/revoke a role on ban.
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-2">
+        <!-- Only shown while composing a new ban — an existing one's reason is just shown as text above, not
+             re-editable here (re-banning an already-banned user is a no-op on the enforcement side anyway; see
+             banUserFromGiveaways). -->
+        <input
+          v-if="!giveawayBan.banned"
+          type="text"
+          class="field-input mt-3"
+          placeholder="Reason (optional)"
+          v-model="banReason"
+        />
+
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="btn-secondary"
+            :disabled="giveawayBan.banned || banUpdating"
+            @click="setBanStatus(true)"
+          >
+            Ban
+          </button>
+          <button
+            type="button"
+            class="btn-secondary"
+            :disabled="!giveawayBan.banned || banUpdating"
+            @click="setBanStatus(false)"
+          >
+            Unban
+          </button>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <div class="min-w-0 flex flex-col gap-4">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Top hosters</h3>
+      <div v-if="!topHosters.length" class="text-sm text-muted-foreground">No giveaways hosted yet</div>
+      <div v-else class="flex flex-col gap-1">
+        <div v-for="(hoster, i) in topHosters" :key="hoster.hostId" class="flex items-center gap-3 text-sm py-1">
+          <span class="w-5 shrink-0 text-muted-foreground font-mono">{{ i + 1 }}</span>
+          <span class="min-w-0 flex-1 truncate">{{ memberName(hoster.hostId) }}</span>
+          <span class="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
+            >{{ hoster.count }} giveaway{{ hoster.count === 1 ? "" : "s" }}</span
+          >
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Running</h3>
+      <div v-if="!running.length" class="text-sm text-muted-foreground">No running giveaways</div>
+      <div class="flex flex-col gap-3">
+        <div
+          v-for="giveaway in running"
+          :key="giveaway.id"
+          class="border border-border rounded-lg p-3 flex flex-col gap-2"
+        >
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 break-words font-semibold">
+              {{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span>
+            </div>
+            <span class="flex-none text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary"
+              >Running</span
+            >
+          </div>
+          <div class="text-sm text-muted-foreground">
+            channel {{ giveaway.channel_id }} · host {{ memberName(giveaway.host_id) }}
+            <template v-if="giveaway.holder_id"> · held by {{ memberName(giveaway.holder_id) }}</template>
+          </div>
+          <div class="text-sm text-muted-foreground">
+            {{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner(s) · ends
+            {{ formatDate(giveaway.ends_at) }}
+          </div>
+          <div class="mt-1 flex flex-wrap gap-2">
+            <button type="button" class="btn-secondary" @click="promptEnd(giveaway)">End now</button>
+            <button type="button" class="btn-secondary" @click="promptCancel(giveaway)">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <div class="min-w-0 bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Recently finished</h3>
+      <input
+        type="text"
+        class="field-input mb-3"
+        placeholder="Search by prize, host username, or host user ID…"
+        :value="finishedSearchInput"
+        @input="onFinishedSearchInput(($event.target as HTMLInputElement).value)"
+      />
+      <div v-if="finishedLoading" class="text-sm text-muted-foreground">Loading…</div>
+      <div v-else-if="!finishedGiveaways.length" class="text-sm text-muted-foreground">
+        {{ finishedSearchInput.trim() ? "No finished giveaways match your search." : "No finished giveaways yet" }}
+      </div>
+      <div class="flex flex-col gap-3">
+        <div
+          v-for="giveaway in finishedGiveaways"
+          :key="giveaway.id"
+          class="border border-border rounded-lg p-3 flex flex-col gap-2"
+        >
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 break-words font-semibold">
+              {{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span>
+            </div>
+            <span
+              class="flex-none text-xs font-medium px-2 py-0.5 rounded-full"
+              :class="
+                giveaway.status === 'cancelled'
+                  ? 'bg-destructive/10 text-destructive'
+                  : currentWinnerIds(giveaway).length
+                    ? 'bg-secondary text-secondary-foreground'
+                    : 'bg-muted text-muted-foreground'
+              "
+            >
+              {{
+                giveaway.status === "cancelled"
+                  ? "Cancelled"
+                  : currentWinnerIds(giveaway).length
+                    ? "Ended"
+                    : "No winners"
+              }}
+            </span>
+          </div>
+          <div class="text-sm text-muted-foreground">
+            host {{ memberName(giveaway.host_id) }}
+            <template v-if="giveaway.holder_id"> · held by {{ memberName(giveaway.holder_id) }}</template>
+          </div>
+          <div class="text-sm">
+            <span v-if="giveaway.status === 'cancelled'" class="text-muted-foreground">No winners were picked.</span>
+            <span v-else-if="!currentWinnerIds(giveaway).length" class="text-muted-foreground"
+              >Ended, no eligible entries.</span
+            >
+            <span v-else>Won by {{ currentWinnerIds(giveaway).map(memberName).join(", ") }}</span>
+          </div>
+          <div class="text-xs text-muted-foreground">ended {{ formatDate(giveaway.ended_at) }}</div>
+          <div class="mt-1" v-if="giveaway.status === 'ended'">
+            <button type="button" class="btn-secondary" @click="promptReroll(giveaway)">Reroll</button>
+          </div>
+        </div>
+      </div>
+      <div v-if="finishedTotalPages > 1" class="mt-3 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="finishedPage <= 1"
+          @click="goToFinishedPage(finishedPage - 1)"
+        >
+          Previous
+        </button>
+        <span class="text-xs text-muted-foreground"
+          >Page {{ finishedPage }} of {{ finishedTotalPages }} ({{ finishedTotal }} total)</span
+        >
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="finishedPage >= finishedTotalPages"
+          @click="goToFinishedPage(finishedPage + 1)"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create-giveaway modal — was previously an always-visible card eating a third of this page's width even
+       when you're just here to check on running/finished giveaways; opening it on demand keeps the page focused
+       on the giveaways themselves, and gives the (fairly long) create form room to breathe in its own overlay. -->
+  <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8" @click.self="closeCreateModal">
+    <div class="bg-card border border-border rounded-3xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-5 sm:p-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold">Create giveaway</h3>
+        <button type="button" class="btn-remove btn-remove-icon" aria-label="Close" @click="closeCreateModal">
+          <Close :size="18" fillColor="currentColor" style="font-size: 25px" />
+        </button>
+      </div>
+
+      <div
+        v-if="createError"
+        class="bg-card border border-destructive/40 border-l-4 border-l-destructive py-2 px-3 rounded-3xl text-sm text-destructive mb-3"
+      >
+        {{ createError }}
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label class="font-medium text-sm">Prize</label>
             <input type="text" class="field-input mt-1" v-model="form.prize" placeholder="e.g. Discord Nitro" />
@@ -177,7 +456,7 @@
             <ComboboxField
               class="w-40"
               :options="periodOptions"
-              placeholder="— Select period —"
+              placeholder="Select period"
               :model-value="form.messagePeriod"
               @update:model-value="form.messagePeriod = $event"
             />
@@ -256,233 +535,10 @@
           </div>
         </div>
 
-        <button class="btn-primary mt-4 mb-4" :disabled="creating" @click="submit">
+      <div class="flex justify-end gap-2 mt-4">
+        <button type="button" class="btn-secondary" @click="closeCreateModal">Cancel</button>
+        <button class="btn-primary" :disabled="creating" @click="submit">
           {{ creating ? "Creating…" : "Create Giveaway" }}
-        </button>
-    </div>
-
-    <div class="min-w-0 flex flex-col gap-4">
-    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
-      <h3 class="mb-3">Giveaway contributor</h3>
-      <input
-        type="text"
-        class="field-input"
-        placeholder="Username or user ID…"
-        :value="contributorLookupQuery"
-        @input="onContributorLookupInput(($event.target as HTMLInputElement).value)"
-      />
-      <div v-if="contributorLookupResults.length" class="mt-2 border border-border rounded-lg overflow-hidden">
-        <button
-          v-for="m in contributorLookupResults"
-          :key="m.id"
-          type="button"
-          class="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
-          @click="selectContributorUser(m)"
-        >
-          {{ m.displayName }} <span class="text-xs text-muted-foreground font-mono">{{ m.id }}</span>
-        </button>
-      </div>
-
-      <div v-if="giveawayContributor" class="mt-4 border-t border-border pt-4">
-        <div class="font-semibold">{{ giveawayContributor.member?.displayName ?? giveawayContributor.userId }}</div>
-        <div class="text-xs text-muted-foreground font-mono">{{ giveawayContributor.userId }}</div>
-
-        <div v-if="!giveawayContributor.configured" class="mt-2 text-sm text-muted-foreground">
-          No contributor role is configured — set <code class="font-mono">contributor_role_id</code> in this plugin's
-          YAML config first.
-        </div>
-        <template v-else>
-          <div class="mt-2 text-sm" :class="giveawayContributor.hasRole ? 'text-green-500' : 'text-muted-foreground'">
-            {{ giveawayContributor.hasRole ? "Has the contributor role" : "Doesn't have the contributor role" }}
-          </div>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="btn-secondary"
-              :disabled="giveawayContributor.hasRole || contributorUpdating"
-              @click="setContributorRole(true)"
-            >
-              Grant
-            </button>
-            <button
-              type="button"
-              class="btn-secondary"
-              :disabled="!giveawayContributor.hasRole || contributorUpdating"
-              @click="setContributorRole(false)"
-            >
-              Revoke
-            </button>
-          </div>
-        </template>
-      </div>
-    </div>
-
-    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
-      <h3 class="mb-3">Giveaway ban</h3>
-      <input
-        type="text"
-        class="field-input"
-        placeholder="Username or user ID…"
-        :value="banLookupQuery"
-        @input="onBanLookupInput(($event.target as HTMLInputElement).value)"
-      />
-      <div v-if="banLookupResults.length" class="mt-2 border border-border rounded-lg overflow-hidden">
-        <button
-          v-for="m in banLookupResults"
-          :key="m.id"
-          type="button"
-          class="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
-          @click="selectBanUser(m)"
-        >
-          {{ m.displayName }} <span class="text-xs text-muted-foreground font-mono">{{ m.id }}</span>
-        </button>
-      </div>
-
-      <div v-if="giveawayBan" class="mt-4 border-t border-border pt-4">
-        <div class="font-semibold">{{ giveawayBan.member?.displayName ?? giveawayBan.userId }}</div>
-        <div class="text-xs text-muted-foreground font-mono">{{ giveawayBan.userId }}</div>
-
-        <div class="mt-2 text-sm" :class="giveawayBan.banned ? 'text-destructive' : 'text-muted-foreground'">
-          {{ giveawayBan.banned ? "Banned from giveaways" : "Not banned" }}
-        </div>
-        <div v-if="!giveawayBan.roleConfigured" class="mt-1 text-xs text-muted-foreground">
-          No ban role is configured — set <code class="font-mono">ban_role_id</code> in this plugin's YAML config to
-          also grant/revoke a role on ban.
-        </div>
-
-        <div class="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            class="btn-secondary"
-            :disabled="giveawayBan.banned || banUpdating"
-            @click="setBanStatus(true)"
-          >
-            Ban
-          </button>
-          <button
-            type="button"
-            class="btn-secondary"
-            :disabled="!giveawayBan.banned || banUpdating"
-            @click="setBanStatus(false)"
-          >
-            Unban
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
-      <h3 class="mb-3">Running</h3>
-      <div v-if="!running.length" class="text-sm text-muted-foreground">No running giveaways</div>
-      <div class="flex flex-col gap-3">
-        <div
-          v-for="giveaway in running"
-          :key="giveaway.id"
-          class="border border-border rounded-lg p-3 flex flex-col gap-2"
-        >
-          <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0 break-words font-semibold">
-              {{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span>
-            </div>
-            <span class="flex-none text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary"
-              >Running</span
-            >
-          </div>
-          <div class="text-sm text-muted-foreground">
-            channel {{ giveaway.channel_id }} · host {{ memberName(giveaway.host_id) }}
-            <template v-if="giveaway.holder_id"> · held by {{ memberName(giveaway.holder_id) }}</template>
-          </div>
-          <div class="text-sm text-muted-foreground">
-            {{ giveaway.entry_count }} entries · {{ giveaway.winner_count }} winner(s) · ends
-            {{ formatDate(giveaway.ends_at) }}
-          </div>
-          <div class="mt-1 flex flex-wrap gap-2">
-            <button type="button" class="btn-secondary" @click="promptEnd(giveaway)">End now</button>
-            <button type="button" class="btn-secondary" @click="promptCancel(giveaway)">Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    </div>
-
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
-      <h3 class="mb-3">Recently finished</h3>
-      <input
-        type="text"
-        class="field-input mb-3"
-        placeholder="Search by prize, host username, or host user ID…"
-        :value="finishedSearchInput"
-        @input="onFinishedSearchInput(($event.target as HTMLInputElement).value)"
-      />
-      <div v-if="finishedLoading" class="text-sm text-muted-foreground">Loading…</div>
-      <div v-else-if="!finishedGiveaways.length" class="text-sm text-muted-foreground">
-        {{ finishedSearchInput.trim() ? "No finished giveaways match your search." : "No finished giveaways yet" }}
-      </div>
-      <div class="flex flex-col gap-3">
-        <div
-          v-for="giveaway in finishedGiveaways"
-          :key="giveaway.id"
-          class="border border-border rounded-lg p-3 flex flex-col gap-2"
-        >
-          <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0 break-words font-semibold">
-              {{ giveaway.prize }} <span class="text-xs font-normal text-muted-foreground">{{ giveaway.id }}</span>
-            </div>
-            <span
-              class="flex-none text-xs font-medium px-2 py-0.5 rounded-full"
-              :class="
-                giveaway.status === 'cancelled'
-                  ? 'bg-destructive/10 text-destructive'
-                  : currentWinnerIds(giveaway).length
-                    ? 'bg-secondary text-secondary-foreground'
-                    : 'bg-muted text-muted-foreground'
-              "
-            >
-              {{
-                giveaway.status === "cancelled"
-                  ? "Cancelled"
-                  : currentWinnerIds(giveaway).length
-                    ? "Ended"
-                    : "No winners"
-              }}
-            </span>
-          </div>
-          <div class="text-sm text-muted-foreground">
-            host {{ memberName(giveaway.host_id) }}
-            <template v-if="giveaway.holder_id"> · held by {{ memberName(giveaway.holder_id) }}</template>
-          </div>
-          <div class="text-sm">
-            <span v-if="giveaway.status === 'cancelled'" class="text-muted-foreground">No winners were picked.</span>
-            <span v-else-if="!currentWinnerIds(giveaway).length" class="text-muted-foreground"
-              >Ended, no eligible entries.</span
-            >
-            <span v-else>Won by {{ currentWinnerIds(giveaway).map(memberName).join(", ") }}</span>
-          </div>
-          <div class="text-xs text-muted-foreground">ended {{ formatDate(giveaway.ended_at) }}</div>
-          <div class="mt-1" v-if="giveaway.status === 'ended'">
-            <button type="button" class="btn-secondary" @click="promptReroll(giveaway)">Reroll</button>
-          </div>
-        </div>
-      </div>
-      <div v-if="finishedTotalPages > 1" class="mt-3 flex items-center justify-between gap-2">
-        <button
-          type="button"
-          class="btn-secondary"
-          :disabled="finishedPage <= 1"
-          @click="goToFinishedPage(finishedPage - 1)"
-        >
-          Previous
-        </button>
-        <span class="text-xs text-muted-foreground"
-          >Page {{ finishedPage }} of {{ finishedTotalPages }} ({{ finishedTotal }} total)</span
-        >
-        <button
-          type="button"
-          class="btn-secondary"
-          :disabled="finishedPage >= finishedTotalPages"
-          @click="goToFinishedPage(finishedPage + 1)"
-        >
-          Next
         </button>
       </div>
     </div>
@@ -501,7 +557,7 @@
 
   <div
     v-if="toastMessage"
-    class="fixed bottom-4 right-4 z-50 bg-card border border-border rounded-lg shadow-lg px-4 py-3 text-sm max-w-sm"
+    class="fixed bottom-4 right-4 z-50 bg-card border border-border rounded-3xl shadow-lg px-4 py-3 text-sm max-w-sm"
   >
     {{ toastMessage }}
   </div>
@@ -514,6 +570,7 @@ import { ApiError } from "../../api";
 import {
   FinishedGiveawaysPage,
   GiveawayAnalytics,
+  GiveawayTopHoster,
   GiveawayApiItem,
   GiveawayBanStatus,
   GiveawayContributorStatus,
@@ -521,6 +578,7 @@ import {
   GiveawayTemplate,
   GuildState,
 } from "../../store/types";
+import Close from "vue-material-design-icons/Close.vue";
 import ColorPickerField from "./ColorPickerField.vue";
 import ComboboxField from "./ComboboxField.vue";
 import ConfirmModal from "./ConfirmModal.vue";
@@ -584,6 +642,7 @@ export default {
     RoleListField,
     RoleEntryMapField,
     ConfirmModal,
+    Close,
   },
 
   props: {
@@ -593,6 +652,7 @@ export default {
   data() {
     return {
       form: defaultForm(),
+      showCreateModal: false,
       creating: false,
       createError: null as string | null,
       periodOptions: PERIOD_OPTIONS,
@@ -612,6 +672,7 @@ export default {
       banLookupResults: [] as GiveawayMemberInfo[],
       banLookupTimeout: null as ReturnType<typeof setTimeout> | null,
       banUpdating: false,
+      banReason: "",
     };
   },
 
@@ -628,6 +689,9 @@ export default {
       },
       analytics(state: GuildState): GiveawayAnalytics {
         return state.giveawayAnalytics[this.guildId] || { totalGiveaways: 0, claimedPrizes: 0, totalEntries: 0 };
+      },
+      topHosters(state: GuildState): GiveawayTopHoster[] {
+        return state.giveawayTopHosters[this.guildId] || [];
       },
       finishedGiveawaysPage(state: GuildState): FinishedGiveawaysPage | null {
         return state.finishedGiveaways[this.guildId] || null;
@@ -697,6 +761,7 @@ export default {
       this.$store.dispatch("guilds/loadGiveaways", this.guildId).catch(() => {}),
       this.$store.dispatch("guilds/loadGiveawayTemplates", this.guildId).catch(() => {}),
       this.$store.dispatch("guilds/loadGiveawayAnalytics", this.guildId).catch(() => {}),
+      this.$store.dispatch("guilds/loadGiveawayTopHosters", this.guildId).catch(() => {}),
       this.fetchFinishedPage(),
     ]);
 
@@ -708,6 +773,9 @@ export default {
     }
 
     this.loadMemberNamesFor(this.allGiveaways);
+    this.$store
+      .dispatch("guilds/loadGiveawayMemberNames", { guildId: this.guildId, ids: this.topHosters.map((h) => h.hostId) })
+      .catch(() => {});
   },
 
   methods: {
@@ -725,6 +793,17 @@ export default {
     memberName(id: string): string {
       const member = this.memberNames[id];
       return member ? member.displayName : id;
+    },
+
+    openCreateModal() {
+      this.showCreateModal = true;
+    },
+
+    // Doesn't reset the form — closing (e.g. by clicking the backdrop) shouldn't discard whatever's already been
+    // filled in, since reopening later should pick up where you left off, same as leaving any other tab does.
+    closeCreateModal() {
+      this.showCreateModal = false;
+      this.createError = null;
     },
 
     addRoleField(key: string) {
@@ -880,6 +959,7 @@ export default {
         });
         this.form = defaultForm();
         this.visibleRoleFields = [];
+        this.showCreateModal = false;
       } catch (err) {
         this.createError = err instanceof ApiError && err.body?.error ? err.body.error : "Failed to create giveaway.";
       } finally {
@@ -1003,6 +1083,7 @@ export default {
     async selectBanUser(member: GiveawayMemberInfo) {
       this.banLookupQuery = "";
       this.banLookupResults = [];
+      this.banReason = "";
       await this.$store.dispatch("guilds/loadGiveawayBanStatus", { guildId: this.guildId, userId: member.id }).catch(() => {});
     },
 
@@ -1014,7 +1095,9 @@ export default {
           guildId: this.guildId,
           userId: this.giveawayBan.userId,
           ban,
+          reason: ban ? this.banReason.trim() || null : null,
         });
+        this.banReason = "";
 
         const details: string[] = [];
         if (ban && result?.removedFromRunning > 0) {

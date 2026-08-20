@@ -10,4 +10,6 @@ export class GiveawayBan {
   @Column() user_id: string;
 
   @Column() created_at: string;
+
+  @Column({ type: "varchar", length: 500, nullable: true }) reason: string | null;
 }

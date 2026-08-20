@@ -5,238 +5,314 @@
    Tailwind utility, even ones written later on the same element. */
 @layer components {
 
-.link {
-  @apply text-primary;
-  @apply underline;
+  .link {
+    @apply text-primary;
+    @apply underline;
 
-  &:hover {
-    @apply text-primary/80;
-  }
-}
-
-.inline-code {
-  @apply inline-block;
-  @apply bg-muted;
-  @apply px-1;
-  @apply rounded;
-  @apply text-sm;
-}
-
-.codeblock {
-  @apply bg-muted;
-  @apply p-3;
-  @apply mb-4;
-  @apply rounded;
-  @apply text-sm;
-  @apply shadow-md;
-
-  & .hljs {
-    @apply bg-transparent;
-    @apply p-0;
-  }
-}
-
-.inline-icon {
-  top: 0.125rem;
-}
-
-.sr-only-when-not-focused:not(:focus-within) {
-  @apply sr-only;
-}
-
-/* Buttons: short + wide + squircle-rounded, instead of the tall/barely-rounded default that comes from stacking
-   raw px/py/rounded utilities ad hoc (and not a full pill — rounded-xl reads as a squircle at this size). Each
-   variant is self-contained (Tailwind v4's @apply can't compose a shared custom class the way v3's could) —
-   combine with .btn-sm for a smaller size if needed. */
-.btn-primary,
-.btn-secondary,
-.btn-tertiary,
-.btn-destructive {
-  @apply inline-flex items-center justify-center;
-  @apply px-5 py-1.5;
-  @apply rounded-xl;
-  @apply text-sm font-medium;
-  @apply transition-[background-color,box-shadow,transform] duration-150;
-  @apply disabled:opacity-50 disabled:pointer-events-none;
-}
-
-.btn-sm {
-  @apply px-3 py-1;
-  @apply text-xs;
-  @apply rounded-lg;
-}
-
-.btn-primary {
-  @apply bg-primary text-primary-foreground;
-  @apply shadow-[0_1px_2px_color-mix(in_oklch,var(--primary)_50%,transparent),0_0_0_1px_color-mix(in_oklch,var(--primary)_35%,transparent)];
-
-  &:hover {
-    @apply bg-primary/90;
-    @apply -translate-y-px;
-    @apply shadow-[0_4px_10px_color-mix(in_oklch,var(--primary)_45%,transparent),0_0_0_1px_color-mix(in_oklch,var(--primary)_45%,transparent)];
-  }
-
-  &:active {
-    @apply translate-y-0;
-  }
-}
-
-.btn-secondary {
-  @apply bg-secondary text-secondary-foreground;
-
-  &:hover {
-    @apply bg-secondary/80;
-  }
-}
-
-.btn-tertiary {
-  @apply bg-tertiary text-tertiary-foreground;
-
-  &:hover {
-    @apply bg-tertiary/80;
-  }
-}
-
-.btn-destructive {
-  @apply bg-destructive text-destructive-foreground;
-
-  &:hover {
-    @apply bg-destructive/90;
-  }
-}
-
-/* Text/number/textarea/select inputs used throughout the plugin config interface — one shared look (incl. a
-   real hover + focus-ring state, which the raw bg-input/border-border utilities scattered around before this
-   had neither of) instead of every field re-typing the same utility string with no interaction feedback. */
-.field-input {
-  @apply w-full bg-input border border-border rounded-md px-2.5 py-1.5;
-  @apply text-sm text-foreground;
-  @apply transition-[border-color,box-shadow] duration-150;
-
-  &::placeholder {
-    @apply text-muted-foreground;
-  }
-
-  &:hover {
-    @apply border-ring/50;
-  }
-
-  &:focus {
-    @apply outline-none border-ring ring-2 ring-ring/25;
-  }
-
-  &:disabled {
-    @apply opacity-50 cursor-not-allowed;
-  }
-}
-
-textarea.field-input {
-  @apply font-mono leading-relaxed;
-}
-
-/* A dashed "empty slot" affordance for add-new actions (add a field/entry/item) — reads as an open slot waiting
-   to be filled rather than a normal action button, and stays visually calm in lists where it repeats often. */
-.btn-add {
-  @apply inline-flex items-center justify-center gap-1;
-  @apply px-3 py-1.5;
-  @apply rounded-lg border border-dashed border-border;
-  @apply text-xs font-medium text-muted-foreground;
-  @apply bg-transparent;
-  @apply transition-colors duration-150;
-  @apply cursor-pointer;
-
-  &:hover {
-    @apply border-ring/60 text-foreground bg-accent/40;
-  }
-}
-
-/* A quieter alternative to .btn-destructive for routine per-row removals (array items, record entries, override
-   criteria) — a whole list of solid red pills reads as noisy/alarming for an action this common, so this stays
-   neutral until hovered/focused. */
-.btn-remove {
-  @apply inline-flex items-center justify-center;
-  @apply px-2.5 py-1;
-  @apply rounded-lg;
-  @apply text-xs font-medium text-muted-foreground;
-  @apply transition-colors duration-150;
-  @apply cursor-pointer;
-
-  &:hover,
-  &:focus-visible {
-    @apply bg-destructive/10 text-destructive;
-  }
-}
-
-/* Chevron icon for collapse/expand toggles — a crisp vector instead of the "▸" glyph, which renders with
-   inconsistent weight/baseline across fonts and doesn't animate smoothly. */
-.chevron-icon {
-  @apply w-3.5 h-3.5 shrink-0;
-  @apply text-muted-foreground;
-  @apply transition-transform duration-150;
-}
-
-/* Nesting container for an object/array/record's child fields — a tinted, right-rounded panel instead of a bare
-   indent line, so nested structure reads as a distinct group at a glance instead of everything just shifting
-   right by the same amount regardless of depth. */
-.field-panel {
-  @apply mt-2 pl-4 pr-3 py-3;
-  @apply border-l-2 border-border;
-  @apply bg-muted/25 rounded-r-lg;
-}
-
-/* Collapsible card for a single array item / record entry — a real card (same solid bg-card + shadow as the
-   top-level plugin/section cards, not just a tinted panel) so a nested list of entries reads as a stack of
-   distinct cards rather than a row of dropdown-menu-style toggles, no matter how many levels deep it sits. */
-.item-card {
-  @apply border border-border rounded-lg bg-card shadow-sm;
-  @apply transition-colors duration-150;
-
-  &:hover {
-    @apply border-ring/40;
-  }
-}
-
-.item-card-header {
-  @apply flex items-center gap-2 px-3 py-2.5;
-}
-
-.item-card-body {
-  @apply px-3 pb-3.5;
-  @apply border-t border-border/60 mt-0.5 pt-3;
-}
-
-/* Checkbox: a pill-style toggle switch (track + sliding thumb) rather than a checkmark box — still a real
-   <input type="checkbox"> under the hood for accessibility/keyboard support, just repainted. */
-.checkbox {
-  appearance: none;
-  @apply w-9 h-5 shrink-0;
-  @apply rounded-full border border-border bg-input;
-  @apply cursor-pointer align-middle relative;
-  @apply transition-colors duration-150;
-
-  &::before {
-    content: "";
-    @apply absolute top-0.5 left-0.5;
-    @apply w-3.5 h-3.5 rounded-full bg-muted-foreground;
-    @apply transition-transform duration-150;
-  }
-
-  &:hover {
-    @apply border-ring/60;
-  }
-
-  &:checked {
-    @apply bg-primary border-primary;
-
-    &::before {
-      @apply bg-primary-foreground;
-      transform: translateX(1.125rem);
+    &:hover {
+      @apply text-primary/80;
     }
   }
 
-  &:focus-visible {
-    @apply outline outline-2 outline-ring outline-offset-2;
+  .inline-code {
+    @apply inline-block;
+    @apply bg-muted;
+    @apply px-1;
+    @apply rounded;
+    @apply text-sm;
   }
+
+  .codeblock {
+    @apply bg-muted;
+    @apply p-3;
+    @apply mb-4;
+    @apply rounded;
+    @apply text-sm;
+    @apply shadow-md;
+
+    & .hljs {
+      @apply bg-transparent;
+      @apply p-0;
+    }
+  }
+
+  .inline-icon {
+    top: 0.125rem;
+  }
+
+  .sr-only-when-not-focused:not(:focus-within) {
+    @apply sr-only;
+  }
+
+  /* Buttons: short + wide + squircle-rounded (still the --radius-driven scale .field-input uses, just a step up on
+   it — rounded-lg reads as a squircle at this size without going as round as rounded-xl). Each variant is
+   self-contained (Tailwind v4's @apply can't compose a shared custom class the way v3's could) — combine with
+   .btn-sm for a smaller size if needed. */
+  .btn-primary,
+  .btn-secondary,
+  .btn-tertiary,
+  .btn-destructive {
+    @apply inline-flex items-center justify-center;
+    @apply px-4.75 py-1.25;
+    @apply rounded-lg;
+    @apply text-sm font-medium;
+    /* Plain CSS, not @apply transition-[...] — Tailwind's bracket arbitrary-value syntax is whitespace-sensitive
+       (a space after the comma ends the class right there), and an auto-formatter that doesn't know that keeps
+       reintroducing spaces after every comma it sees. Plain properties are immune to that. A longer duration +
+       explicit ease-out (was the browser's default "ease", and a snappier 150ms) so the hover lift/shadow settle
+       into place instead of just snapping there. */
+    transition-property: background-color, box-shadow, transform;
+    transition-duration: 220ms;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    @apply disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1;
+    @apply text-xs;
+    @apply rounded-md;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground;
+    /* Plain CSS for the same reason as the transition-property above — a multi-value shadow needs commas the
+       formatter will keep re-spacing if this is written as an @apply shadow-[...] arbitrary value. */
+    box-shadow: 0 1px 2px color-mix(in oklch, var(--primary) 50%, transparent), 0 0 0 1px color-mix(in oklch, var(--primary) 35%, transparent);
+
+    &:hover {
+      @apply bg-primary/90;
+      @apply -translate-y-px;
+      box-shadow: 0 4px 10px color-mix(in oklch, var(--primary) 45%, transparent), 0 0 0 1px color-mix(in oklch, var(--primary) 45%, transparent);
+    }
+
+    &:active {
+      @apply translate-y-0;
+    }
+  }
+
+  .btn-secondary {
+    @apply bg-white/6 text-secondary-foreground;
+    @apply shadow-sm shadow-black/10;
+    @apply border border-border;
+
+    &:hover {
+      @apply bg-white/10;
+      @apply shadow-sm shadow-black/20;
+      @apply -translate-y-px;
+    }
+  }
+
+  .btn-tertiary {
+    @apply bg-tertiary text-tertiary-foreground;
+
+    &:hover {
+      @apply bg-tertiary/80;
+    }
+  }
+
+  .btn-destructive {
+    @apply bg-destructive text-destructive-foreground;
+
+    &:hover {
+      @apply bg-destructive/90;
+    }
+  }
+
+  /* Text/number/textarea/select inputs used throughout the plugin config interface — one shared look (incl. a
+   real hover + focus-ring state, which the raw bg-input/border-border utilities scattered around before this
+   had neither of) instead of every field re-typing the same utility string with no interaction feedback. */
+  .field-input {
+    @apply w-full bg-input border border-border rounded-md px-2.5 py-1.5;
+    @apply text-sm text-foreground;
+    /* Plain CSS — see .btn-primary's transition-property above for why. */
+    transition-property: border-color, box-shadow;
+    transition-duration: 150ms;
+
+    &::placeholder {
+      @apply text-muted-foreground;
+    }
+
+    &:hover {
+      @apply border-ring/50;
+    }
+
+    &:focus {
+      @apply outline-none border-ring ring-2 ring-ring/25;
+    }
+
+    &:disabled {
+      @apply opacity-50 cursor-not-allowed;
+    }
+  }
+
+  /* Hides the native up/down spinner buttons on number inputs — every number field in this app is already a
+   plain typed value (no meaningful "step" to click through), so the browser's stepper just adds visual noise
+   and eats padding on the right for a control nothing here relies on. */
+  input[type="number"].field-input {
+    -moz-appearance: textfield;
+    appearance: textfield;
+
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      appearance: none;
+      margin: 0;
+    }
+  }
+
+  textarea.field-input {
+    @apply font-mono leading-relaxed;
+  }
+
+  /* Add-new action (add a field/entry/item) — a borderless pill/chip rather than the outlined dashed-box "empty
+   slot" look this used to have, so it reads as a normal small action (closer to .btn-remove's quiet style) than
+   as a placeholder input. Neutral, like the rest of the app's chrome — no identity color of its own. */
+  .btn-add {
+    @apply inline-flex items-center justify-center gap-1.5;
+    @apply px-3.5 py-2.5;
+    @apply rounded-full;
+    @apply text-xs font-medium text-muted-foreground;
+    @apply bg-muted/40;
+    @apply transition-colors duration-150;
+    @apply cursor-pointer;
+
+    &:hover {
+      @apply text-foreground bg-accent;
+    }
+  }
+
+  /* A quieter alternative to .btn-destructive for routine per-row removals (array items, record entries, override
+   criteria) — always tinted red (so it's clear at a glance what this button does, not just on hover), brightening
+   further on hover/focus for feedback that the click will land. */
+  .btn-remove {
+    @apply inline-flex items-center justify-center;
+    @apply px-2.5 py-1;
+    @apply rounded-lg;
+    @apply text-xs font-medium text-destructive/80;
+    @apply bg-destructive/20;
+    @apply transition-colors duration-150;
+    @apply cursor-pointer;
+
+    &:hover,
+    &:focus-visible {
+      @apply bg-destructive/35 text-destructive;
+    }
+  }
+
+  /* Icon-only variant of .btn-remove — for a simple scalar list (see .row-item below) a full "Remove" word on
+   every single row adds up to real width/clutter once there are more than a few entries; a compact × reads just
+   as clearly once the row itself already has hover feedback. */
+  .btn-remove-icon {
+    @apply p-2;
+  }
+
+  /* Chevron icon for collapse/expand toggles — a crisp vector instead of the "▸" glyph, which renders with
+   inconsistent weight/baseline across fonts and doesn't animate smoothly. */
+  .chevron-icon {
+    @apply w-3.5 h-3.5 shrink-0;
+    @apply text-muted-foreground;
+    @apply transition-transform duration-150;
+  }
+
+  /* Nesting container for an object/array/record's child fields — no indentation, no border/background/rounding
+   of its own. field-panel/item-card both nest recursively (an override's Config can contain Rules, which can
+   contain an entry, which can contain Presets, which can contain an item...), so even a small per-level indent
+   compounds into a deep staircase a few levels down. No indent at all keeps the whole tree flush inside whatever
+   single outer card it started in (e.g. the "Overrides" card), reading as one card of fields rather than
+   progressively narrower nested boxes — depth is carried by the labels/headers themselves, not by shifting
+   right. */
+  .field-panel {
+    @apply mt-1;
+  }
+
+  /* A simple array item / record entry / multi-list item (a bare scalar or picker, not complex enough to earn the
+   full .item-card treatment below) — previously just a flex row with no boundary of its own, which read as
+   loose floating inputs rather than a list. Always carries a faint background (no border/shadow — still no
+   "card" anywhere in this list, just enough of a hover/rest tint to read as one row) so each row reads as a
+   defined unit at rest, not just once hovered, brightening further on hover for feedback. */
+  .row-item {
+    @apply flex items-center gap-2 rounded-lg px-2 py-1.5;
+    @apply bg-muted/45;
+    @apply transition-colors duration-150;
+
+    &:hover {
+      @apply bg-muted;
+    }
+  }
+
+  /* A single array item / record entry — a divider between siblings in the same list (like rows in a table),
+   not a card of its own. Previously a full bg-card/border/shadow/rounded-3xl card, which is what actually
+   compounded into "boxes inside boxes" once one of these sat inside another one a couple of levels down — this
+   is the collapsible-header equivalent of .row-item: just enough definition to separate one entry from the
+   next, nothing that reads as its own contained box. */
+  .item-card {
+    @apply border-b border-border/50;
+
+    &:last-child {
+      @apply border-b-0;
+    }
+  }
+
+  .item-card-header {
+    @apply flex items-center gap-2 py-2;
+  }
+
+  .item-card-body {
+    @apply pb-3;
+  }
+
+  /* Checkbox: a pill-style toggle switch (track + sliding thumb) rather than a checkmark box — still a real
+   <input type="checkbox"> under the hood for accessibility/keyboard support, just repainted. */
+  .checkbox {
+    appearance: none;
+    @apply w-9 h-5 shrink-0;
+    @apply rounded-full border border-border bg-input;
+    @apply cursor-pointer align-middle relative;
+    @apply transition-colors duration-150;
+
+    &::before {
+      content: "";
+      @apply absolute top-0.5 left-0.5;
+      @apply w-3.5 h-3.5 rounded-full bg-muted-foreground;
+      @apply transition-transform duration-150;
+    }
+
+    &:hover {
+      @apply border-ring/60;
+    }
+
+    &:checked {
+      @apply bg-primary border-primary;
+
+      &::before {
+        @apply bg-primary-foreground;
+        transform: translateX(1.125rem);
+      }
+    }
+
+    &:focus-visible {
+      @apply outline outline-2 outline-ring outline-offset-2;
+    }
+  }
+
+  /* App-shell sidebar nav links (see Layout.vue) — uses the theme's own --sidebar-* tokens (already defined in
+   theme.css but unused until now) rather than the card-context --accent/--border tokens the rest of the app's
+   nav-style links (e.g. GuildConfigEditor's plugin list) use, since the sidebar sits on its own background. */
+  .sidebar-link {
+    @apply flex items-center gap-2.5 px-3 py-2 rounded-lg;
+    @apply text-sm font-medium text-sidebar-foreground/70;
+    @apply transition-colors duration-150;
+    @apply cursor-pointer;
+
+    &:hover {
+      @apply bg-sidebar-accent/60 text-sidebar-foreground;
+    }
+  }
+
+  .sidebar-link-active {
+    @apply bg-sidebar-accent text-sidebar-accent-foreground;
+  }
+
 }
 
-} /* @layer components */
+/* @layer components */

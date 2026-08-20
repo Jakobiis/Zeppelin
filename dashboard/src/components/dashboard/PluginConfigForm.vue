@@ -14,7 +14,7 @@
     <div
       v-for="key in wideVisibleKeys"
       :key="key"
-      class="bg-card border border-border rounded-lg shadow-md p-4 sm:p-6"
+      class="bg-card border border-border rounded-3xl shadow-md p-4 sm:p-6"
     >
       <PluginConfigField
         :schema="configSchema.properties[key]"
@@ -27,11 +27,34 @@
 
     <!-- Everything simple (booleans, plain strings/numbers, color pickers) shares one compact card — these are
          the "3 toggles" a plugin like Counters has alongside its counters list, and packing them together reads
-         far better than each getting its own mostly-empty card. -->
-    <div v-if="packedVisibleKeys.length" class="bg-card border border-border rounded-lg shadow-md p-4 sm:p-6">
-      <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
+         far better than each getting its own mostly-empty card. Split further into a toggle row and a value grid
+         (see below) rather than mixing both kinds in the same grid cells. -->
+    <div v-if="packedVisibleKeys.length" class="bg-card border border-border rounded-3xl shadow-md p-4 sm:p-6">
+      <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">General</h2>
+
+      <!-- Toggles: a wrapped row, not the value grid below — a boolean field only ever renders its header row
+           (checkbox + label, no input underneath), so forcing it into a 220px grid column meant for a
+           label-then-input stack stretched every switch to that column's width and left dead space beneath it.
+           Wrapping at natural width instead lets several toggles sit shoulder-to-shoulder on one line. -->
+      <div v-if="packedToggleKeys.length" class="flex flex-wrap gap-x-6 gap-y-3 pt-4 border-t border-border">
         <PluginConfigField
-          v-for="key in packedVisibleKeys"
+          v-for="key in packedToggleKeys"
+          :key="key"
+          :schema="configSchema.properties[key]"
+          :field-key="key"
+          :label="prettifyKey(key)"
+          :model-value="modelValue.config[key]"
+          @update:model-value="(val) => updateConfigKey(key, val)"
+        />
+      </div>
+
+      <div
+        v-if="packedValueKeys.length"
+        class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start"
+        :class="packedToggleKeys.length ? 'mt-4 pt-4 border-t border-border' : ''"
+      >
+        <PluginConfigField
+          v-for="key in packedValueKeys"
           :key="key"
           :schema="configSchema.properties[key]"
           :field-key="key"
@@ -60,7 +83,7 @@
       @update:model-value="(key) => addConfigField(String(key))"
     />
 
-    <div v-if="overridesSchema" class="bg-card border border-border rounded-lg shadow-md p-4 sm:p-6">
+    <div v-if="overridesSchema" class="bg-card border border-border rounded-3xl shadow-md p-4 sm:p-6">
       <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Overrides</h2>
       <PluginConfigField
         :schema="overridesSchema"
@@ -78,7 +101,15 @@ import { computed, inject, provide, type ComputedRef } from "vue";
 import MarkdownBlock from "../docs/MarkdownBlock.vue";
 import ComboboxField from "./ComboboxField.vue";
 import PluginConfigField from "./PluginConfigField.vue";
-import { defaultForSchema, isWide, prettifyKey, schemaValueMatchesSearch, useOrderedObjectFieldKeys } from "./pluginConfigSchema";
+import {
+  classifyKind,
+  defaultForSchema,
+  isWide,
+  prettifyKey,
+  schemaValueMatchesSearch,
+  unwrapNullable,
+  useOrderedObjectFieldKeys,
+} from "./pluginConfigSchema";
 
 const props = defineProps<{
   guildId: string;
@@ -126,6 +157,15 @@ const searchedVisibleConfigKeys = computed(() => {
 // pickers) or shares the compact "General"-style card with the other simple fields (booleans/strings/numbers).
 const wideVisibleKeys = computed(() => searchedVisibleConfigKeys.value.filter((key) => isWide(configSchema.value?.properties?.[key], key)));
 const packedVisibleKeys = computed(() => searchedVisibleConfigKeys.value.filter((key) => !isWide(configSchema.value?.properties?.[key], key)));
+
+// Splits the packed fields further — a boolean only ever renders a header row (checkbox + label, no input below
+// it), so it gets a compact wrapped row of its own instead of sharing the value grid, where it'd be stretched to
+// a 220px column and leave the space below it empty. See the template comment above the toggle row.
+function isBooleanKey(key: string): boolean {
+  return classifyKind(unwrapNullable(configSchema.value?.properties?.[key]).inner) === "boolean";
+}
+const packedToggleKeys = computed(() => packedVisibleKeys.value.filter(isBooleanKey));
+const packedValueKeys = computed(() => packedVisibleKeys.value.filter((key) => !isBooleanKey(key)));
 
 function updateConfigKey(key: string, value: any) {
   emit("update:modelValue", { ...props.modelValue, config: { ...props.modelValue.config, [key]: value } });

@@ -1,21 +1,21 @@
 <template>
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-4">
-    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-3">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-3">
       <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Messages today</div>
       <div class="mt-1 text-2xl font-semibold">{{ analytics.totalToday.toLocaleString() }}</div>
     </div>
-    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-3">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-3">
       <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total messages</div>
       <div class="mt-1 text-2xl font-semibold">{{ analytics.totalAllTimeMessages.toLocaleString() }}</div>
     </div>
-    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-3">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-3">
       <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tracked users</div>
       <div class="mt-1 text-2xl font-semibold">{{ analytics.totalTrackedUsers.toLocaleString() }}</div>
     </div>
   </div>
 
   <div class="grid min-w-0 items-start gap-4 xl:grid-cols-3">
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Look up a user</h3>
       <input
         type="text"
@@ -58,7 +58,7 @@
     </div>
 
     <div class="min-w-0 flex flex-col gap-4">
-    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Top senders today</h3>
       <div v-if="!analytics.topToday.length" class="text-sm text-muted-foreground">No messages sent yet today.</div>
       <div class="flex flex-col gap-2">
@@ -78,7 +78,7 @@
       </div>
     </div>
 
-    <div class="bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Top senders all-time</h3>
       <div v-if="!analytics.topAllTime.length" class="text-sm text-muted-foreground">No messages tracked yet.</div>
       <div class="flex flex-col gap-2">
@@ -99,7 +99,7 @@
     </div>
     </div>
 
-    <div class="min-w-0 bg-card border border-border rounded-lg shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Top channels today</h3>
       <div v-if="!analytics.topChannelsToday.length" class="text-sm text-muted-foreground">No messages sent yet today.</div>
       <div class="flex flex-col gap-2">
@@ -132,7 +132,7 @@
 
   <div
     v-if="toastMessage"
-    class="fixed bottom-4 right-4 z-50 bg-card border border-border rounded-lg shadow-lg px-4 py-3 text-sm max-w-sm"
+    class="fixed bottom-4 right-4 z-50 bg-card border border-border rounded-3xl shadow-lg px-4 py-3 text-sm max-w-sm"
   >
     {{ toastMessage }}
   </div>

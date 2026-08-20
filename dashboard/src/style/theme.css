@@ -1,6 +1,10 @@
 /*
- * Design tokens for the "Tiesen" theme (https://tweakcn.com/themes/cmie97f2b000704l27r9g1p11),
- * exported from tweakcn and adapted to this app's existing Tailwind v4 setup.
+ * Design tokens, originally exported from tweakcn's "Tiesen" theme (https://tweakcn.com/themes/cmie97f2b000704l27r9g1p11)
+ * and adapted to this app's Tailwind v4 setup, then repainted to true achromatic (chroma 0) grays for every
+ * neutral — background/card/border/muted/sidebar/etc. — with color reserved specifically for primary/buttons
+ * (blue, hue ~258), tertiary (warm amber, ~55), and destructive (red, ~22). Earlier passes tinted the neutrals
+ * with a hue of their own (blue, then violet) — this version deliberately doesn't, so blue reads as "the button
+ * color" rather than "the whole app's color."
  *
  * The dashboard is dark-only today (no light/dark toggle), so :root defines the light-mode
  * values (kept for completeness / a future toggle) and index.html applies `class="dark"` to
@@ -12,98 +16,99 @@
 :root {
   --background: oklch(0.9851 0 0);
   --foreground: oklch(0 0 0);
-  --card: oklch(1 0 267.5100);
-  --card-foreground: oklch(0.2103 0 267.5100);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0 0 0);
-  --primary: oklch(0.5144 0.1605 267.4400);
-  --primary-foreground: oklch(0.9700 0.0140 254.6040);
+  --primary: oklch(0.50 0.19 258);
+  --primary-foreground: oklch(0.97 0.014 258);
   --secondary: oklch(0.9400 0 0);
   --secondary-foreground: oklch(0.2500 0 0);
-  --tertiary: oklch(0.7200 0.1500 85);
-  --tertiary-foreground: oklch(0.2500 0.0500 85);
+  --tertiary: oklch(0.72 0.15 55);
+  --tertiary-foreground: oklch(0.25 0.05 55);
   --muted: oklch(0.9700 0 0);
   --muted-foreground: oklch(0.4400 0 0);
-  --accent: oklch(0.9214 0.0248 257.6500);
-  --accent-foreground: oklch(0.2571 0.1161 272.2400);
+  --accent: oklch(0.92 0 0);
+  --accent-foreground: oklch(0.21 0 0);
   --destructive: oklch(0.5800 0.2200 27);
-  --destructive-foreground: oklch(0.9700 0.0140 254.6040);
+  --destructive-foreground: oklch(0.97 0 0);
   --border: oklch(0.9200 0 0);
   --input: oklch(0.9400 0 0);
-  --ring: oklch(0.5144 0.1605 267.4400);
-  --chart-1: oklch(0.9214 0.0248 257.6500);
-  --chart-2: oklch(0.7597 0.0804 267.0100);
-  --chart-3: oklch(0.6083 0.1247 272.7200);
-  --chart-4: oklch(0.5144 0.1605 267.4400);
-  --chart-5: oklch(0.2571 0.1161 272.2400);
-  --sidebar: oklch(1 0 267.5100);
+  --ring: oklch(0.50 0.19 258);
+  --chart-1: oklch(0.92 0.025 258);
+  --chart-2: oklch(0.76 0.08 258);
+  --chart-3: oklch(0.61 0.125 260);
+  --chart-4: oklch(0.50 0.19 258);
+  --chart-5: oklch(0.26 0.12 262);
+  --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0 0 0);
-  --sidebar-primary: oklch(0.5144 0.1605 267.4400);
-  --sidebar-primary-foreground: oklch(0.9700 0.0140 254.6040);
-  --sidebar-accent: oklch(0.9214 0.0248 257.6500);
-  --sidebar-accent-foreground: oklch(0.2571 0.1161 272.2400);
+  --sidebar-primary: oklch(0.50 0.19 258);
+  --sidebar-primary-foreground: oklch(0.97 0.014 258);
+  --sidebar-accent: oklch(0.92 0 0);
+  --sidebar-accent-foreground: oklch(0.21 0 0);
   --sidebar-border: oklch(0.9200 0 0);
-  --sidebar-ring: oklch(0.5144 0.1605 267.4400);
+  --sidebar-ring: oklch(0.50 0.19 258);
   --font-sans: "Geist Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-serif: "Noto Serif Georgian", ui-serif, serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --radius: 0.625rem;
+  --radius: 0.65rem;
   --shadow-x: 0.25px;
   --shadow-y: 1px;
   --shadow-blur: 3px;
   --shadow-spread: 0px;
   --shadow-opacity: 0.15;
-  --shadow-color: oklch(0.2571 0.1161 258);
-  --shadow-2xs: 0.25px 1px 3px 0px hsl(258 64.2250% 21.4383% / 0.07);
-  --shadow-xs: 0.25px 1px 3px 0px hsl(258 64.2250% 21.4383% / 0.07);
-  --shadow-sm: 0.25px 1px 3px 0px hsl(258 64.2250% 21.4383% / 0.15), 0.25px 1px 2px -1px hsl(258 64.2250% 21.4383% / 0.15);
-  --shadow: 0.25px 1px 3px 0px hsl(258 64.2250% 21.4383% / 0.15), 0.25px 1px 2px -1px hsl(258 64.2250% 21.4383% / 0.15);
-  --shadow-md: 0.25px 1px 3px 0px hsl(258 64.2250% 21.4383% / 0.15), 0.25px 2px 4px -1px hsl(258 64.2250% 21.4383% / 0.15);
-  --shadow-lg: 0.25px 1px 3px 0px hsl(258 64.2250% 21.4383% / 0.15), 0.25px 4px 6px -1px hsl(258 64.2250% 21.4383% / 0.15);
-  --shadow-xl: 0.25px 1px 3px 0px hsl(258 64.2250% 21.4383% / 0.15), 0.25px 8px 10px -1px hsl(258 64.2250% 21.4383% / 0.15);
-  --shadow-2xl: 0.25px 1px 3px 0px hsl(258 64.2250% 21.4383% / 0.38);
+  --shadow-color: oklch(0.21 0 0);
+  --shadow-2xs: 0.25px 1px 3px 0px hsl(0 0% 21.4383% / 0.07);
+  --shadow-xs: 0.25px 1px 3px 0px hsl(0 0% 21.4383% / 0.07);
+  --shadow-sm: 0.25px 1px 3px 0px hsl(0 0% 21.4383% / 0.15), 0.25px 1px 2px -1px hsl(0 0% 21.4383% / 0.15);
+  --shadow: 0.25px 1px 3px 0px hsl(0 0% 21.4383% / 0.15), 0.25px 1px 2px -1px hsl(0 0% 21.4383% / 0.15);
+  --shadow-md: 0.25px 1px 3px 0px hsl(0 0% 21.4383% / 0.15), 0.25px 2px 4px -1px hsl(0 0% 21.4383% / 0.15);
+  --shadow-lg: 0.25px 1px 3px 0px hsl(0 0% 21.4383% / 0.15), 0.25px 4px 6px -1px hsl(0 0% 21.4383% / 0.15);
+  --shadow-xl: 0.25px 1px 3px 0px hsl(0 0% 21.4383% / 0.15), 0.25px 8px 10px -1px hsl(0 0% 21.4383% / 0.15);
+  --shadow-2xl: 0.25px 1px 3px 0px hsl(0 0% 21.4383% / 0.38);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 }
 
-/* A cool slate-blue dark palette — every neutral (background/card/border/muted/etc.) carries a slight blue
-   chroma at the same ~258 hue as primary, instead of flat chroma-0 gray with only the accent color blue. Also
-   noticeably lighter across the board (background/card especially) than the old near-black version. */
+/* True achromatic dark grays (chroma 0) for every neutral — background/card/border/muted/sidebar/etc. — instead
+   of tinting them with primary's own hue like the last two passes did. Blue (primary/ring, hue 258) is reserved
+   for buttons and other explicitly "primary" elements; accent/sidebar-accent (hover/active highlights) are
+   neutral too, so blue reads as a deliberate accent rather than the app's overall color. */
 .dark {
-  --background: oklch(0.16 0.021 258);
-  --foreground: oklch(0.95 0.008 258);
-  --card: oklch(0.205 0.026 258);
-  --card-foreground: oklch(0.95 0.008 258);
-  --popover: oklch(0.205 0.026 258);
-  --popover-foreground: oklch(0.95 0.008 258);
-  --primary: oklch(0.62 0.19 258);
+  --background: oklch(0.11 0 0);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.155 0 0);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.155 0 0);
+  --popover-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.50 0.20 258);
   --primary-foreground: oklch(0.98 0.012 258);
-  --secondary: oklch(0.25 0.022 258);
-  --secondary-foreground: oklch(0.93 0.01 258);
-  --tertiary: oklch(0.6000 0.1400 85);
-  --tertiary-foreground: oklch(0.9700 0.0200 85);
-  --muted: oklch(0.235 0.02 258);
-  --muted-foreground: oklch(0.685 0.022 258);
-  --accent: oklch(0.29 0.045 258);
-  --accent-foreground: oklch(0.93 0.03 258);
-  --destructive: oklch(0.4200 0.1910 22.2160);
-  --destructive-foreground: oklch(0.9700 0.0140 254.6040);
-  --border: oklch(0.30 0.022 258);
-  --input: oklch(0.26 0.03 258);
-  --ring: oklch(0.62 0.19 258);
+  --secondary: oklch(0.20 0 0);
+  --secondary-foreground: oklch(0.93 0 0);
+  --tertiary: oklch(0.68 0.16 55);
+  --tertiary-foreground: oklch(0.97 0.02 55);
+  --muted: oklch(0.185 0 0);
+  --muted-foreground: oklch(0.685 0 0);
+  --accent: oklch(0.24 0 0);
+  --accent-foreground: oklch(0.93 0 0);
+  --destructive: oklch(0.4400 0.1900 22.5000);
+  --destructive-foreground: oklch(0.9700 0 0);
+  --border: oklch(0.25 0 0);
+  --input: oklch(0.21 0 0);
+  --ring: oklch(0.64 0.20 258);
   --chart-1: oklch(0.93 0.03 258);
-  --chart-2: oklch(0.7800 0.0900 258.0100);
-  --chart-3: oklch(0.6600 0.1400 260.7200);
+  --chart-2: oklch(0.7800 0.0900 258);
+  --chart-3: oklch(0.6600 0.1400 260);
   --chart-4: oklch(0.6200 0.1900 258);
-  --chart-5: oklch(0.42 0.09 262.24);
-  --sidebar: oklch(0.13 0.02 258);
-  --sidebar-foreground: oklch(0.95 0.008 258);
-  --sidebar-primary: oklch(0.62 0.19 258);
+  --chart-5: oklch(0.42 0.09 262);
+  --sidebar: oklch(0.08 0 0);
+  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar-primary: oklch(0.62 0.20 258);
   --sidebar-primary-foreground: oklch(0.98 0.012 258);
-  --sidebar-accent: oklch(0.27 0.05 258);
-  --sidebar-accent-foreground: oklch(0.93 0.03 258);
-  --sidebar-border: oklch(0.24 0.02 258);
-  --sidebar-ring: oklch(0.62 0.19 258);
+  --sidebar-accent: oklch(0.22 0 0);
+  --sidebar-accent-foreground: oklch(0.95 0 0);
+  --sidebar-border: oklch(0.19 0 0);
+  --sidebar-ring: oklch(0.62 0.20 258);
 }
 
 @theme inline {
@@ -165,6 +170,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground font-sans text-base;
   }

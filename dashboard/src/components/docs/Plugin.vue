@@ -9,7 +9,7 @@
     <MarkdownBlock :content="data.info.description" class="content"></MarkdownBlock>
 
     <div v-if="data.info.type === 'legacy'">
-      <div class="px-3 py-2 mb-4 rounded-lg bg-card shadow-md flex">
+      <div class="px-3 py-2 mb-4 rounded-3xl bg-card shadow-md flex">
         <div class="flex-none mr-2">
           <alert class="inline-icon mr-1 text-yellow-300" />
         </div>

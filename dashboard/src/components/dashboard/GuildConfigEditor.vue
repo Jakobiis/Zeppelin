@@ -3,18 +3,62 @@
     Loading…
   </div>
   <div v-else>
-    <div v-if="errors.length" class="bg-card border border-destructive/40 border-l-4 border-l-destructive py-3 px-4 rounded-lg shadow-md mb-4">
+    <div v-if="errors.length" class="bg-card border border-destructive/40 border-l-4 border-l-destructive py-3 px-4 rounded-3xl shadow-md mb-4">
       <div class="font-semibold text-destructive mb-1">Errors</div>
       <pre v-for="error in errors" class="text-sm whitespace-pre-wrap font-mono text-foreground/90">{{ error }}</pre>
     </div>
 
-    <Tabs variant="header">
-      <Tab variant="header" v-if="canReadConfig" :active="mode === 'yaml'"><a href="javascript:void(0)" v-on:click="setMode('yaml')">YAML</a></Tab>
-      <Tab variant="header" v-if="canReadConfig" :active="mode === 'interface'"><a href="javascript:void(0)" v-on:click="setMode('interface')">Interface</a></Tab>
-      <Tab variant="header" v-if="isGiveawayManager" :active="mode === 'giveaways'"><a href="javascript:void(0)" v-on:click="setMode('giveaways')">Giveaways</a></Tab>
-      <Tab variant="header" v-if="isEconomyManager" :active="mode === 'economy'"><a href="javascript:void(0)" v-on:click="setMode('economy')">Economy</a></Tab>
-      <Tab variant="header" v-if="isMessageTrackerManager" :active="mode === 'messages'"><a href="javascript:void(0)" v-on:click="setMode('messages')">Messages</a></Tab>
-    </Tabs>
+    <!-- Teleported into the app-wide sidebar (see Layout.vue's #config-nav-slot) instead of rendered as a page
+         header tab strip — same .sidebar-link treatment as Guilds/Log out (a real background on hover/active,
+         which the old underlined-text tab strip never had) so switching sections of this guild's config reads as
+         navigation, not a content-area tab control. -->
+    <Teleport to="#config-nav-slot">
+      <div class="border-t border-sidebar-border pt-3 mt-3 space-y-0.5">
+        <a v-if="canReadConfig" href="javascript:void(0)" class="sidebar-link" :class="mode === 'yaml' ? 'sidebar-link-active' : ''" v-on:click="setMode('yaml')">YAML</a>
+        <a v-if="isGiveawayManager" href="javascript:void(0)" class="sidebar-link" :class="mode === 'giveaways' ? 'sidebar-link-active' : ''" v-on:click="setMode('giveaways')">Giveaways</a>
+        <a v-if="isEconomyManager" href="javascript:void(0)" class="sidebar-link" :class="mode === 'economy' ? 'sidebar-link-active' : ''" v-on:click="setMode('economy')">Economy</a>
+        <a v-if="isMessageTrackerManager" href="javascript:void(0)" class="sidebar-link" :class="mode === 'messages' ? 'sidebar-link-active' : ''" v-on:click="setMode('messages')">Messages</a>
+        <!-- Always last in the tab order (not second, right after YAML) — kept below every other tab regardless
+             of which of them happen to be available for this guild, so its own plugin sub-nav (right below) has
+             a stable position instead of jumping around depending on isGiveawayManager/isEconomyManager/etc. -->
+        <a v-if="canReadConfig" href="javascript:void(0)" class="sidebar-link" :class="mode === 'interface' ? 'sidebar-link-active' : ''" v-on:click="setMode('interface')">Interface</a>
+
+        <!-- Plugin picker, only while the Interface tab is actually open — indented under it (a left border, like
+             a tree) so it reads as "Interface"'s own sub-nav rather than another top-level section. The search
+             box that filters this list lives separately, pinned above "Current server" — see #plugin-search-slot
+             below — so it doesn't scroll away along with the list itself. -->
+        <div v-if="canReadConfig && mode === 'interface'" class="ml-3 pl-3 mt-1 space-y-0.5 border-l border-sidebar-border">
+          <a href="javascript:void(0)"
+             v-if="generalMatchesSearch"
+             class="sidebar-link"
+             :class="selectedPlugin === GENERAL ? 'sidebar-link-active' : ''"
+             v-on:click="selectPlugin(GENERAL)">
+            General
+          </a>
+          <a href="javascript:void(0)"
+             v-for="plugin in searchedFormPlugins"
+             :key="plugin.name"
+             class="sidebar-link"
+             :class="selectedPlugin === plugin.name ? 'sidebar-link-active' : ''"
+             v-on:click="selectPlugin(plugin.name)">
+            {{ plugin.info.prettyName || plugin.name }}
+          </a>
+          <p v-if="interfaceSearchQuery && !generalMatchesSearch && !searchedFormPlugins.length" class="text-sm text-sidebar-foreground/50 italic px-3 py-1.5">
+            No plugins match.
+          </p>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="#plugin-search-slot" v-if="canReadConfig && mode === 'interface'">
+      <input
+        ref="pluginSearchInput"
+        type="text"
+        class="field-input"
+        placeholder="Search plugins"
+        v-model="interfaceSearchQuery"
+      />
+    </Teleport>
 
     <v-ace-editor v-if="canReadConfig" v-show="mode === 'yaml'" class="rounded-lg shadow-lg border border-border"
                v-model:value="editableConfig"
@@ -32,68 +76,27 @@
                   height: editorHeight + 'px',
                 }" />
 
-    <div v-if="canReadConfig && mode === 'interface'" class="mt-4">
-      <input
-        type="text"
-        class="field-input"
-        placeholder="Search"
-        v-model="interfaceSearchQuery"
+    <div v-if="canReadConfig && mode === 'interface'" class="mt-4 min-w-0">
+      <div v-if="pluginLoading" class="bg-card border border-border rounded-3xl shadow-md p-6 text-muted-foreground text-sm">
+        Loading…
+      </div>
+      <GeneralConfigForm
+        v-else-if="selectedPlugin === GENERAL && generalSchema && generalValue"
+        :schema="generalSchema"
+        :model-value="generalValue"
+        @update:model-value="generalValue = $event"
       />
-    </div>
-
-    <div v-if="canReadConfig && mode === 'interface'" class="flex flex-wrap lg:flex-nowrap items-start gap-6 mt-4">
-      <nav class="w-full lg:w-56 flex-none border border-border rounded-lg bg-card shadow-md p-3">
-        <ul v-if="generalMatchesSearch" class="list-none space-y-0.5 mb-3 pb-3 border-b border-border">
-          <li>
-            <a href="javascript:void(0)"
-               class="block px-3 py-1.5 rounded-md text-sm border-l-2 transition-colors duration-150"
-               :class="selectedPlugin === GENERAL
-                 ? 'bg-accent text-accent-foreground font-medium border-primary'
-                 : 'text-foreground border-transparent hover:bg-accent hover:text-accent-foreground'"
-               v-on:click="selectPlugin(GENERAL)">
-              General
-            </a>
-          </li>
-        </ul>
-        <ul class="list-none space-y-0.5">
-          <li v-for="plugin in searchedFormPlugins" :key="plugin.name">
-            <a href="javascript:void(0)"
-               class="block px-3 py-1.5 rounded-md text-sm border-l-2 transition-colors duration-150"
-               :class="selectedPlugin === plugin.name
-                 ? 'bg-accent text-accent-foreground font-medium border-primary'
-                 : 'text-foreground border-transparent hover:bg-accent hover:text-accent-foreground'"
-               v-on:click="selectPlugin(plugin.name)">
-              {{ plugin.info.prettyName || plugin.name }}
-            </a>
-          </li>
-        </ul>
-        <p v-if="interfaceSearchQuery && !generalMatchesSearch && !searchedFormPlugins.length" class="text-sm text-muted-foreground italic px-3 py-1.5">
-          No plugins match.
-        </p>
-      </nav>
-
-      <div class="flex-auto min-w-0">
-        <div v-if="pluginLoading" class="bg-card border border-border rounded-lg shadow-md p-6 text-muted-foreground text-sm">
-          Loading…
-        </div>
-        <GeneralConfigForm
-          v-else-if="selectedPlugin === GENERAL && generalSchema && generalValue"
-          :schema="generalSchema"
-          :model-value="generalValue"
-          @update:model-value="generalValue = $event"
-        />
-        <PluginConfigForm
-          v-else-if="selectedPlugin && selectedPlugin !== GENERAL && pluginSchema && pluginValue"
-          :guild-id="String($route.params.guildId)"
-          :schema="pluginSchema"
-          :model-value="pluginValue"
-          :plugin-title="selectedPluginInfo ? (selectedPluginInfo.prettyName || selectedPlugin) : selectedPlugin"
-          :plugin-description="selectedPluginInfo ? selectedPluginInfo.description : null"
-          @update:model-value="pluginValue = $event"
-        />
-        <div v-else class="bg-card border border-border rounded-lg shadow-md p-6 text-muted-foreground text-sm">
-          Select a plugin from the sidebar.
-        </div>
+      <PluginConfigForm
+        v-else-if="selectedPlugin && selectedPlugin !== GENERAL && pluginSchema && pluginValue"
+        :guild-id="String($route.params.guildId)"
+        :schema="pluginSchema"
+        :model-value="pluginValue"
+        :plugin-title="selectedPluginInfo ? (selectedPluginInfo.prettyName || selectedPlugin) : selectedPlugin"
+        :plugin-description="selectedPluginInfo ? selectedPluginInfo.description : null"
+        @update:model-value="pluginValue = $event"
+      />
+      <div v-else class="bg-card border border-border rounded-3xl shadow-md p-6 text-muted-foreground text-sm">
+        Select a plugin from the sidebar.
       </div>
     </div>
 
@@ -118,8 +121,6 @@
   import "ace-builds/src-noconflict/mode-yaml";
   import "ace-builds/src-noconflict/theme-tomorrow_night";
 
-  import Tab from "../Tab.vue";
-  import Tabs from "../Tabs.vue";
   import GeneralConfigForm from "./GeneralConfigForm.vue";
   import GuildEconomyPanel from "./GuildEconomyPanel.vue";
   import GuildGiveawaysPanel from "./GuildGiveawaysPanel.vue";
@@ -136,8 +137,6 @@
   export default {
     components: {
       VAceEditor,
-      Tab,
-      Tabs,
       GeneralConfigForm,
       PluginConfigForm,
       GuildGiveawaysPanel,
@@ -518,9 +517,21 @@
           }
 
           if (shortcutModifierPressed(ev) && ev.key === "f") {
-            ev.preventDefault();
-            this.$refs.aceEditor.getAceInstance().execCommand("find");
-            return;
+            // Interface tab has its own plugin search box instead of the YAML editor's find widget — Ctrl/Cmd+F
+            // focuses whichever one is actually relevant to what's currently on screen.
+            if (this.mode === "interface") {
+              ev.preventDefault();
+              const input = this.$refs.pluginSearchInput as HTMLInputElement | undefined;
+              input?.focus();
+              input?.select();
+              return;
+            }
+
+            if (this.mode === "yaml") {
+              ev.preventDefault();
+              this.$refs.aceEditor.getAceInstance().execCommand("find");
+              return;
+            }
           }
         };
         window.addEventListener("keydown", editorKeybindListener);

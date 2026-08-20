@@ -1,5 +1,5 @@
 <template>
-  <div class="expandable mb-4 bg-card border border-border rounded-lg overflow-hidden"
+  <div class="expandable mb-4 bg-card border border-border rounded-3xl overflow-hidden"
        ref="root"
        v-bind:class="{ 'shadow-xl': isOpen}">
     <div role="button"

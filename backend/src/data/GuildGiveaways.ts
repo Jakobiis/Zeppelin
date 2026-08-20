@@ -113,6 +113,24 @@ export class GuildGiveaways extends BaseGuildRepository {
     };
   }
 
+  // Powers the dashboard's "Top hosters" card — every giveaway ever hosted in this guild, grouped by host_id and
+  // ranked by count. Display names are resolved separately on the dashboard side (same
+  // loadGiveawayMemberNames/getGuildMemberDisplayInfo path every other giveaway list already uses), since a
+  // Discord display name isn't something this query can produce on its own.
+  async getTopHosters(limit: number): Promise<{ hostId: string; count: number }[]> {
+    const rows = await dataSource.query(
+      `SELECT host_id AS hostId, COUNT(*) AS count
+        FROM giveaways
+        WHERE guild_id = ?
+        GROUP BY host_id
+        ORDER BY count DESC
+        LIMIT ?`,
+      [this.guildId, limit],
+    );
+
+    return rows.map((row: { hostId: string; count: string }) => ({ hostId: row.hostId, count: Number(row.count) }));
+  }
+
   async create(data: Omit<Partial<Giveaway>, "id">): Promise<Giveaway> {
     const result = await this.giveaways.insert({
       ...data,

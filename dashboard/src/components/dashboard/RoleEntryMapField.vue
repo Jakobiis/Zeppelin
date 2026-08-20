@@ -1,7 +1,7 @@
 <template>
   <div class="field-panel space-y-2">
     <div v-if="!modelValue.length" class="text-sm text-muted-foreground italic">None</div>
-    <div v-for="(entry, index) in modelValue" :key="index" class="flex items-center gap-2">
+    <div v-for="(entry, index) in modelValue" :key="index" class="row-item">
       <RoleChannelPickerField
         class="flex-1"
         :guild-id="guildId"
@@ -18,13 +18,16 @@
         @input="(ev) => updateBonus(index, (ev.target as HTMLInputElement).value)"
       />
       <span class="text-sm text-muted-foreground shrink-0">bonus entries</span>
-      <button type="button" class="btn-remove shrink-0" @click="removeAt(index)">Remove</button>
+      <button type="button" class="btn-remove btn-remove-icon shrink-0" aria-label="Remove" @click="removeAt(index)">
+        <Close :size="16" fillColor="currentColor" style="font-size: 16px" />
+      </button>
     </div>
     <button type="button" class="btn-add" @click="addEmpty">+ Add bonus</button>
   </div>
 </template>
 
 <script setup lang="ts">
+import Close from "vue-material-design-icons/Close.vue";
 import RoleChannelPickerField from "./RoleChannelPickerField.vue";
 
 export interface RoleEntryMapRow {

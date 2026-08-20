@@ -1,6 +1,6 @@
 <template>
   <div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" @click.self="$emit('cancel')">
-    <div class="bg-card border border-border rounded-lg shadow-lg max-w-sm w-full p-5">
+    <div class="bg-card border border-border rounded-3xl shadow-lg max-w-sm w-full p-5">
       <h3 class="font-semibold mb-2">{{ title }}</h3>
       <p class="text-sm text-muted-foreground whitespace-pre-line">{{ message }}</p>
 

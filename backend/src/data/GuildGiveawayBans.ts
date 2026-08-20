@@ -23,11 +23,17 @@ export class GuildGiveawayBans extends BaseGuildRepository {
     return row != null;
   }
 
-  async ban(userId: string): Promise<void> {
+  // Used where the ban's own details (not just the yes/no from isBanned) are shown — the dashboard's "Giveaway
+  // ban" card, so staff can see *why* someone was banned without needing to dig through mod logs/chat history.
+  getBan(userId: string): Promise<GiveawayBan | null> {
+    return this.bans.findOne({ where: { guild_id: this.guildId, user_id: userId } });
+  }
+
+  async ban(userId: string, reason: string | null): Promise<void> {
     await this.bans.query(
-      `INSERT INTO giveaway_bans (guild_id, user_id, created_at) VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE guild_id = guild_id`,
-      [this.guildId, userId, moment.utc().format(DBDateFormat)],
+      `INSERT INTO giveaway_bans (guild_id, user_id, created_at, reason) VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE reason = VALUES(reason)`,
+      [this.guildId, userId, moment.utc().format(DBDateFormat), reason],
     );
   }
 

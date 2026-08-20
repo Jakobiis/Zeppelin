@@ -3,7 +3,7 @@
     v-if="!loadError"
     :options="options"
     :model-value="modelValue"
-    :placeholder="loading ? 'Loading…' : `— Select a ${entityType} —`"
+    :placeholder="loading ? 'Loading…' : `Select a ${entityType}`"
     @update:model-value="(val) => $emit('update:modelValue', val == null ? null : String(val))"
   />
   <div v-else>

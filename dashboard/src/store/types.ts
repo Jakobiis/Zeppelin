@@ -65,6 +65,11 @@ export interface GiveawayAnalytics {
   totalEntries: number;
 }
 
+export interface GiveawayTopHoster {
+  hostId: string;
+  count: number;
+}
+
 export interface GiveawayContributorStatus {
   userId: string;
   member: GiveawayMemberInfo | null;
@@ -78,6 +83,8 @@ export interface GiveawayBanStatus {
   userId: string;
   member: GiveawayMemberInfo | null;
   banned: boolean;
+  reason: string | null;
+  bannedAt: string | null;
   // Whether ban_role_id is configured — unlike GiveawayContributorStatus's "configured", a ban can still be
   // applied/enforced with no role set (the role is purely an optional cosmetic add-on here), so this only
   // affects whether hasRole means anything.
@@ -238,6 +245,9 @@ export interface GuildState {
   };
   giveawayAnalytics: {
     [guildId: string]: GiveawayAnalytics;
+  };
+  giveawayTopHosters: {
+    [guildId: string]: GiveawayTopHoster[];
   };
   giveaways: {
     [guildId: string]: GiveawayApiItem[];

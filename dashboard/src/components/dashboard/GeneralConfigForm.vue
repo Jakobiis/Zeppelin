@@ -7,7 +7,7 @@
     <div
       v-for="key in wideVisibleKeys"
       :key="key"
-      class="bg-card border border-border rounded-lg shadow-md p-4 sm:p-6"
+      class="bg-card border border-border rounded-3xl shadow-md p-4 sm:p-6"
     >
       <PluginConfigField
         :schema="schema.properties[key]"
@@ -18,7 +18,7 @@
       />
     </div>
 
-    <div v-if="packedVisibleKeys.length" class="bg-card border border-border rounded-lg shadow-md p-4 sm:p-6">
+    <div v-if="packedVisibleKeys.length" class="bg-card border border-border rounded-3xl shadow-md p-4 sm:p-6">
       <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-4 items-start">
         <PluginConfigField
           v-for="key in packedVisibleKeys"

@@ -137,7 +137,7 @@
       </div>
 
       <!-- dynamic record (arbitrary string keys -> a shared value schema) -->
-      <div v-else-if="kind === 'record'" v-show="!collapsed" class="field-panel space-y-2">
+      <div v-else-if="kind === 'record'" v-show="!collapsed" class="field-panel space-y-2 rounded-lg">
         <input
           v-if="recordEntries.length > 3"
           type="text"
@@ -146,7 +146,7 @@
           v-model="recordSearch"
         />
         <div v-for="entry in filteredRecordEntries" :key="entry.uid">
-          <div v-if="recordValueIsSimple" class="flex items-center gap-2 max-w-[50%]">
+          <div v-if="recordValueIsSimple" class="row-item max-w-[50%]">
             <RoleChannelPickerField
               v-if="(recordKeySpecialKind === 'role' || recordKeySpecialKind === 'channel') && guildId"
               class="w-48 shrink-0"
@@ -177,7 +177,9 @@
               :model-value="(modelValue ?? {})[entry.key]"
               @update:model-value="(val) => updateObjectKey(entry.key, val)"
             />
-            <button type="button" class="btn-remove shrink-0" @click="removeRecordKey(entry.key)">Remove</button>
+            <button type="button" class="btn-remove btn-remove-icon shrink-0" aria-label="Remove" @click="removeRecordKey(entry.key)">
+              <Close :size="10" fillColor="currentColor" style="font-size: 20px" />
+            </button>
           </div>
           <div v-else class="item-card max-w-[50%]">
             <div class="item-card-header">
@@ -226,11 +228,11 @@
           </div>
         </div>
         <p v-if="effectiveRecordSearch && !filteredRecordEntries.length" class="text-sm text-muted-foreground italic">No matches.</p>
-        <button type="button" class="btn-add" @click="addRecordKey">+ Add entry</button>
+        <button type="button" class="btn-secondary" @click="addRecordKey">+ Add entry</button>
       </div>
 
       <!-- array -->
-      <div v-else-if="kind === 'array'" v-show="!collapsed" class="field-panel space-y-2">
+      <div v-else-if="kind === 'array'" v-show="!collapsed" class="field-panel space-y-2 rounded-lg">
         <input
           v-if="(modelValue ?? []).length > 3"
           type="text"
@@ -241,7 +243,7 @@
         <template v-for="entry in filteredArrayEntries" :key="arrayItemUids[entry.index]">
           <!-- simple items: one compact row, value + remove, no card/header. Not width-capped for a special
                picker (role/channel/emoji) — those benefit from the extra room — only for a plain scalar list. -->
-          <div v-if="itemsAreSimple" class="flex items-center gap-2" :class="specialKind ? '' : 'max-w-[50%]'">
+          <div v-if="itemsAreSimple" class="row-item" :class="specialKind ? '' : 'max-w-[50%]'">
             <PluginConfigField
               class="flex-1 min-w-0"
               :schema="innerSchema.items"
@@ -249,7 +251,9 @@
               :model-value="entry.item"
               @update:model-value="(val) => updateArrayItem(entry.index, val)"
             />
-            <button type="button" class="btn-remove shrink-0" @click="removeArrayItem(entry.index)">Remove</button>
+            <button type="button" class="btn-remove btn-remove-icon shrink-0" aria-label="Remove" @click="removeArrayItem(entry.index)">
+              <Close :size="20" fillColor="currentColor" style="font-size: 20px" />
+            </button>
           </div>
           <!-- complex items: collapsible, no text header, just a chevron + remove -->
           <div v-else class="item-card">
@@ -263,8 +267,9 @@
                   <path d="M6 4l4 4-4 4" />
                 </svg>
               </button>
-              <span v-if="itemSummary(entry.item)" class="flex-1 text-sm text-muted-foreground truncate">{{ itemSummary(entry.item) }}</span>
-              <div v-else class="flex-1"></div>
+              <span class="flex-1 text-sm text-muted-foreground truncate">
+                {{ itemSummary(entry.item) || `Item ${entry.index + 1}` }}
+              </span>
               <button type="button" class="btn-remove shrink-0" @click="removeArrayItem(entry.index)">Remove</button>
             </div>
             <div v-show="!isItemCollapsed(entry.index)" class="item-card-body">
@@ -278,7 +283,7 @@
           </div>
         </template>
         <p v-if="effectiveArraySearch && !filteredArrayEntries.length" class="text-sm text-muted-foreground italic">No matches.</p>
-        <button type="button" class="btn-add" @click="addArrayItem">+ Add item</button>
+        <button type="button" class="btn-secondary" @click="addArrayItem">+ Add item</button>
       </div>
 
       <!-- "a single value, or a list of them" (e.g. override criteria like channel: string | string[], or a
@@ -286,9 +291,9 @@
            an array, or null depending on how many items end up in it, to match whichever branch of the union
            that represents. Simple items (a leaf value) get one compact row like a plain array does; complex ones
            (e.g. a whole embed) get the same collapsible item-card treatment array items get too. -->
-      <div v-else-if="kind === 'union' && multiLeafSchema" class="field-panel space-y-2">
+      <div v-else-if="kind === 'union' && multiLeafSchema" class="field-panel space-y-2 rounded-lg">
         <div v-for="(item, index) in multiList" :key="multiItemUids[index]">
-          <div v-if="multiLeafIsSimple" class="flex items-center gap-2">
+          <div v-if="multiLeafIsSimple" class="row-item">
             <PluginConfigField
               class="flex-1"
               :schema="multiLeafSchema"
@@ -296,7 +301,9 @@
               :model-value="item"
               @update:model-value="(val) => updateMultiItem(index, val)"
             />
-            <button type="button" class="btn-remove shrink-0" @click="removeMultiItem(index)">Remove</button>
+            <button type="button" class="btn-remove btn-remove-icon shrink-0" aria-label="Remove" @click="removeMultiItem(index)">
+              <Close :size="20" fillColor="currentColor" style="font-size: 20px" />
+            </button>
           </div>
           <div v-else class="item-card">
             <div class="item-card-header">
@@ -309,8 +316,9 @@
                   <path d="M6 4l4 4-4 4" />
                 </svg>
               </button>
-              <span v-if="multiItemSummary(item)" class="flex-1 text-sm text-muted-foreground truncate">{{ multiItemSummary(item) }}</span>
-              <div v-else class="flex-1"></div>
+              <span class="flex-1 text-sm text-muted-foreground truncate">
+                {{ multiItemSummary(item) || `Item ${index + 1}` }}
+              </span>
               <button type="button" class="btn-remove shrink-0" @click="removeMultiItem(index)">Remove</button>
             </div>
             <div v-show="!isMultiItemCollapsed(index)" class="item-card-body">
@@ -323,7 +331,7 @@
             </div>
           </div>
         </div>
-        <button type="button" class="btn-add" @click="addMultiItem">+ Add</button>
+        <button type="button" class="btn-secondary" @click="addMultiItem">+ Add</button>
       </div>
 
       <!-- union -->
@@ -395,6 +403,7 @@
 
 <script setup lang="ts">
 import { computed, inject, ref, watch, type ComputedRef } from "vue";
+import Close from "vue-material-design-icons/Close.vue";
 import ColorPickerField from "./ColorPickerField.vue";
 import ComboboxField from "./ComboboxField.vue";
 import { getCachedName } from "./discordGuildData";
@@ -567,9 +576,9 @@ function toggleEntryCollapsed(key: string) {
 
 function addRecordKey() {
   const obj = props.modelValue ?? {};
-  let newKey = `new_key_${++recordKeyCounter}`;
+  let newKey = `key${++recordKeyCounter}`;
   while (newKey in obj) {
-    newKey = `new_key_${++recordKeyCounter}`;
+    newKey = `key${++recordKeyCounter}`;
   }
   emit("update:modelValue", { ...obj, [newKey]: defaultForSchema(innerSchema.value.additionalProperties) });
 }

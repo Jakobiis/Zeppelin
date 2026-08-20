@@ -1,10 +1,11 @@
 import express, { NextFunction, Request, Response } from "express";
 import { GiveawayEntries } from "../../data/GiveawayEntries.js";
 import { Configs } from "../../data/Configs.js";
+import { GuildGiveawayBans } from "../../data/GuildGiveawayBans.js";
 import { GuildGiveaways } from "../../data/GuildGiveaways.js";
 import { createGiveawayRecord } from "../../plugins/Giveaways/functions/createGiveaway.js";
 import { finalizeGiveaway, rerollGiveaway } from "../../plugins/Giveaways/functions/finalizeGiveaway.js";
-import { banUserFromGiveaways, isUserBannedFromGiveaways, unbanUserFromGiveaways } from "../../plugins/Giveaways/functions/giveawayBans.js";
+import { banUserFromGiveaways, unbanUserFromGiveaways } from "../../plugins/Giveaways/functions/giveawayBans.js";
 import { parseMessagePeriod } from "../../plugins/MessageTracker/functions/messagePeriods.js";
 import { convertDelayStringToMS, isValidSnowflake } from "../../utils.js";
 import { loadYamlSafely } from "../../utils/loadYamlSafely.js";
@@ -19,6 +20,8 @@ const MAX_FINISHED_PAGE_SIZE = 50;
 const DEFAULT_FINISHED_PAGE_SIZE = 15;
 const MAX_FINISHED_USERNAME_MATCHES = 25;
 const MAX_LOOKUP_MATCHES = 10;
+const MAX_TOP_HOSTERS = 10;
+const MAX_BAN_REASON_LENGTH = 500;
 
 const configs = new Configs();
 const giveawayEntries = new GiveawayEntries();
@@ -114,6 +117,18 @@ export function initGuildGiveawaysAPI(router: express.Router) {
         res.json(await GuildGiveaways.getGuildInstance(req.params.guildId).getAnalytics());
       } catch {
         serverError(res, "Failed to load giveaway analytics");
+      }
+    },
+  );
+
+  giveawaysRouter.get(
+    "/:guildId/giveaways/top-hosters",
+    requireGiveawayManager(),
+    async (req: Request, res: Response) => {
+      try {
+        res.json(await GuildGiveaways.getGuildInstance(req.params.guildId).getTopHosters(MAX_TOP_HOSTERS));
+      } catch {
+        serverError(res, "Failed to load top hosters");
       }
     },
   );
@@ -222,14 +237,16 @@ export function initGuildGiveawaysAPI(router: express.Router) {
         const config = await getGiveawaysPluginConfig(guildId);
         const roleId: string | null = config.ban_role_id ?? null;
 
-        const [banned, memberRoleIds, member] = await Promise.all([
-          isUserBannedFromGiveaways(guildId, userId),
+        const [ban, memberRoleIds, member] = await Promise.all([
+          GuildGiveawayBans.getGuildInstance(guildId).getBan(userId),
           roleId ? getGuildMemberRoleIds(guildId, userId) : Promise.resolve(null),
           getGuildMemberDisplayInfo(guildId, userId),
         ]);
 
         res.json({
-          banned,
+          banned: ban != null,
+          reason: ban?.reason ?? null,
+          bannedAt: ban?.created_at ?? null,
           roleConfigured: roleId != null,
           hasRole: roleId != null ? (memberRoleIds?.includes(roleId) ?? false) : false,
           member,
@@ -253,7 +270,8 @@ export function initGuildGiveawaysAPI(router: express.Router) {
         const roleId: string | null = config.ban_role_id ?? null;
 
         if (ban) {
-          const result = await banUserFromGiveaways(guildId, userId);
+          const rawReason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, MAX_BAN_REASON_LENGTH) : "";
+          const result = await banUserFromGiveaways(guildId, userId, rawReason || null);
           if (roleId) await setGuildMemberRole(guildId, userId, roleId, true).catch(() => null);
           res.json({ banned: true, ...result });
         } else {

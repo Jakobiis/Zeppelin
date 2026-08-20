@@ -3,7 +3,7 @@
     <Title title="Zeppelin - Documentation" />
 
     <!-- Top bar -->
-    <nav class="flex items-stretch pl-4 pr-2 py-1 border border-border rounded-lg bg-card shadow-xl">
+    <nav class="flex items-stretch pl-4 pr-2 py-1 border border-border rounded-3xl bg-card shadow-xl">
       <div class="flex-initial flex items-center">
         <img class="flex-auto w-10 mr-5" src="/img/logo.png" alt="" aria-hidden="true">
 
@@ -29,7 +29,7 @@
     <!-- Content wrapper -->
     <div class="flex flex-wrap lg:flex-nowrap items-start mt-8 gap-8">
       <!-- Sidebar -->
-      <nav class="docs-sidebar px-4 pt-2 pb-3 border border-border rounded-lg bg-card shadow-md flex-full lg:flex-none lg:block" v-bind:class="{ closed: !mobileMenuOpen }">
+      <nav class="docs-sidebar px-4 pt-2 pb-3 border border-border rounded-3xl bg-card shadow-md flex-full lg:flex-none lg:block" v-bind:class="{ closed: !mobileMenuOpen }">
         <div role="none" v-for="(group, index) in menu">
           <h1 class="font-bold" :aria-owns="'menu-group-' + index" :class="{'mt-4': typeof index === 'number' && index !== 0}">{{ group.label }}</h1>
           <ul v-bind:id="'menu-group-' + index" role="group" class="list-none pl-2">

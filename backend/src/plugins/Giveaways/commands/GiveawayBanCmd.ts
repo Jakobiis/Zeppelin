@@ -15,6 +15,7 @@ export const GiveawayBanCmd = guildPluginMessageCommand<GiveawaysPluginType>()({
 
   signature: {
     user: ct.resolvedUser(),
+    reason: ct.string({ required: false, catchAll: true }),
   },
 
   async run({ pluginData, message, args }) {
@@ -23,7 +24,7 @@ export const GiveawayBanCmd = guildPluginMessageCommand<GiveawaysPluginType>()({
       return;
     }
 
-    const result = await banUserFromGiveaways(pluginData.guild.id, args.user.id);
+    const result = await banUserFromGiveaways(pluginData.guild.id, args.user.id, args.reason?.trim() || null);
 
     const config = pluginData.config.get();
     if (config.ban_role_id) {
@@ -46,7 +47,7 @@ export const GiveawayBanCmd = guildPluginMessageCommand<GiveawaysPluginType>()({
 
     void pluginData.state.common.sendSuccessMessage(
       message,
-      `Banned <@${args.user.id}> from giveaways.${details.length ? ` (${details.join("; ")})` : ""}`,
+      `Banned <@${args.user.id}> from giveaways.${args.reason ? ` Reason: ${args.reason.trim()}` : ""}${details.length ? ` (${details.join("; ")})` : ""}`,
     );
   },
 });

@@ -16,13 +16,13 @@
     />
     <div
       v-if="open && filteredOptions.length"
-      class="absolute z-20 left-0 right-0 mt-1 max-h-56 overflow-y-auto border border-border rounded-lg bg-popover shadow-lg py-1"
+      class="absolute z-20 left-0 right-0 mt-1 max-h-56 overflow-y-auto border border-border rounded-lg bg-popover shadow-lg py-1 px-0.5"
     >
       <button
         v-for="(opt, i) in filteredOptions"
         :key="opt.value"
         type="button"
-        class="block w-full text-left px-3 py-1.5 text-sm truncate cursor-pointer"
+        class="block w-full text-left px-3 py-1.5 text-sm truncate cursor-pointer rounded-md"
         :class="i === highlightedIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground'"
         @mousedown.prevent="choose(opt)"
         @mouseenter="highlightedIndex = i"

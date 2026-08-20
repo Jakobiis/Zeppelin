@@ -6,7 +6,7 @@
     </p>
 
     <!-- WIP bar -->
-    <div class="px-3 py-2 rounded-lg bg-card shadow-md inline-block">
+    <div class="px-3 py-2 rounded-3xl bg-card shadow-md inline-block">
       <alert class="inline-icon mr-1 text-yellow-300" title="Note!" />
       This documentation is a work in progress.
     </div>

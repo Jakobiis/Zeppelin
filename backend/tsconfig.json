@@ -8,6 +8,14 @@
     "outDir": "./dist",
     "composite": true
   },
+  // Repo is bind-mounted from the Windows host into this Linux dev container (WSL2) — inotify events for edits
+  // made from the host side don't propagate through that mount, so tsc --watch's default fs-event watcher
+  // silently misses them (a rebuild only happened once something was also touched container-side). Polling
+  // instead of relying on those events is what makes the watch build actually fire on host-side edits.
+  "watchOptions": {
+    "watchFile": "PriorityPollingInterval",
+    "watchDirectory": "DynamicPriorityPolling"
+  },
   "include": ["src/**/*.ts", "src/**/*.json"],
   "references": [
     {
