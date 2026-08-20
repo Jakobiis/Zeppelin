@@ -12,13 +12,17 @@ let commitHash: string | null = null;
 try {
   accessSync(`${rootDir}/.commit-hash`);
   commitHash = readFileSync(`${rootDir}/.commit-hash`, "utf-8").trim();
-} catch {}
+} catch {
+  // File doesn't exist outside of built/deployed environments — commitHash stays null.
+}
 
 let buildTime: string | null = null;
 try {
   accessSync(`${rootDir}/.build-time`);
   buildTime = readFileSync(`${rootDir}/.build-time`, "utf-8").trim();
-} catch {}
+} catch {
+  // File doesn't exist outside of built/deployed environments — buildTime stays null.
+}
 
 export const AboutCmd = utilityCmd({
   trigger: "about",

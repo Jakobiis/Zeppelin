@@ -41,17 +41,41 @@
         <div class="text-xs text-muted-foreground font-mono">{{ selectedUser.userId }}</div>
 
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
-          <div><span class="text-muted-foreground">Today:</span> {{ selectedUser.counts.daily.toLocaleString() }}</div>
-          <div><span class="text-muted-foreground">This week:</span> {{ selectedUser.counts.weekly.toLocaleString() }}</div>
-          <div><span class="text-muted-foreground">This month:</span> {{ selectedUser.counts.monthly.toLocaleString() }}</div>
-          <div><span class="text-muted-foreground">All-time:</span> {{ selectedUser.counts.allTime.toLocaleString() }}</div>
+          <button
+            v-for="p in periods"
+            :key="p.value"
+            type="button"
+            class="text-left rounded-lg px-2 py-1 -mx-2 transition-colors"
+            :class="adjustPeriod === p.value ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'"
+            @click="adjustPeriod = p.value"
+          >
+            <span class="text-muted-foreground">{{ p.label }}:</span> {{ selectedUser.counts[p.value].toLocaleString() }}
+          </button>
         </div>
 
-        <p class="mt-2 text-xs text-muted-foreground">Give/Subtract/Set act on the all-time count.</p>
+        <p class="mt-2 text-xs text-muted-foreground">
+          Give/Subtract/Set act on the <strong>{{ adjustPeriodLabel }}</strong> count selected above.
+        </p>
+
+        <!-- Only consulted by Give (see onAdjustConfirm) — attributes the credited messages to a channel so
+             that channel's own leaderboard/top-channels stats stay consistent with the credit, the same as if
+             the messages had actually been sent there. Subtract/Set/Reset have no sensible channel to apply
+             to, so this is left visible but simply ignored for those. -->
+        <div class="mt-2">
+          <label class="text-xs text-muted-foreground">Attribute Give to a channel (optional)</label>
+          <RoleChannelPickerField
+            class="mt-1"
+            :guild-id="guildId"
+            entity-type="channel"
+            :model-value="giveChannelId"
+            @update:model-value="giveChannelId = $event"
+          />
+        </div>
+
         <div class="mt-2 flex flex-wrap gap-2">
           <button type="button" class="btn-secondary" @click="promptAdjust('give')">Give</button>
           <button type="button" class="btn-secondary" @click="promptAdjust('subtract')">Subtract</button>
-          <button type="button" class="btn-secondary" @click="promptAdjust('set')">Set all-time</button>
+          <button type="button" class="btn-secondary" @click="promptAdjust('set')">Set</button>
           <button type="button" class="btn-secondary" @click="promptAdjust('reset')">Reset all</button>
         </div>
       </div>
@@ -143,6 +167,7 @@ import { mapState } from "vuex";
 import { ApiError } from "../../api";
 import { MessagesAnalytics, MessagesMemberInfo, MessagesTopEntry, MessagesUserInfo, GuildState } from "../../store/types";
 import ConfirmModal from "./ConfirmModal.vue";
+import RoleChannelPickerField from "./RoleChannelPickerField.vue";
 
 const EMPTY_ANALYTICS: MessagesAnalytics = {
   totalTrackedUsers: 0,
@@ -155,9 +180,17 @@ const EMPTY_ANALYTICS: MessagesAnalytics = {
 
 type AdjustAction = "give" | "subtract" | "set" | "reset";
 type AdjustState = { action: AdjustAction; defaultAmount: number };
+type Period = "daily" | "weekly" | "monthly" | "allTime";
+
+const PERIODS: { value: Period; label: string }[] = [
+  { value: "daily", label: "Today" },
+  { value: "weekly", label: "This week" },
+  { value: "monthly", label: "This month" },
+  { value: "allTime", label: "All-time" },
+];
 
 export default {
-  components: { ConfirmModal },
+  components: { ConfirmModal, RoleChannelPickerField },
 
   props: {
     guildId: { type: String, required: true },
@@ -169,6 +202,8 @@ export default {
       lookupResults: [] as MessagesMemberInfo[],
       lookupTimeout: null as ReturnType<typeof setTimeout> | null,
       selectedUserId: null as string | null,
+      adjustPeriod: "allTime" as Period,
+      giveChannelId: null as string | null,
       adjustState: null as AdjustState | null,
       toastMessage: null as string | null,
       toastTimeout: null as ReturnType<typeof setTimeout> | null,
@@ -185,18 +220,27 @@ export default {
       },
     }),
 
+    periods() {
+      return PERIODS;
+    },
+
+    adjustPeriodLabel() {
+      return PERIODS.find((p) => p.value === this.adjustPeriod)!.label.toLowerCase();
+    },
+
     adjustTitle() {
       if (!this.adjustState) return "";
-      return { give: "Give messages", subtract: "Subtract messages", set: "Set all-time count", reset: "Reset all counts" }[this.adjustState.action];
+      return { give: "Give messages", subtract: "Subtract messages", set: "Set count", reset: "Reset all counts" }[this.adjustState.action];
     },
 
     adjustMessage() {
       if (!this.adjustState || !this.selectedUser) return "";
       const name = this.selectedUser.member?.displayName ?? this.selectedUser.userId;
+      const period = this.adjustPeriodLabel;
       return {
-        give: `Add to ${name}'s all-time message count.`,
-        subtract: `Remove from ${name}'s all-time message count.`,
-        set: `Set ${name}'s all-time message count to an exact amount.`,
+        give: `Add to ${name}'s ${period} message count.`,
+        subtract: `Remove from ${name}'s ${period} message count.`,
+        set: `Set ${name}'s ${period} message count to an exact amount.`,
         reset: `Reset all of ${name}'s message counts (today/week/month/all-time) to 0.`,
       }[this.adjustState.action];
     },
@@ -259,6 +303,10 @@ export default {
           userId: this.selectedUserId,
           action: state.action,
           amount: state.action === "reset" ? undefined : (amount ?? 0),
+          // "Reset all" (see the button below) always resets every period — only give/subtract/set are scoped
+          // to whichever period is selected above.
+          period: state.action === "reset" ? undefined : this.adjustPeriod,
+          channelId: state.action === "give" ? this.giveChannelId || undefined : undefined,
         });
         await this.refreshSelectedUser();
         this.showToast(state.action === "reset" ? "Message counts reset." : "Message count updated.");

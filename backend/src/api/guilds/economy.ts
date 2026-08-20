@@ -8,7 +8,7 @@ import { NON_GAME_TYPES } from "../../plugins/Economy/functions/gameHistory.js";
 import { isValidSnowflake } from "../../utils.js";
 import { loadYamlSafely } from "../../utils/loadYamlSafely.js";
 import { getGuildMemberDisplayInfo, getGuildMemberRoleIds, searchGuildMembersByUsername } from "./discordData.js";
-import { clientError, notFound, ok, serverError, unauthorized } from "../responses.js";
+import { clientError, serverError, unauthorized } from "../responses.js";
 
 const MAX_LEADERBOARD_PAGE_SIZE = 50;
 const DEFAULT_LEADERBOARD_PAGE_SIZE = 10;

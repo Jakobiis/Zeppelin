@@ -242,8 +242,8 @@ export const GuildStore: Module<GuildState, RootState> = {
       commit("setMessagesUser", { guildId, user });
     },
 
-    async adjustMessagesCount(_ctx, { guildId, userId, action, amount }) {
-      return post(`guilds/${guildId}/messages/user/${userId}`, { action, amount });
+    async adjustMessagesCount(_ctx, { guildId, userId, action, amount, period, channelId }) {
+      return post(`guilds/${guildId}/messages/user/${userId}`, { action, amount, period, channelId });
     },
 
     async loadMessagesAnalytics({ commit }, guildId) {

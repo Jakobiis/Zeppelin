@@ -16,6 +16,8 @@ const MAX_LOOKUP_MATCHES = 10;
 const MAX_ADJUST_AMOUNT = 2147483647; // matches MAX_COUNT_VALUE in GuildMessageTrackerCounts
 const TOP_LIST_LIMIT = 10;
 const TOP_CHANNELS_LIMIT = 10;
+const PERIODS = ["daily", "weekly", "monthly", "allTime"] as const;
+type Period = (typeof PERIODS)[number];
 
 const configs = new Configs();
 
@@ -112,9 +114,10 @@ export function initGuildMessageTrackerAPI(router: express.Router) {
     },
   );
 
-  // Manages the all-time count specifically — the closest analogue to Economy's single coin balance. Per-period
-  // (daily/weekly/monthly) corrections are still available via the `-messages set` chat command; this endpoint
-  // deliberately doesn't expose them to keep the dashboard card as simple as Economy's give/subtract/set/reset.
+  // Give/subtract/set act on whichever period the caller picks (defaulting to all-time, same as before this
+  // took a `period` field at all — the dashboard's own default is still "All-time" too, so an old client that
+  // never sends `period` keeps working exactly as it did). Reset with no period resets all four at once (the
+  // dashboard's "Reset all" button); with one, it resets just that period.
   messagesRouter.post(
     "/:guildId/messages/user/:userId",
     requireMessageTrackerManager(),
@@ -128,12 +131,27 @@ export function initGuildMessageTrackerAPI(router: express.Router) {
           return clientError(res, "action must be one of: give, subtract, set, reset");
         }
 
+        const rawPeriod = req.body?.period;
+        if (rawPeriod !== undefined && !PERIODS.includes(rawPeriod)) {
+          return clientError(res, "period must be one of: daily, weekly, monthly, allTime");
+        }
+        const period: Period = rawPeriod ?? "allTime";
+
+        // Only meaningful for "give" — attributes the credited messages to a channel so that channel's own
+        // leaderboard/top-channels stats (see GuildMessageTrackerChannelCounts, otherwise only ever touched by
+        // real messages via recordMessage) stay consistent with a manual credit. Subtract/set/reset have no
+        // sensible channel to apply to (subtracting doesn't know which channel the over-count came from; set/
+        // reset are absolute, not additive), so this is silently ignored for those.
+        const rawChannelId = req.body?.channelId;
+        if (rawChannelId !== undefined && rawChannelId !== null && !isValidSnowflake(rawChannelId)) {
+          return clientError(res, "channelId must be a valid channel ID");
+        }
+
         const repo = GuildMessageTrackerCounts.getGuildInstance(guildId);
 
         if (action === "reset") {
-          await Promise.all(
-            (["daily", "weekly", "monthly", "allTime"] as const).map((period) => repo.setCount(userId, period, 0)),
-          );
+          const periodsToReset = rawPeriod ? [period] : PERIODS;
+          await Promise.all(periodsToReset.map((p) => repo.setCount(userId, p, 0)));
         } else {
           const amount = Number(req.body?.amount);
           if (!Number.isInteger(amount) || amount < 0 || amount > MAX_ADJUST_AMOUNT) {
@@ -141,11 +159,15 @@ export function initGuildMessageTrackerAPI(router: express.Router) {
           }
 
           if (action === "set") {
-            await repo.setCount(userId, "allTime", amount);
+            await repo.setCount(userId, period, amount);
           } else {
             const current = await repo.getForUser(userId);
-            const newValue = action === "give" ? current.allTime + amount : current.allTime - amount;
-            await repo.setCount(userId, "allTime", newValue);
+            const newValue = action === "give" ? current[period] + amount : current[period] - amount;
+            await repo.setCount(userId, period, newValue);
+          }
+
+          if (action === "give" && rawChannelId) {
+            await GuildMessageTrackerChannelCounts.getGuildInstance(guildId).addCount(rawChannelId, userId, period, amount);
           }
         }
 

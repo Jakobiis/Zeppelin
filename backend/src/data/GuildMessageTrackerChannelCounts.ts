@@ -5,9 +5,6 @@ import { dataSource } from "./dataSource.js";
 import { MessageTrackerChannelCount } from "./entities/MessageTrackerChannelCount.js";
 import { MessageCounts } from "./GuildMessageTrackerCounts.js";
 
-// 2^31-1 — matches Counters' MAX_COUNTER_VALUE, safely within the unsigned int columns these are stored in.
-const MAX_COUNT_VALUE = 2147483647;
-
 function currentDailyKey(): string {
   return moment.utc().format("YYYY-MM-DD");
 }
@@ -71,6 +68,49 @@ export class GuildMessageTrackerChannelCounts extends BaseGuildRepository {
         monthlyKey,
         monthlyKey,
       ],
+    );
+  }
+
+  // Credits `amount` messages to `userId` in `channelId`, for one specific period only (mirrors
+  // GuildMessageTrackerCounts.setCount's per-period independence — giving to "allTime" doesn't touch the
+  // daily/weekly/monthly buckets and vice versa). Used when a dashboard "Give" attributes manually-credited
+  // messages to a channel, so that channel's own leaderboard/top-channels stats stay consistent with the
+  // user's overall count instead of only the organic recordMessage path ever touching this table. Same
+  // stale-bucket-resets-to-the-new-amount semantics as recordMessage, just adding `amount` instead of 1.
+  async addCount(channelId: string, userId: string, period: "daily" | "weekly" | "monthly" | "allTime", amount: number): Promise<void> {
+    const dailyKey = currentDailyKey();
+    const weeklyKey = currentWeeklyKey();
+    const monthlyKey = currentMonthlyKey();
+
+    const insertAllTime = period === "allTime" ? amount : 0;
+    const insertDaily = period === "daily" ? amount : 0;
+    const insertWeekly = period === "weekly" ? amount : 0;
+    const insertMonthly = period === "monthly" ? amount : 0;
+
+    let updateSql: string;
+    let updateParams: (string | number)[];
+    if (period === "allTime") {
+      updateSql = "all_time_count = all_time_count + ?";
+      updateParams = [amount];
+    } else if (period === "daily") {
+      updateSql = "daily_count = IF(daily_date = ?, daily_count + ?, ?), daily_date = ?";
+      updateParams = [dailyKey, amount, amount, dailyKey];
+    } else if (period === "weekly") {
+      updateSql = "weekly_count = IF(weekly_start = ?, weekly_count + ?, ?), weekly_start = ?";
+      updateParams = [weeklyKey, amount, amount, weeklyKey];
+    } else {
+      updateSql = "monthly_count = IF(monthly_month = ?, monthly_count + ?, ?), monthly_month = ?";
+      updateParams = [monthlyKey, amount, amount, monthlyKey];
+    }
+
+    await this.counts.query(
+      `
+      INSERT INTO message_tracker_channel_counts
+        (guild_id, channel_id, user_id, all_time_count, daily_count, daily_date, weekly_count, weekly_start, monthly_count, monthly_month)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE ${updateSql}
+    `,
+      [this.guildId, channelId, userId, insertAllTime, insertDaily, dailyKey, insertWeekly, weeklyKey, insertMonthly, monthlyKey, ...updateParams],
     );
   }
 

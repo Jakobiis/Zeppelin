@@ -1121,7 +1121,6 @@ export function deepKeyIntersect(obj, keyReference) {
   return result;
 }
 
-const unknownUsers = new Set();
 const unknownMembers = new Set();
 
 export function resolveUserId(bot: Client, value: string) {

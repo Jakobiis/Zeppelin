@@ -5,8 +5,8 @@ import { CountersPluginType } from "../types.js";
 export async function getTopCounterValues(
   pluginData: GuildPluginData<CountersPluginType>,
   counterName: string,
-  limit: number = 10,
-  offset: number = 0,
+  limit = 10,
+  offset = 0,
 ): Promise<CounterValue[]> {
   const config = pluginData.config.get();
   const counter = config.counters[counterName];
