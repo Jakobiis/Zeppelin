@@ -43,7 +43,10 @@
         "description": "**{count}** messages deleted in {channelMention(channel)}",
         "fields": [
           { "name": "Authors", "value": "{if(not(authorMentions), \"—\", authorMentions)}" },
-          { "name": "Archive", "value": "[View Archive]({archiveUrl})" }
+          {
+            "name": "Archive",
+            "value": "{if(eq(slice(archiveUrl, 0, 4), \"http\"), concat(\"[View Archive](\", archiveUrl, \")\"), archiveUrl)}"
+          }
         ]
       }
     ]
