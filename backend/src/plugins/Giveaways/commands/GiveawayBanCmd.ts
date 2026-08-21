@@ -1,6 +1,9 @@
 import { Snowflake } from "discord.js";
+import moment from "moment-timezone";
 import { guildPluginMessageCommand } from "vety";
 import { commandTypeHelpers as ct } from "../../../commandTypes.js";
+import { humanizeDuration } from "../../../humanizeDuration.js";
+import { DBDateFormat } from "../../../utils.js";
 import { banUserFromGiveaways } from "../functions/giveawayBans.js";
 import { hasGiveawayManagerRole } from "../functions/requireGiveawayManager.js";
 import { GiveawaysPluginType } from "../types.js";
@@ -13,10 +16,17 @@ export const GiveawayBanCmd = guildPluginMessageCommand<GiveawaysPluginType>()({
   trigger: ["giveaway ban", "gw ban", "gw b"],
   permission: null,
 
-  signature: {
-    user: ct.resolvedUser(),
-    reason: ct.string({ required: false, catchAll: true }),
-  },
+  signature: [
+    {
+      user: ct.resolvedUser(),
+      time: ct.delay(),
+      reason: ct.string({ required: false, catchAll: true }),
+    },
+    {
+      user: ct.resolvedUser(),
+      reason: ct.string({ required: false, catchAll: true }),
+    },
+  ],
 
   async run({ pluginData, message, args }) {
     if (!hasGiveawayManagerRole(pluginData, message.member!)) {
@@ -24,7 +34,8 @@ export const GiveawayBanCmd = guildPluginMessageCommand<GiveawaysPluginType>()({
       return;
     }
 
-    const result = await banUserFromGiveaways(pluginData.guild.id, args.user.id, args.reason?.trim() || null);
+    const expiresAt = args["time"] ? moment.utc().add(args["time"], "ms").format(DBDateFormat) : null;
+    const result = await banUserFromGiveaways(pluginData.guild.id, args.user.id, args.reason?.trim() || null, expiresAt);
 
     const config = pluginData.config.get();
     if (config.ban_role_id) {
@@ -47,7 +58,7 @@ export const GiveawayBanCmd = guildPluginMessageCommand<GiveawaysPluginType>()({
 
     void pluginData.state.common.sendSuccessMessage(
       message,
-      `Banned <@${args.user.id}> from giveaways.${args.reason ? ` Reason: ${args.reason.trim()}` : ""}${details.length ? ` (${details.join("; ")})` : ""}`,
+      `Banned <@${args.user.id}> from giveaways${args["time"] ? ` for ${humanizeDuration(args["time"])}` : ""}.${args.reason ? ` Reason: ${args.reason.trim()}` : ""}${details.length ? ` (${details.join("; ")})` : ""}`,
     );
   },
 });

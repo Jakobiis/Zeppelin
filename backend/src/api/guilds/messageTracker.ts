@@ -5,9 +5,9 @@ import { GuildMessageTrackerCounts, MessageCounts } from "../../data/GuildMessag
 import { isValidSnowflake } from "../../utils.js";
 import { loadYamlSafely } from "../../utils/loadYamlSafely.js";
 import {
-  getGuildChannelNameMap,
   getGuildMemberDisplayInfo,
   getGuildMemberRoleIds,
+  resolveChannelNames,
   searchGuildMembersByUsername,
 } from "./discordData.js";
 import { clientError, serverError, unauthorized } from "../responses.js";
@@ -179,6 +179,42 @@ export function initGuildMessageTrackerAPI(router: express.Router) {
     },
   );
 
+  // Top senders within one specific channel — the per-channel counterpart to the top senders lists in
+  // /messages/analytics (see GuildMessageTrackerChannelCounts.getTop, populated by real messages via
+  // recordMessage and by "Give ... to channel" credits via addCount).
+  messagesRouter.get(
+    "/:guildId/messages/channel/:channelId",
+    requireMessageTrackerManager(),
+    async (req: Request, res: Response) => {
+      try {
+        const { guildId, channelId } = req.params;
+        if (!isValidSnowflake(channelId)) return clientError(res, "Invalid channel ID");
+
+        const rawPeriod = req.query.period;
+        if (rawPeriod !== undefined && !PERIODS.includes(rawPeriod as Period)) {
+          return clientError(res, "period must be one of: daily, weekly, monthly, allTime");
+        }
+        const period: Period = (rawPeriod as Period | undefined) ?? "allTime";
+
+        const [topRaw, channelNames] = await Promise.all([
+          GuildMessageTrackerChannelCounts.getGuildInstance(guildId).getTop(channelId, period, TOP_LIST_LIMIT, 0),
+          resolveChannelNames(guildId, [channelId]),
+        ]);
+        const top = await resolveTopList(guildId, topRaw);
+
+        res.json({
+          channelId,
+          period,
+          top,
+          name: channelNames[channelId]?.name ?? null,
+          type: channelNames[channelId]?.type ?? null,
+        });
+      } catch (err) {
+        serverError(res, "Failed to load channel stats");
+      }
+    },
+  );
+
   // Guild-wide analytics for the Messages tab: totals, today's/all-time top senders, and today's top channels.
   messagesRouter.get(
     "/:guildId/messages/analytics",
@@ -189,17 +225,24 @@ export function initGuildMessageTrackerAPI(router: express.Router) {
         const countsRepo = GuildMessageTrackerCounts.getGuildInstance(guildId);
         const channelCountsRepo = GuildMessageTrackerChannelCounts.getGuildInstance(guildId);
 
-        const [summary, topTodayRaw, topAllTimeRaw, topChannelsTodayRaw, channelNames] = await Promise.all([
+        const [summary, topTodayRaw, topAllTimeRaw, topChannelsTodayRaw] = await Promise.all([
           countsRepo.getSummary(),
           countsRepo.getTop("daily", TOP_LIST_LIMIT, 0),
           countsRepo.getTop("allTime", TOP_LIST_LIMIT, 0),
           channelCountsRepo.getTopChannels("daily", TOP_CHANNELS_LIMIT),
-          getGuildChannelNameMap(guildId),
         ]);
 
-        const [topToday, topAllTime] = await Promise.all([resolveTopList(guildId, topTodayRaw), resolveTopList(guildId, topAllTimeRaw)]);
+        const [topToday, topAllTime, channelNames] = await Promise.all([
+          resolveTopList(guildId, topTodayRaw),
+          resolveTopList(guildId, topAllTimeRaw),
+          resolveChannelNames(guildId, topChannelsTodayRaw.map((c) => c.channelId)),
+        ]);
 
-        const topChannelsToday = topChannelsTodayRaw.map((c) => ({ ...c, name: channelNames[c.channelId] ?? null }));
+        const topChannelsToday = topChannelsTodayRaw.map((c) => ({
+          ...c,
+          name: channelNames[c.channelId]?.name ?? null,
+          type: channelNames[c.channelId]?.type ?? null,
+        }));
 
         res.json({ ...summary, topToday, topAllTime, topChannelsToday });
       } catch (err) {

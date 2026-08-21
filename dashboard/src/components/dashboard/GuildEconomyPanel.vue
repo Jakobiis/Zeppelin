@@ -32,13 +32,17 @@
           class="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
           @click="selectUser(m)"
         >
-          {{ m.displayName }} <span class="text-xs text-muted-foreground font-mono">{{ m.id }}</span>
+          <MemberInline :avatar="m.avatar" :display-name="m.displayName" :id="m.id" />
         </button>
       </div>
 
       <div v-if="selectedUser" class="mt-4 border-t border-border pt-4">
-        <div class="font-semibold">{{ selectedUser.member?.displayName ?? selectedUser.userId }}</div>
-        <div class="text-xs text-muted-foreground font-mono">{{ selectedUser.userId }}</div>
+        <MemberInline
+          :avatar="selectedUser.member?.avatar ?? null"
+          :display-name="selectedUser.member?.displayName ?? selectedUser.userId"
+          :id="selectedUser.userId"
+          :size="36"
+        />
         <div class="mt-2 text-2xl font-semibold">
           {{ selectedUser.balance.toLocaleString() }} <span class="text-sm font-normal text-muted-foreground">coins</span>
         </div>
@@ -108,8 +112,8 @@
         >
           <div class="min-w-0 flex items-center gap-2">
             <span class="text-xs text-muted-foreground w-6 shrink-0">#{{ leaderboardOffset + i + 1 }}</span>
-            <button type="button" class="truncate hover:underline text-left" @click="selectUser(leaderboardMember(entry))">
-              {{ entry.member?.displayName ?? entry.userId }}
+            <button type="button" class="min-w-0 hover:underline text-left" @click="selectUser(leaderboardMember(entry))">
+              <MemberInline :avatar="entry.member?.avatar ?? null" :display-name="entry.member?.displayName ?? entry.userId" :id="entry.userId" />
             </button>
           </div>
           <span class="font-medium shrink-0">{{ entry.balance.toLocaleString() }}</span>
@@ -219,6 +223,7 @@ import {
   GuildState,
 } from "../../store/types";
 import ConfirmModal from "./ConfirmModal.vue";
+import MemberInline from "./MemberInline.vue";
 
 const LEADERBOARD_PAGE_SIZE = 10;
 const HISTORY_PAGE_SIZE = 10;
@@ -243,7 +248,7 @@ type AdjustAction = "give" | "subtract" | "set";
 type AdjustState = { action: AdjustAction; defaultAmount: number };
 
 export default {
-  components: { ConfirmModal },
+  components: { ConfirmModal, MemberInline },
 
   props: {
     guildId: { type: String, required: true },

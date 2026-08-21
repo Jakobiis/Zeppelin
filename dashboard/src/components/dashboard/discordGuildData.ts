@@ -84,6 +84,9 @@ const CHANNEL_TYPE_LABELS: Record<number, string> = {
   2: "voice",
   4: "category",
   5: "announcement",
+  10: "announcement thread",
+  11: "thread",
+  12: "private thread",
   13: "stage",
   15: "forum",
 };

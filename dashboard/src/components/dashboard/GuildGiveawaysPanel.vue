@@ -45,13 +45,17 @@
           class="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
           @click="selectContributorUser(m)"
         >
-          {{ m.displayName }} <span class="text-xs text-muted-foreground font-mono">{{ m.id }}</span>
+          <MemberInline :avatar="m.avatar" :display-name="m.displayName" :id="m.id" />
         </button>
       </div>
 
       <div v-if="giveawayContributor" class="mt-4 border-t border-border pt-4">
-        <div class="font-semibold">{{ giveawayContributor.member?.displayName ?? giveawayContributor.userId }}</div>
-        <div class="text-xs text-muted-foreground font-mono">{{ giveawayContributor.userId }}</div>
+        <MemberInline
+          :avatar="giveawayContributor.member?.avatar ?? null"
+          :display-name="giveawayContributor.member?.displayName ?? giveawayContributor.userId"
+          :id="giveawayContributor.userId"
+          :size="36"
+        />
 
         <div v-if="!giveawayContributor.configured" class="mt-2 text-sm text-muted-foreground">
           No contributor role is configured — set <code class="font-mono">contributor_role_id</code> in this plugin's
@@ -100,13 +104,17 @@
           class="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
           @click="selectBanUser(m)"
         >
-          {{ m.displayName }} <span class="text-xs text-muted-foreground font-mono">{{ m.id }}</span>
+          <MemberInline :avatar="m.avatar" :display-name="m.displayName" :id="m.id" />
         </button>
       </div>
 
       <div v-if="giveawayBan" class="mt-4 border-t border-border pt-4">
-        <div class="font-semibold">{{ giveawayBan.member?.displayName ?? giveawayBan.userId }}</div>
-        <div class="text-xs text-muted-foreground font-mono">{{ giveawayBan.userId }}</div>
+        <MemberInline
+          :avatar="giveawayBan.member?.avatar ?? null"
+          :display-name="giveawayBan.member?.displayName ?? giveawayBan.userId"
+          :id="giveawayBan.userId"
+          :size="36"
+        />
 
         <div class="mt-2 text-sm" :class="giveawayBan.banned ? 'text-destructive' : 'text-muted-foreground'">
           {{ giveawayBan.banned ? "Banned from giveaways" : "Not banned" }}
@@ -114,21 +122,26 @@
         <div v-if="giveawayBan.banned && giveawayBan.reason" class="mt-1 text-sm text-muted-foreground">
           Reason: {{ giveawayBan.reason }}
         </div>
+        <div v-if="giveawayBan.banned" class="mt-1 text-sm text-muted-foreground">
+          {{ giveawayBan.expiresAt ? `Expires: ${formatDate(giveawayBan.expiresAt)}` : "Permanent" }}
+        </div>
         <div v-if="!giveawayBan.roleConfigured" class="mt-1 text-xs text-muted-foreground">
           No ban role is configured — set <code class="font-mono">ban_role_id</code> in this plugin's YAML config to
           also grant/revoke a role on ban.
         </div>
 
-        <!-- Only shown while composing a new ban — an existing one's reason is just shown as text above, not
-             re-editable here (re-banning an already-banned user is a no-op on the enforcement side anyway; see
+        <!-- Only shown while composing a new ban — an existing one's reason/duration is just shown as text above,
+             not re-editable here (re-banning an already-banned user is a no-op on the enforcement side anyway; see
              banUserFromGiveaways). -->
-        <input
-          v-if="!giveawayBan.banned"
-          type="text"
-          class="field-input mt-3"
-          placeholder="Reason (optional)"
-          v-model="banReason"
-        />
+        <template v-if="!giveawayBan.banned">
+          <input type="text" class="field-input mt-3" placeholder="Reason (optional)" v-model="banReason" />
+          <input
+            type="text"
+            class="field-input mt-2"
+            placeholder="Duration (optional, e.g. 1d, 12h — leave blank for permanent)"
+            v-model="banDuration"
+          />
+        </template>
 
         <div class="mt-3 flex flex-wrap gap-2">
           <button
@@ -159,7 +172,12 @@
       <div v-else class="flex flex-col gap-1">
         <div v-for="(hoster, i) in topHosters" :key="hoster.hostId" class="flex items-center gap-3 text-sm py-1">
           <span class="w-5 shrink-0 text-muted-foreground font-mono">{{ i + 1 }}</span>
-          <span class="min-w-0 flex-1 truncate">{{ memberName(hoster.hostId) }}</span>
+          <MemberInline
+            class="min-w-0 flex-1"
+            :avatar="memberNames[hoster.hostId]?.avatar ?? null"
+            :display-name="memberName(hoster.hostId)"
+            :id="hoster.hostId"
+          />
           <span class="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
             >{{ hoster.count }} giveaway{{ hoster.count === 1 ? "" : "s" }}</span
           >
@@ -582,6 +600,7 @@ import Close from "vue-material-design-icons/Close.vue";
 import ColorPickerField from "./ColorPickerField.vue";
 import ComboboxField from "./ComboboxField.vue";
 import ConfirmModal from "./ConfirmModal.vue";
+import MemberInline from "./MemberInline.vue";
 import RoleChannelPickerField from "./RoleChannelPickerField.vue";
 import RoleEntryMapField, { RoleEntryMapRow } from "./RoleEntryMapField.vue";
 import RoleListField from "./RoleListField.vue";
@@ -642,6 +661,7 @@ export default {
     RoleListField,
     RoleEntryMapField,
     ConfirmModal,
+    MemberInline,
     Close,
   },
 
@@ -673,6 +693,7 @@ export default {
       banLookupTimeout: null as ReturnType<typeof setTimeout> | null,
       banUpdating: false,
       banReason: "",
+      banDuration: "",
     };
   },
 
@@ -1084,6 +1105,7 @@ export default {
       this.banLookupQuery = "";
       this.banLookupResults = [];
       this.banReason = "";
+      this.banDuration = "";
       await this.$store.dispatch("guilds/loadGiveawayBanStatus", { guildId: this.guildId, userId: member.id }).catch(() => {});
     },
 
@@ -1096,8 +1118,10 @@ export default {
           userId: this.giveawayBan.userId,
           ban,
           reason: ban ? this.banReason.trim() || null : null,
+          duration: ban ? this.banDuration.trim() || null : null,
         });
         this.banReason = "";
+        this.banDuration = "";
 
         const details: string[] = [];
         if (ban && result?.removedFromRunning > 0) {

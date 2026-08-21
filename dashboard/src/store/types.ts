@@ -85,6 +85,8 @@ export interface GiveawayBanStatus {
   banned: boolean;
   reason: string | null;
   bannedAt: string | null;
+  // null = permanent ban.
+  expiresAt: string | null;
   // Whether ban_role_id is configured — unlike GiveawayContributorStatus's "configured", a ban can still be
   // applied/enforced with no role set (the role is purely an optional cosmetic add-on here), so this only
   // affects whether hasRole means anything.
@@ -213,6 +215,7 @@ export interface MessagesTopChannelEntry {
   channelId: string;
   count: number;
   name: string | null;
+  type: number | null;
 }
 
 export interface MessagesAnalytics {
@@ -222,6 +225,14 @@ export interface MessagesAnalytics {
   topToday: MessagesTopEntry[];
   topAllTime: MessagesTopEntry[];
   topChannelsToday: MessagesTopChannelEntry[];
+}
+
+export interface MessagesChannelStats {
+  channelId: string;
+  period: "daily" | "weekly" | "monthly" | "allTime";
+  top: MessagesTopEntry[];
+  name: string | null;
+  type: number | null;
 }
 
 export interface GuildState {
@@ -293,6 +304,9 @@ export interface GuildState {
   };
   messagesAnalytics: {
     [guildId: string]: MessagesAnalytics | null;
+  };
+  messagesChannelStats: {
+    [guildId: string]: MessagesChannelStats | null;
   };
 }
 

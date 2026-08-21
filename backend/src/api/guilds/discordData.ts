@@ -130,17 +130,71 @@ export async function searchGuildMembersByUsername(guildId: string, query: strin
   }
 }
 
-// Bulk channel name lookup, sharing the same 30s cache as the /discord-data/channels route below (same cache
-// key) — used server-side by callers that want a few channel names without a round trip through that route
-// themselves (e.g. the Messages dashboard's "top channels" widget, see api/guilds/messageTracker.ts). Returns an
-// id -> name map; channel IDs with no match (deleted since, or just never fetched) are simply absent.
-export async function getGuildChannelNameMap(guildId: string): Promise<Record<string, string>> {
+// Bulk channel name+type lookup, sharing the same 30s cache as the /discord-data/channels route below (same
+// cache key for the non-thread half) — used server-side by callers that want a few channel names without a round
+// trip through that route themselves (e.g. the Messages dashboard's "top channels" widget, see
+// api/guilds/messageTracker.ts). Also merges in currently-active threads (GET .../threads/active is a separate
+// Discord endpoint — plain GET .../channels never includes them), since message tracking records messages sent
+// in a thread under the thread's own channel id, not its parent's. Archived threads still won't resolve — there's
+// no bulk "all threads ever" endpoint, only per-parent archived-thread listing, which isn't worth the N+1 calls
+// just for a display name. Returns an id -> {name, type} map; channel ids with no match (deleted, an archived
+// thread, or just never fetched) are simply absent.
+export async function getGuildChannelNameMap(guildId: string): Promise<Record<string, { name: string; type: number }>> {
   try {
-    const channels = await cachedDiscordBotRequest(`channels:${guildId}`, `guilds/${guildId}/channels`);
-    return Object.fromEntries((channels as any[]).map((c) => [c.id, c.name]));
+    const [channels, activeThreads] = await Promise.all([
+      cachedDiscordBotRequest(`channels:${guildId}`, `guilds/${guildId}/channels`),
+      cachedDiscordBotRequest(`threads:${guildId}`, `guilds/${guildId}/threads/active`).catch(() => ({ threads: [] })),
+    ]);
+
+    const map: Record<string, { name: string; type: number }> = {};
+    for (const c of channels as any[]) {
+      map[c.id] = { name: c.name, type: c.type };
+    }
+    for (const t of (activeThreads?.threads as any[]) ?? []) {
+      if (!map[t.id]) map[t.id] = { name: t.name, type: t.type };
+    }
+    return map;
   } catch {
     return {};
   }
+}
+
+// Direct single-channel fetch (GET /channels/{id}) — resolves a channel the bulk /guilds/{id}/channels and
+// /guilds/{id}/threads/active endpoints don't cover, chiefly an *archived* thread (there's no bulk "all threads
+// ever" endpoint, only per-parent archived-thread listing). Works for any channel the bot can still see
+// regardless of active/archived state, at the cost of one call per id — so this is only ever used as a fallback
+// for specific ids that came up empty in the bulk map (see resolveChannelNames below), never for building a full
+// channel list.
+async function getDiscordChannel(channelId: string): Promise<{ name: string; type: number } | null> {
+  try {
+    const channel = await cachedDiscordBotRequest(`channel:${channelId}`, `channels/${channelId}`);
+    return { name: channel.name, type: channel.type };
+  } catch {
+    return null;
+  }
+}
+
+// Resolves a specific, small list of channel ids to {name, type}: the guild-wide bulk map (getGuildChannelNameMap)
+// first, falling back to a direct per-channel fetch only for ids that come up empty there. Used by the Messages
+// dashboard's "top channels" widget and single-channel stats route (api/guilds/messageTracker.ts), where the id
+// list is always small (≤10) so the fallback's extra calls stay cheap.
+export async function resolveChannelNames(guildId: string, channelIds: string[]): Promise<Record<string, { name: string; type: number }>> {
+  const map = await getGuildChannelNameMap(guildId);
+  const result: Record<string, { name: string; type: number }> = {};
+  const unresolved: string[] = [];
+  for (const id of channelIds) {
+    if (map[id]) result[id] = map[id];
+    else unresolved.push(id);
+  }
+
+  if (unresolved.length) {
+    const fetched = await Promise.all(unresolved.map((id) => getDiscordChannel(id)));
+    unresolved.forEach((id, i) => {
+      if (fetched[i]) result[id] = fetched[i]!;
+    });
+  }
+
+  return result;
 }
 
 // Giveaway managers need role and channel names to create a giveaway, even when they are not allowed to view

@@ -1,5 +1,5 @@
 import moment from "moment-timezone";
-import { Repository } from "typeorm";
+import { Brackets, Repository } from "typeorm";
 import { BaseGuildRepository } from "./BaseGuildRepository.js";
 import { dataSource } from "./dataSource.js";
 import { DBDateFormat } from "../utils.js";
@@ -18,22 +18,43 @@ export class GuildGiveawayBans extends BaseGuildRepository {
     this.bans = dataSource.getRepository(GiveawayBan);
   }
 
+  // A row with a past expires_at reads as "not currently banned" here — see the class comment on ban() for why
+  // the row itself isn't deleted when that happens.
+  private notExpired() {
+    return new Brackets((qb) =>
+      qb.where("expires_at IS NULL").orWhere("expires_at > :now", { now: moment.utc().format(DBDateFormat) }),
+    );
+  }
+
   async isBanned(userId: string): Promise<boolean> {
-    const row = await this.bans.findOne({ where: { guild_id: this.guildId, user_id: userId } });
+    const row = await this.bans
+      .createQueryBuilder()
+      .where("guild_id = :guildId", { guildId: this.guildId })
+      .andWhere("user_id = :userId", { userId })
+      .andWhere(this.notExpired())
+      .getOne();
     return row != null;
   }
 
   // Used where the ban's own details (not just the yes/no from isBanned) are shown — the dashboard's "Giveaway
-  // ban" card, so staff can see *why* someone was banned without needing to dig through mod logs/chat history.
+  // ban" card, so staff can see *why* (and until when) someone was banned without needing to dig through mod
+  // logs/chat history. Same "expired = not banned" filtering as isBanned.
   getBan(userId: string): Promise<GiveawayBan | null> {
-    return this.bans.findOne({ where: { guild_id: this.guildId, user_id: userId } });
+    return this.bans
+      .createQueryBuilder()
+      .where("guild_id = :guildId", { guildId: this.guildId })
+      .andWhere("user_id = :userId", { userId })
+      .andWhere(this.notExpired())
+      .getOne();
   }
 
-  async ban(userId: string, reason: string | null): Promise<void> {
+  // expiresAt: null for a permanent ban. Re-banning an already-banned user (e.g. to change the reason/duration)
+  // overwrites both rather than requiring an unban first.
+  async ban(userId: string, reason: string | null, expiresAt: string | null): Promise<void> {
     await this.bans.query(
-      `INSERT INTO giveaway_bans (guild_id, user_id, created_at, reason) VALUES (?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE reason = VALUES(reason)`,
-      [this.guildId, userId, moment.utc().format(DBDateFormat), reason],
+      `INSERT INTO giveaway_bans (guild_id, user_id, created_at, reason, expires_at) VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE reason = VALUES(reason), expires_at = VALUES(expires_at)`,
+      [this.guildId, userId, moment.utc().format(DBDateFormat), reason, expiresAt],
     );
   }
 

@@ -32,20 +32,24 @@
           class="block w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
           @click="selectUser(m)"
         >
-          {{ m.displayName }} <span class="text-xs text-muted-foreground font-mono">{{ m.id }}</span>
+          <MemberInline :avatar="m.avatar" :display-name="m.displayName" :id="m.id" />
         </button>
       </div>
 
       <div v-if="selectedUser" class="mt-4 border-t border-border pt-4">
-        <div class="font-semibold">{{ selectedUser.member?.displayName ?? selectedUser.userId }}</div>
-        <div class="text-xs text-muted-foreground font-mono">{{ selectedUser.userId }}</div>
+        <MemberInline
+          :avatar="selectedUser.member?.avatar ?? null"
+          :display-name="selectedUser.member?.displayName ?? selectedUser.userId"
+          :id="selectedUser.userId"
+          :size="36"
+        />
 
         <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
           <button
             v-for="p in periods"
             :key="p.value"
             type="button"
-            class="text-left rounded-lg px-2 py-1 -mx-2 transition-colors"
+            class="text-left rounded-lg px-2 py-1 transition-colors"
             :class="adjustPeriod === p.value ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'"
             @click="adjustPeriod = p.value"
           >
@@ -93,8 +97,8 @@
         >
           <div class="min-w-0 flex items-center gap-2">
             <span class="text-xs text-muted-foreground w-4 shrink-0">#{{ i + 1 }}</span>
-            <button type="button" class="truncate hover:underline text-left" @click="selectUser(topEntryMember(entry))">
-              {{ entry.member?.displayName ?? entry.userId }}
+            <button type="button" class="min-w-0 hover:underline text-left" @click="selectUser(topEntryMember(entry))">
+              <MemberInline :avatar="entry.member?.avatar ?? null" :display-name="entry.member?.displayName ?? entry.userId" :id="entry.userId" />
             </button>
           </div>
           <span class="font-medium shrink-0">{{ entry.count.toLocaleString() }}</span>
@@ -113,8 +117,8 @@
         >
           <div class="min-w-0 flex items-center gap-2">
             <span class="text-xs text-muted-foreground w-4 shrink-0">#{{ i + 1 }}</span>
-            <button type="button" class="truncate hover:underline text-left" @click="selectUser(topEntryMember(entry))">
-              {{ entry.member?.displayName ?? entry.userId }}
+            <button type="button" class="min-w-0 hover:underline text-left" @click="selectUser(topEntryMember(entry))">
+              <MemberInline :avatar="entry.member?.avatar ?? null" :display-name="entry.member?.displayName ?? entry.userId" :id="entry.userId" />
             </button>
           </div>
           <span class="font-medium shrink-0">{{ entry.count.toLocaleString() }}</span>
@@ -123,7 +127,8 @@
     </div>
     </div>
 
-    <div class="min-w-0 bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 flex flex-col gap-4">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Top channels today</h3>
       <div v-if="!analytics.topChannelsToday.length" class="text-sm text-muted-foreground">No messages sent yet today.</div>
       <div class="flex flex-col gap-2">
@@ -134,11 +139,62 @@
         >
           <div class="min-w-0 flex items-center gap-2">
             <span class="text-xs text-muted-foreground w-4 shrink-0">#{{ i + 1 }}</span>
-            <span class="truncate">{{ entry.name ? `#${entry.name}` : entry.channelId }}</span>
+            <button type="button" class="min-w-0 truncate hover:underline text-left" @click="selectChannelForStats(entry.channelId)">
+              {{ entry.name ? `#${entry.name}` : entry.channelId }}
+              <span v-if="entry.type != null" class="text-muted-foreground">({{ channelTypeLabel(entry.type) }})</span>
+            </button>
           </div>
           <span class="font-medium shrink-0">{{ entry.count.toLocaleString() }}</span>
         </div>
       </div>
+    </div>
+
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Channel stats</h3>
+      <RoleChannelPickerField
+        :guild-id="guildId"
+        entity-type="channel"
+        :model-value="statsChannelId"
+        @update:model-value="onStatsChannelChange"
+      />
+
+      <template v-if="statsChannelId">
+        <div v-if="channelStats?.name" class="mt-2 text-sm text-muted-foreground">
+          #{{ channelStats.name }}
+          <span v-if="channelStats.type != null">({{ channelTypeLabel(channelStats.type) }})</span>
+        </div>
+
+        <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <button
+            v-for="p in periods"
+            :key="p.value"
+            type="button"
+            class="text-left rounded-lg px-2 py-1 transition-colors"
+            :class="statsPeriod === p.value ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'"
+            @click="onStatsPeriodChange(p.value)"
+          >
+            {{ p.label }}
+          </button>
+        </div>
+
+        <div class="mt-3 flex flex-col gap-2">
+          <div v-if="!channelStats?.top.length" class="text-sm text-muted-foreground">No messages tracked in this channel yet.</div>
+          <div
+            v-for="(entry, i) in channelStats?.top ?? []"
+            :key="entry.userId"
+            class="flex items-center justify-between gap-2 text-sm border border-border rounded-md px-2 py-1.5"
+          >
+            <div class="min-w-0 flex items-center gap-2">
+              <span class="text-xs text-muted-foreground w-4 shrink-0">#{{ i + 1 }}</span>
+              <button type="button" class="min-w-0 hover:underline text-left" @click="selectUser(topEntryMember(entry))">
+                <MemberInline :avatar="entry.member?.avatar ?? null" :display-name="entry.member?.displayName ?? entry.userId" :id="entry.userId" />
+              </button>
+            </div>
+            <span class="font-medium shrink-0">{{ entry.count.toLocaleString() }}</span>
+          </div>
+        </div>
+      </template>
+    </div>
     </div>
   </div>
 
@@ -165,8 +221,10 @@
 <script lang="ts">
 import { mapState } from "vuex";
 import { ApiError } from "../../api";
-import { MessagesAnalytics, MessagesMemberInfo, MessagesTopEntry, MessagesUserInfo, GuildState } from "../../store/types";
+import { MessagesAnalytics, MessagesChannelStats, MessagesMemberInfo, MessagesTopEntry, MessagesUserInfo, GuildState } from "../../store/types";
 import ConfirmModal from "./ConfirmModal.vue";
+import { channelTypeLabel } from "./discordGuildData";
+import MemberInline from "./MemberInline.vue";
 import RoleChannelPickerField from "./RoleChannelPickerField.vue";
 
 const EMPTY_ANALYTICS: MessagesAnalytics = {
@@ -190,7 +248,7 @@ const PERIODS: { value: Period; label: string }[] = [
 ];
 
 export default {
-  components: { ConfirmModal, RoleChannelPickerField },
+  components: { ConfirmModal, MemberInline, RoleChannelPickerField },
 
   props: {
     guildId: { type: String, required: true },
@@ -204,6 +262,8 @@ export default {
       selectedUserId: null as string | null,
       adjustPeriod: "allTime" as Period,
       giveChannelId: null as string | null,
+      statsChannelId: null as string | null,
+      statsPeriod: "allTime" as Period,
       adjustState: null as AdjustState | null,
       toastMessage: null as string | null,
       toastTimeout: null as ReturnType<typeof setTimeout> | null,
@@ -217,6 +277,9 @@ export default {
       },
       selectedUser(state: GuildState): MessagesUserInfo | null {
         return state.messagesUser[this.guildId] || null;
+      },
+      channelStats(state: GuildState): MessagesChannelStats | null {
+        return state.messagesChannelStats[this.guildId] || null;
       },
     }),
 
@@ -260,6 +323,14 @@ export default {
       return entry.member ?? { id: entry.userId, username: entry.userId, displayName: entry.userId, avatar: null };
     },
 
+    channelTypeLabel,
+
+    async selectChannelForStats(channelId: string) {
+      this.statsChannelId = channelId;
+      this.statsPeriod = "daily";
+      await this.refreshChannelStats();
+    },
+
     onLookupInput(value: string) {
       this.lookupQuery = value;
       if (this.lookupTimeout) clearTimeout(this.lookupTimeout);
@@ -286,6 +357,23 @@ export default {
     async refreshSelectedUser() {
       if (!this.selectedUserId) return;
       await this.$store.dispatch("guilds/loadMessagesUser", { guildId: this.guildId, userId: this.selectedUserId });
+    },
+
+    async onStatsChannelChange(channelId: string | null) {
+      this.statsChannelId = channelId;
+      await this.refreshChannelStats();
+    },
+
+    async onStatsPeriodChange(period: Period) {
+      this.statsPeriod = period;
+      await this.refreshChannelStats();
+    },
+
+    async refreshChannelStats() {
+      if (!this.statsChannelId) return;
+      await this.$store
+        .dispatch("guilds/loadMessagesChannelStats", { guildId: this.guildId, channelId: this.statsChannelId, period: this.statsPeriod })
+        .catch(() => {});
     },
 
     promptAdjust(action: AdjustAction, defaultAmount = 1) {

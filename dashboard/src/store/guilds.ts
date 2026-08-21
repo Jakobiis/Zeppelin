@@ -28,6 +28,7 @@ export const GuildStore: Module<GuildState, RootState> = {
     messagesAccess: {},
     messagesUser: {},
     messagesAnalytics: {},
+    messagesChannelStats: {},
   },
 
   actions: {
@@ -223,8 +224,8 @@ export const GuildStore: Module<GuildState, RootState> = {
 
     // Returns the raw result (removedFromRunning/rerolledFromGiveawayIds on a ban) so the component can surface
     // it in a toast — loadGiveawayBanStatus is dispatched separately afterward to refresh the full card state.
-    setGiveawayBanned(_ctx, { guildId, userId, ban, reason }) {
-      return post(`guilds/${guildId}/giveaways/ban/${userId}`, { ban, reason });
+    setGiveawayBanned(_ctx, { guildId, userId, ban, reason, duration }) {
+      return post(`guilds/${guildId}/giveaways/ban/${userId}`, { ban, reason, duration });
     },
 
     async loadMessagesAccess({ commit }, guildId) {
@@ -249,6 +250,11 @@ export const GuildStore: Module<GuildState, RootState> = {
     async loadMessagesAnalytics({ commit }, guildId) {
       const analytics = await get(`guilds/${guildId}/messages/analytics`);
       commit("setMessagesAnalytics", { guildId, analytics });
+    },
+
+    async loadMessagesChannelStats({ commit }, { guildId, channelId, period }) {
+      const stats = await get(`guilds/${guildId}/messages/channel/${channelId}`, { period });
+      commit("setMessagesChannelStats", { guildId, stats });
     },
   },
 
@@ -378,6 +384,10 @@ export const GuildStore: Module<GuildState, RootState> = {
 
     setMessagesAnalytics(state: GuildState, { guildId, analytics }) {
       state.messagesAnalytics = { ...state.messagesAnalytics, [guildId]: analytics };
+    },
+
+    setMessagesChannelStats(state: GuildState, { guildId, stats }) {
+      state.messagesChannelStats = { ...state.messagesChannelStats, [guildId]: stats };
     },
   },
 };

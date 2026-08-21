@@ -1,4 +1,5 @@
 import express, { NextFunction, Request, Response } from "express";
+import moment from "moment-timezone";
 import { GiveawayEntries } from "../../data/GiveawayEntries.js";
 import { Configs } from "../../data/Configs.js";
 import { GuildGiveawayBans } from "../../data/GuildGiveawayBans.js";
@@ -7,7 +8,7 @@ import { createGiveawayRecord } from "../../plugins/Giveaways/functions/createGi
 import { finalizeGiveaway, rerollGiveaway } from "../../plugins/Giveaways/functions/finalizeGiveaway.js";
 import { banUserFromGiveaways, unbanUserFromGiveaways } from "../../plugins/Giveaways/functions/giveawayBans.js";
 import { parseMessagePeriod } from "../../plugins/MessageTracker/functions/messagePeriods.js";
-import { convertDelayStringToMS, isValidSnowflake } from "../../utils.js";
+import { convertDelayStringToMS, DBDateFormat, isValidSnowflake } from "../../utils.js";
 import { loadYamlSafely } from "../../utils/loadYamlSafely.js";
 import { getGuildMemberDisplayInfo, getGuildMemberRoleIds, searchGuildMembersByUsername, setGuildMemberRole } from "./discordData.js";
 import { clientError, notFound, ok, serverError, unauthorized } from "../responses.js";
@@ -247,6 +248,7 @@ export function initGuildGiveawaysAPI(router: express.Router) {
           banned: ban != null,
           reason: ban?.reason ?? null,
           bannedAt: ban?.created_at ?? null,
+          expiresAt: ban?.expires_at ?? null,
           roleConfigured: roleId != null,
           hasRole: roleId != null ? (memberRoleIds?.includes(roleId) ?? false) : false,
           member,
@@ -271,9 +273,20 @@ export function initGuildGiveawaysAPI(router: express.Router) {
 
         if (ban) {
           const rawReason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, MAX_BAN_REASON_LENGTH) : "";
-          const result = await banUserFromGiveaways(guildId, userId, rawReason || null);
+
+          const rawDuration = typeof req.body?.duration === "string" ? req.body.duration.trim() : "";
+          let expiresAt: string | null = null;
+          if (rawDuration) {
+            const durationMs = convertDelayStringToMS(rawDuration);
+            if (!durationMs || durationMs <= 0) {
+              return clientError(res, "Invalid duration — use a delay string like `1d`, `30m`, or `6h`, or leave it blank for a permanent ban");
+            }
+            expiresAt = moment.utc().add(durationMs, "ms").format(DBDateFormat);
+          }
+
+          const result = await banUserFromGiveaways(guildId, userId, rawReason || null, expiresAt);
           if (roleId) await setGuildMemberRole(guildId, userId, roleId, true).catch(() => null);
-          res.json({ banned: true, ...result });
+          res.json({ banned: true, expiresAt, ...result });
         } else {
           await unbanUserFromGiveaways(guildId, userId);
           if (roleId) await setGuildMemberRole(guildId, userId, roleId, false).catch(() => null);
