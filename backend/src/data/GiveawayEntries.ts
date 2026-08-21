@@ -45,4 +45,10 @@ export class GiveawayEntries extends BaseRepository {
   async remove(giveawayId: number, userId: string): Promise<void> {
     await this.entries.delete({ giveaway_id: giveawayId, user_id: userId });
   }
+
+  // Called when a finished giveaway itself is deleted (see GuildGiveaways#del) — there's no FK/cascade between
+  // the two tables, so entries have to be cleared out explicitly or they'd be orphaned.
+  async deleteForGiveaway(giveawayId: number): Promise<void> {
+    await this.entries.delete({ giveaway_id: giveawayId });
+  }
 }

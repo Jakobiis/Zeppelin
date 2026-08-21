@@ -100,7 +100,12 @@
       </div>
     </div>
 
-    <GuildGiveawaysPanel v-if="mode === 'giveaways' && isGiveawayManager" class="mt-4" :guild-id="String($route.params.guildId)" />
+    <GuildGiveawaysPanel
+      v-if="mode === 'giveaways' && isGiveawayManager"
+      class="mt-4"
+      :guild-id="String($route.params.guildId)"
+      :can-edit-config="canEditConfig"
+    />
     <GuildEconomyPanel v-if="mode === 'economy' && isEconomyManager" class="mt-4" :guild-id="String($route.params.guildId)" />
     <GuildMessagesPanel v-if="mode === 'messages' && isMessageTrackerManager" class="mt-4" :guild-id="String($route.params.guildId)" />
   </div>

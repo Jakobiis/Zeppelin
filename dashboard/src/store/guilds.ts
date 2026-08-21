@@ -144,6 +144,14 @@ export const GuildStore: Module<GuildState, RootState> = {
       await dispatch("loadGiveawayAnalytics", guildId);
     },
 
+    // Finished-only (running giveaways must be cancelled first) — doesn't touch loadGiveaways since a finished
+    // giveaway was never in that (running-only) list to begin with. Caller re-fetches its "Recently finished"
+    // page itself afterwards, same as it already does after end/cancel/reroll.
+    async deleteGiveaway({ dispatch }, { guildId, giveawayId }) {
+      await post(`guilds/${guildId}/giveaways/${giveawayId}/delete`);
+      await dispatch("loadGiveawayAnalytics", guildId);
+    },
+
     async loadGiveawayTemplates({ commit }, guildId) {
       const templates = await get(`guilds/${guildId}/giveaways/templates`);
       commit("setGiveawayTemplates", { guildId, templates });

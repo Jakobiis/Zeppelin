@@ -143,4 +143,8 @@ export class GuildGiveaways extends BaseGuildRepository {
   async update(id: number, data: Partial<Giveaway>): Promise<void> {
     await this.giveaways.update({ id, guild_id: this.guildId }, data);
   }
+
+  async del(id: number): Promise<void> {
+    await this.giveaways.delete({ id, guild_id: this.guildId });
+  }
 }

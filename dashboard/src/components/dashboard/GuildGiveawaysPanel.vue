@@ -273,8 +273,9 @@
             <span v-else>Won by {{ currentWinnerIds(giveaway).map(memberName).join(", ") }}</span>
           </div>
           <div class="text-xs text-muted-foreground">ended {{ formatDate(giveaway.ended_at) }}</div>
-          <div class="mt-1" v-if="giveaway.status === 'ended'">
-            <button type="button" class="btn-secondary" @click="promptReroll(giveaway)">Reroll</button>
+          <div class="mt-1 flex flex-wrap gap-2" v-if="giveaway.status === 'ended' || canEditConfig">
+            <button type="button" class="btn-secondary" v-if="giveaway.status === 'ended'" @click="promptReroll(giveaway)">Reroll</button>
+            <button type="button" class="btn-remove" v-if="canEditConfig" @click="promptDelete(giveaway)">Delete</button>
           </div>
         </div>
       </div>
@@ -622,7 +623,7 @@ const ROLE_FIELD_DEFS: { key: "required_role_ids" | "bypass_role_ids" | "blackli
   { key: "blacklisted_role_ids", label: "Blacklisted roles" },
 ];
 
-type ConfirmState = { type: "end" | "cancel" | "reroll"; giveaway: GiveawayApiItem };
+type ConfirmState = { type: "end" | "cancel" | "reroll" | "delete"; giveaway: GiveawayApiItem };
 
 function defaultForm() {
   return {
@@ -667,6 +668,7 @@ export default {
 
   props: {
     guildId: { type: String, required: true },
+    canEditConfig: { type: Boolean, default: false },
   },
 
   data() {
@@ -754,7 +756,9 @@ export default {
 
     confirmTitle() {
       if (!this.confirmState) return "";
-      return { end: "End giveaway", cancel: "Cancel giveaway", reroll: "Reroll giveaway" }[this.confirmState.type];
+      return { end: "End giveaway", cancel: "Cancel giveaway", reroll: "Reroll giveaway", delete: "Delete giveaway" }[
+        this.confirmState.type
+      ];
     },
 
     confirmMessage() {
@@ -763,12 +767,13 @@ export default {
       const label = `${state.giveaway.prize} (${state.giveaway.id})`;
       if (state.type === "end") return `End giveaway ${label} now and pick winner(s)?`;
       if (state.type === "cancel") return `Cancel giveaway ${label}? No winners will be picked.`;
+      if (state.type === "delete") return `Permanently delete giveaway ${label}? This can't be undone.`;
       return `Reroll winner(s) for giveaway ${label}?`;
     },
 
     confirmLabel() {
       if (!this.confirmState) return "Confirm";
-      return { end: "End now", cancel: "Cancel giveaway", reroll: "Reroll" }[this.confirmState.type];
+      return { end: "End now", cancel: "Cancel giveaway", reroll: "Reroll", delete: "Delete" }[this.confirmState.type];
     },
 
     rerollWinnerOptions() {
@@ -1000,6 +1005,10 @@ export default {
       this.confirmState = { type: "reroll", giveaway };
     },
 
+    promptDelete(giveaway: GiveawayApiItem) {
+      this.confirmState = { type: "delete", giveaway };
+    },
+
     async onConfirmModal({ selectedValues }: { amount: number | undefined; selectedValues: string[] }) {
       const state = this.confirmState;
       if (!state) return;
@@ -1011,6 +1020,13 @@ export default {
       } else if (state.type === "cancel") {
         await this.$store.dispatch("guilds/cancelGiveaway", { guildId: this.guildId, giveawayId: state.giveaway.id });
         await this.fetchFinishedPage();
+      } else if (state.type === "delete") {
+        try {
+          await this.$store.dispatch("guilds/deleteGiveaway", { guildId: this.guildId, giveawayId: state.giveaway.id });
+          await this.fetchFinishedPage();
+        } catch (err) {
+          this.showToast(err instanceof ApiError && err.body?.error ? err.body.error : "Failed to delete giveaway.");
+        }
       } else {
         if (selectedValues.length === 0) {
           this.showToast("Select at least one winner to reroll.");

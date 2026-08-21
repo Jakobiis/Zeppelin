@@ -1,3 +1,4 @@
+import { ApiPermissions } from "@zeppelinbot/shared/apiPermissions.js";
 import express, { NextFunction, Request, Response } from "express";
 import moment from "moment-timezone";
 import { GiveawayEntries } from "../../data/GiveawayEntries.js";
@@ -11,6 +12,7 @@ import { parseMessagePeriod } from "../../plugins/MessageTracker/functions/messa
 import { convertDelayStringToMS, DBDateFormat, isValidSnowflake } from "../../utils.js";
 import { loadYamlSafely } from "../../utils/loadYamlSafely.js";
 import { getGuildMemberDisplayInfo, getGuildMemberRoleIds, searchGuildMembersByUsername, setGuildMemberRole } from "./discordData.js";
+import { requireGuildPermission } from "../permissions.js";
 import { clientError, notFound, ok, serverError, unauthorized } from "../responses.js";
 
 const MAX_ROLES_PER_FIELD = 20;
@@ -545,6 +547,29 @@ export function initGuildGiveawaysAPI(router: express.Router) {
         ok(res);
       } catch (err) {
         serverError(res, "Failed to cancel giveaway");
+      }
+    },
+  );
+
+  // Permanently removes a finished giveaway's record and entries — gated on true config-edit access on top of
+  // requireGiveawayManager(), not just giveaway-manager status, since unlike end/cancel/reroll this can't be
+  // undone. Running giveaways must be cancelled first (use /cancel), so they're never eligible for this route.
+  giveawaysRouter.post(
+    "/:guildId/giveaways/:id/delete",
+    requireGiveawayManager(),
+    requireGuildPermission(ApiPermissions.EditConfig),
+    async (req: Request, res: Response) => {
+      try {
+        const repo = GuildGiveaways.getGuildInstance(req.params.guildId);
+        const giveaway = await repo.find(Number(req.params.id));
+        if (!giveaway) return notFound(res);
+        if (giveaway.status === "running") return clientError(res, "Cancel the giveaway before deleting it");
+
+        await giveawayEntries.deleteForGiveaway(giveaway.id);
+        await repo.del(giveaway.id);
+        ok(res);
+      } catch (err) {
+        serverError(res, "Failed to delete giveaway");
       }
     },
   );
