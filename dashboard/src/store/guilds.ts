@@ -27,7 +27,9 @@ export const GuildStore: Module<GuildState, RootState> = {
     giveawayBan: {},
     messagesAccess: {},
     messagesUser: {},
-    messagesAnalytics: {},
+    messagesSummary: {},
+    messagesTopSenders: {},
+    messagesTopChannels: {},
     messagesChannelStats: {},
   },
 
@@ -247,9 +249,19 @@ export const GuildStore: Module<GuildState, RootState> = {
       return post(`guilds/${guildId}/messages/user/${userId}`, { action, amount, period, channelId });
     },
 
-    async loadMessagesAnalytics({ commit }, guildId) {
-      const analytics = await get(`guilds/${guildId}/messages/analytics`);
-      commit("setMessagesAnalytics", { guildId, analytics });
+    async loadMessagesSummary({ commit }, guildId) {
+      const summary = await get(`guilds/${guildId}/messages/summary`);
+      commit("setMessagesSummary", { guildId, summary });
+    },
+
+    async loadMessagesTopSenders({ commit }, { guildId, period }) {
+      const list = await get(`guilds/${guildId}/messages/top-senders`, { period });
+      commit("setMessagesTopSenders", { guildId, list });
+    },
+
+    async loadMessagesTopChannels({ commit }, { guildId, period }) {
+      const list = await get(`guilds/${guildId}/messages/top-channels`, { period });
+      commit("setMessagesTopChannels", { guildId, list });
     },
 
     async loadMessagesChannelStats({ commit }, { guildId, channelId, period }) {
@@ -382,8 +394,16 @@ export const GuildStore: Module<GuildState, RootState> = {
       state.messagesUser = { ...state.messagesUser, [guildId]: user };
     },
 
-    setMessagesAnalytics(state: GuildState, { guildId, analytics }) {
-      state.messagesAnalytics = { ...state.messagesAnalytics, [guildId]: analytics };
+    setMessagesSummary(state: GuildState, { guildId, summary }) {
+      state.messagesSummary = { ...state.messagesSummary, [guildId]: summary };
+    },
+
+    setMessagesTopSenders(state: GuildState, { guildId, list }) {
+      state.messagesTopSenders = { ...state.messagesTopSenders, [guildId]: list };
+    },
+
+    setMessagesTopChannels(state: GuildState, { guildId, list }) {
+      state.messagesTopChannels = { ...state.messagesTopChannels, [guildId]: list };
     },
 
     setMessagesChannelStats(state: GuildState, { guildId, stats }) {

@@ -94,6 +94,19 @@ export function initGuildMessageTrackerAPI(router: express.Router) {
     }
   });
 
+  // Just the three top stat cards (messages today/total messages/tracked users) — a plain DB read with no
+  // Discord REST calls, unlike /messages/top-senders and /messages/top-channels (which resolve names/avatars).
+  // Split into its own route so the dashboard can poll this one every second for a live-updating counter without
+  // hammering Discord's API or re-resolving the top lists on every tick.
+  messagesRouter.get("/:guildId/messages/summary", requireMessageTrackerManager(), async (req: Request, res: Response) => {
+    try {
+      const summary = await GuildMessageTrackerCounts.getGuildInstance(req.params.guildId).getSummary();
+      res.json(summary);
+    } catch (err) {
+      serverError(res, "Failed to load message summary");
+    }
+  });
+
   messagesRouter.get(
     "/:guildId/messages/user/:userId",
     requireMessageTrackerManager(),
@@ -179,9 +192,9 @@ export function initGuildMessageTrackerAPI(router: express.Router) {
     },
   );
 
-  // Top senders within one specific channel — the per-channel counterpart to the top senders lists in
-  // /messages/analytics (see GuildMessageTrackerChannelCounts.getTop, populated by real messages via
-  // recordMessage and by "Give ... to channel" credits via addCount).
+  // Top senders within one specific channel — the per-channel counterpart to /messages/top-senders (see
+  // GuildMessageTrackerChannelCounts.getTop, populated by real messages via recordMessage and by "Give ... to
+  // channel" credits via addCount).
   messagesRouter.get(
     "/:guildId/messages/channel/:channelId",
     requireMessageTrackerManager(),
@@ -215,41 +228,54 @@ export function initGuildMessageTrackerAPI(router: express.Router) {
     },
   );
 
-  // Guild-wide analytics for the Messages tab: totals, today's/all-time top senders, and today's top channels.
-  messagesRouter.get(
-    "/:guildId/messages/analytics",
-    requireMessageTrackerManager(),
-    async (req: Request, res: Response) => {
-      try {
-        const { guildId } = req.params;
-        const countsRepo = GuildMessageTrackerCounts.getGuildInstance(guildId);
-        const channelCountsRepo = GuildMessageTrackerChannelCounts.getGuildInstance(guildId);
+  function parsePeriodQuery(req: Request, res: Response): Period | undefined {
+    const rawPeriod = req.query.period;
+    if (rawPeriod !== undefined && !PERIODS.includes(rawPeriod as Period)) {
+      clientError(res, "period must be one of: daily, weekly, monthly, allTime");
+      return undefined;
+    }
+    return (rawPeriod as Period | undefined) ?? "daily";
+  }
 
-        const [summary, topTodayRaw, topAllTimeRaw, topChannelsTodayRaw] = await Promise.all([
-          countsRepo.getSummary(),
-          countsRepo.getTop("daily", TOP_LIST_LIMIT, 0),
-          countsRepo.getTop("allTime", TOP_LIST_LIMIT, 0),
-          channelCountsRepo.getTopChannels("daily", TOP_CHANNELS_LIMIT),
-        ]);
+  // Top senders guild-wide, for whichever rolling period the dashboard's selector is on — independent of
+  // /messages/top-channels' own period (see GuildMessagesPanel.vue, each list has its own selector).
+  messagesRouter.get("/:guildId/messages/top-senders", requireMessageTrackerManager(), async (req: Request, res: Response) => {
+    try {
+      const { guildId } = req.params;
+      const period = parsePeriodQuery(req, res);
+      if (!period) return;
 
-        const [topToday, topAllTime, channelNames] = await Promise.all([
-          resolveTopList(guildId, topTodayRaw),
-          resolveTopList(guildId, topAllTimeRaw),
-          resolveChannelNames(guildId, topChannelsTodayRaw.map((c) => c.channelId)),
-        ]);
+      const topSendersRaw = await GuildMessageTrackerCounts.getGuildInstance(guildId).getTop(period, TOP_LIST_LIMIT, 0);
+      const topSenders = await resolveTopList(guildId, topSendersRaw);
 
-        const topChannelsToday = topChannelsTodayRaw.map((c) => ({
-          ...c,
-          name: channelNames[c.channelId]?.name ?? null,
-          type: channelNames[c.channelId]?.type ?? null,
-        }));
+      res.json({ period, topSenders });
+    } catch (err) {
+      serverError(res, "Failed to load top senders");
+    }
+  });
 
-        res.json({ ...summary, topToday, topAllTime, topChannelsToday });
-      } catch (err) {
-        serverError(res, "Failed to load message analytics");
-      }
-    },
-  );
+  // Top channels guild-wide, for whichever rolling period the dashboard's selector is on — independent of
+  // /messages/top-senders' own period.
+  messagesRouter.get("/:guildId/messages/top-channels", requireMessageTrackerManager(), async (req: Request, res: Response) => {
+    try {
+      const { guildId } = req.params;
+      const period = parsePeriodQuery(req, res);
+      if (!period) return;
+
+      const topChannelsRaw = await GuildMessageTrackerChannelCounts.getGuildInstance(guildId).getTopChannels(period, TOP_CHANNELS_LIMIT);
+      const channelNames = await resolveChannelNames(guildId, topChannelsRaw.map((c) => c.channelId));
+
+      const topChannels = topChannelsRaw.map((c) => ({
+        ...c,
+        name: channelNames[c.channelId]?.name ?? null,
+        type: channelNames[c.channelId]?.type ?? null,
+      }));
+
+      res.json({ period, topChannels });
+    } catch (err) {
+      serverError(res, "Failed to load top channels");
+    }
+  });
 
   router.use("/", messagesRouter);
 }

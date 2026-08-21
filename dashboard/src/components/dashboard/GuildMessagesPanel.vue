@@ -2,20 +2,21 @@
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-4">
     <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-3">
       <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Messages today</div>
-      <div class="mt-1 text-2xl font-semibold">{{ analytics.totalToday.toLocaleString() }}</div>
+      <div class="mt-1 text-2xl font-semibold">{{ summary.totalToday.toLocaleString() }}</div>
     </div>
     <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-3">
       <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total messages</div>
-      <div class="mt-1 text-2xl font-semibold">{{ analytics.totalAllTimeMessages.toLocaleString() }}</div>
+      <div class="mt-1 text-2xl font-semibold">{{ summary.totalAllTimeMessages.toLocaleString() }}</div>
     </div>
     <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-3">
       <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tracked users</div>
-      <div class="mt-1 text-2xl font-semibold">{{ analytics.totalTrackedUsers.toLocaleString() }}</div>
+      <div class="mt-1 text-2xl font-semibold">{{ summary.totalTrackedUsers.toLocaleString() }}</div>
     </div>
   </div>
 
   <div class="grid min-w-0 items-start gap-4 xl:grid-cols-3">
-    <div class="min-w-0 bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
+    <div class="min-w-0 flex flex-col gap-4">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Look up a user</h3>
       <input
         type="text"
@@ -85,70 +86,6 @@
       </div>
     </div>
 
-    <div class="min-w-0 flex flex-col gap-4">
-    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
-      <h3 class="mb-3">Top senders today</h3>
-      <div v-if="!analytics.topToday.length" class="text-sm text-muted-foreground">No messages sent yet today.</div>
-      <div class="flex flex-col gap-2">
-        <div
-          v-for="(entry, i) in analytics.topToday"
-          :key="entry.userId"
-          class="flex items-center justify-between gap-2 text-sm border border-border rounded-md px-2 py-1.5"
-        >
-          <div class="min-w-0 flex items-center gap-2">
-            <span class="text-xs text-muted-foreground w-4 shrink-0">#{{ i + 1 }}</span>
-            <button type="button" class="min-w-0 hover:underline text-left" @click="selectUser(topEntryMember(entry))">
-              <MemberInline :avatar="entry.member?.avatar ?? null" :display-name="entry.member?.displayName ?? entry.userId" :id="entry.userId" />
-            </button>
-          </div>
-          <span class="font-medium shrink-0">{{ entry.count.toLocaleString() }}</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
-      <h3 class="mb-3">Top senders all-time</h3>
-      <div v-if="!analytics.topAllTime.length" class="text-sm text-muted-foreground">No messages tracked yet.</div>
-      <div class="flex flex-col gap-2">
-        <div
-          v-for="(entry, i) in analytics.topAllTime"
-          :key="entry.userId"
-          class="flex items-center justify-between gap-2 text-sm border border-border rounded-md px-2 py-1.5"
-        >
-          <div class="min-w-0 flex items-center gap-2">
-            <span class="text-xs text-muted-foreground w-4 shrink-0">#{{ i + 1 }}</span>
-            <button type="button" class="min-w-0 hover:underline text-left" @click="selectUser(topEntryMember(entry))">
-              <MemberInline :avatar="entry.member?.avatar ?? null" :display-name="entry.member?.displayName ?? entry.userId" :id="entry.userId" />
-            </button>
-          </div>
-          <span class="font-medium shrink-0">{{ entry.count.toLocaleString() }}</span>
-        </div>
-      </div>
-    </div>
-    </div>
-
-    <div class="min-w-0 flex flex-col gap-4">
-    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
-      <h3 class="mb-3">Top channels today</h3>
-      <div v-if="!analytics.topChannelsToday.length" class="text-sm text-muted-foreground">No messages sent yet today.</div>
-      <div class="flex flex-col gap-2">
-        <div
-          v-for="(entry, i) in analytics.topChannelsToday"
-          :key="entry.channelId"
-          class="flex items-center justify-between gap-2 text-sm border border-border rounded-md px-2 py-1.5"
-        >
-          <div class="min-w-0 flex items-center gap-2">
-            <span class="text-xs text-muted-foreground w-4 shrink-0">#{{ i + 1 }}</span>
-            <button type="button" class="min-w-0 truncate hover:underline text-left" @click="selectChannelForStats(entry.channelId)">
-              {{ entry.name ? `#${entry.name}` : entry.channelId }}
-              <span v-if="entry.type != null" class="text-muted-foreground">({{ channelTypeLabel(entry.type) }})</span>
-            </button>
-          </div>
-          <span class="font-medium shrink-0">{{ entry.count.toLocaleString() }}</span>
-        </div>
-      </div>
-    </div>
-
     <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
       <h3 class="mb-3">Channel stats</h3>
       <RoleChannelPickerField
@@ -196,6 +133,73 @@
       </template>
     </div>
     </div>
+
+    <div class="min-w-0 flex flex-col gap-4">
+    <div class="bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Top senders</h3>
+      <div class="grid grid-cols-2 gap-2 text-sm mb-3">
+        <button
+          v-for="p in periods"
+          :key="p.value"
+          type="button"
+          class="text-left rounded-lg px-2 py-1 transition-colors"
+          :class="topSendersPeriod === p.value ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'"
+          @click="onTopSendersPeriodChange(p.value)"
+        >
+          {{ p.label }}
+        </button>
+      </div>
+      <div v-if="!topSendersList.topSenders.length" class="text-sm text-muted-foreground">No messages tracked for this period.</div>
+      <div class="flex flex-col gap-2">
+        <div
+          v-for="(entry, i) in topSendersList.topSenders"
+          :key="entry.userId"
+          class="flex items-center justify-between gap-2 text-sm border border-border rounded-md px-2 py-1.5"
+        >
+          <div class="min-w-0 flex items-center gap-2">
+            <span class="text-xs text-muted-foreground w-4 shrink-0">#{{ i + 1 }}</span>
+            <button type="button" class="min-w-0 hover:underline text-left" @click="selectUser(topEntryMember(entry))">
+              <MemberInline :avatar="entry.member?.avatar ?? null" :display-name="entry.member?.displayName ?? entry.userId" :id="entry.userId" />
+            </button>
+          </div>
+          <span class="font-medium shrink-0">{{ entry.count.toLocaleString() }}</span>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <div class="min-w-0 bg-card border border-border rounded-3xl shadow-md px-4 py-4 sm:px-6">
+      <h3 class="mb-3">Top channels</h3>
+      <div class="grid grid-cols-2 gap-2 text-sm mb-3">
+        <button
+          v-for="p in periods"
+          :key="p.value"
+          type="button"
+          class="text-left rounded-lg px-2 py-1 transition-colors"
+          :class="topChannelsPeriod === p.value ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'"
+          @click="onTopChannelsPeriodChange(p.value)"
+        >
+          {{ p.label }}
+        </button>
+      </div>
+      <div v-if="!topChannelsList.topChannels.length" class="text-sm text-muted-foreground">No messages tracked for this period.</div>
+      <div class="flex flex-col gap-2">
+        <div
+          v-for="(entry, i) in topChannelsList.topChannels"
+          :key="entry.channelId"
+          class="flex items-center justify-between gap-2 text-sm border border-border rounded-md px-2 py-1.5"
+        >
+          <div class="min-w-0 flex items-center gap-2">
+            <span class="text-xs text-muted-foreground w-4 shrink-0">#{{ i + 1 }}</span>
+            <button type="button" class="min-w-0 truncate hover:underline text-left" @click="selectChannelForStats(entry.channelId)">
+              {{ entry.name ? `#${entry.name}` : entry.channelId }}
+              <span v-if="entry.type != null" class="text-muted-foreground">({{ channelTypeLabel(entry.type) }})</span>
+            </button>
+          </div>
+          <span class="font-medium shrink-0">{{ entry.count.toLocaleString() }}</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <ConfirmModal
@@ -221,20 +225,28 @@
 <script lang="ts">
 import { mapState } from "vuex";
 import { ApiError } from "../../api";
-import { MessagesAnalytics, MessagesChannelStats, MessagesMemberInfo, MessagesTopEntry, MessagesUserInfo, GuildState } from "../../store/types";
+import {
+  MessagesChannelStats,
+  MessagesMemberInfo,
+  MessagesSummary,
+  MessagesTopChannelsList,
+  MessagesTopEntry,
+  MessagesTopSendersList,
+  MessagesUserInfo,
+  GuildState,
+} from "../../store/types";
 import ConfirmModal from "./ConfirmModal.vue";
 import { channelTypeLabel } from "./discordGuildData";
 import MemberInline from "./MemberInline.vue";
 import RoleChannelPickerField from "./RoleChannelPickerField.vue";
 
-const EMPTY_ANALYTICS: MessagesAnalytics = {
-  totalTrackedUsers: 0,
-  totalAllTimeMessages: 0,
-  totalToday: 0,
-  topToday: [],
-  topAllTime: [],
-  topChannelsToday: [],
-};
+const EMPTY_SUMMARY: MessagesSummary = { totalTrackedUsers: 0, totalAllTimeMessages: 0, totalToday: 0 };
+const EMPTY_TOP_SENDERS: MessagesTopSendersList = { period: "daily", topSenders: [] };
+const EMPTY_TOP_CHANNELS: MessagesTopChannelsList = { period: "daily", topChannels: [] };
+
+// How often the top 3 stat cards re-poll (see mounted/unmounted) — cheap since /messages/summary is a plain DB
+// read with no Discord REST calls, unlike the top senders/channels lists which resolve names/avatars.
+const SUMMARY_POLL_INTERVAL_MS = 1000;
 
 type AdjustAction = "give" | "subtract" | "set" | "reset";
 type AdjustState = { action: AdjustAction; defaultAmount: number };
@@ -262,18 +274,27 @@ export default {
       selectedUserId: null as string | null,
       adjustPeriod: "allTime" as Period,
       giveChannelId: null as string | null,
+      topSendersPeriod: "daily" as Period,
+      topChannelsPeriod: "daily" as Period,
       statsChannelId: null as string | null,
       statsPeriod: "allTime" as Period,
       adjustState: null as AdjustState | null,
       toastMessage: null as string | null,
       toastTimeout: null as ReturnType<typeof setTimeout> | null,
+      summaryPollTimer: null as ReturnType<typeof setInterval> | null,
     };
   },
 
   computed: {
     ...mapState("guilds", {
-      analytics(state: GuildState): MessagesAnalytics {
-        return state.messagesAnalytics[this.guildId] || EMPTY_ANALYTICS;
+      summary(state: GuildState): MessagesSummary {
+        return state.messagesSummary[this.guildId] || EMPTY_SUMMARY;
+      },
+      topSendersList(state: GuildState): MessagesTopSendersList {
+        return state.messagesTopSenders[this.guildId] || EMPTY_TOP_SENDERS;
+      },
+      topChannelsList(state: GuildState): MessagesTopChannelsList {
+        return state.messagesTopChannels[this.guildId] || EMPTY_TOP_CHANNELS;
       },
       selectedUser(state: GuildState): MessagesUserInfo | null {
         return state.messagesUser[this.guildId] || null;
@@ -315,7 +336,12 @@ export default {
   },
 
   async mounted() {
-    await this.$store.dispatch("guilds/loadMessagesAnalytics", this.guildId).catch(() => {});
+    await Promise.all([this.refreshSummary(), this.refreshTopSenders(), this.refreshTopChannels()]);
+    this.summaryPollTimer = setInterval(() => this.refreshSummary(), SUMMARY_POLL_INTERVAL_MS);
+  },
+
+  beforeUnmount() {
+    if (this.summaryPollTimer) clearInterval(this.summaryPollTimer);
   },
 
   methods: {
@@ -327,8 +353,34 @@ export default {
 
     async selectChannelForStats(channelId: string) {
       this.statsChannelId = channelId;
-      this.statsPeriod = "daily";
+      this.statsPeriod = this.topChannelsPeriod;
       await this.refreshChannelStats();
+    },
+
+    async refreshSummary() {
+      await this.$store.dispatch("guilds/loadMessagesSummary", this.guildId).catch(() => {});
+    },
+
+    async onTopSendersPeriodChange(period: Period) {
+      this.topSendersPeriod = period;
+      await this.refreshTopSenders();
+    },
+
+    async refreshTopSenders() {
+      await this.$store
+        .dispatch("guilds/loadMessagesTopSenders", { guildId: this.guildId, period: this.topSendersPeriod })
+        .catch(() => {});
+    },
+
+    async onTopChannelsPeriodChange(period: Period) {
+      this.topChannelsPeriod = period;
+      await this.refreshTopChannels();
+    },
+
+    async refreshTopChannels() {
+      await this.$store
+        .dispatch("guilds/loadMessagesTopChannels", { guildId: this.guildId, period: this.topChannelsPeriod })
+        .catch(() => {});
     },
 
     onLookupInput(value: string) {

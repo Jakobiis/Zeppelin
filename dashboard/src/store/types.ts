@@ -218,13 +218,20 @@ export interface MessagesTopChannelEntry {
   type: number | null;
 }
 
-export interface MessagesAnalytics {
+export interface MessagesSummary {
   totalTrackedUsers: number;
   totalAllTimeMessages: number;
   totalToday: number;
-  topToday: MessagesTopEntry[];
-  topAllTime: MessagesTopEntry[];
-  topChannelsToday: MessagesTopChannelEntry[];
+}
+
+export interface MessagesTopSendersList {
+  period: "daily" | "weekly" | "monthly" | "allTime";
+  topSenders: MessagesTopEntry[];
+}
+
+export interface MessagesTopChannelsList {
+  period: "daily" | "weekly" | "monthly" | "allTime";
+  topChannels: MessagesTopChannelEntry[];
 }
 
 export interface MessagesChannelStats {
@@ -302,8 +309,14 @@ export interface GuildState {
   messagesUser: {
     [guildId: string]: MessagesUserInfo | null;
   };
-  messagesAnalytics: {
-    [guildId: string]: MessagesAnalytics | null;
+  messagesSummary: {
+    [guildId: string]: MessagesSummary | null;
+  };
+  messagesTopSenders: {
+    [guildId: string]: MessagesTopSendersList | null;
+  };
+  messagesTopChannels: {
+    [guildId: string]: MessagesTopChannelsList | null;
   };
   messagesChannelStats: {
     [guildId: string]: MessagesChannelStats | null;
