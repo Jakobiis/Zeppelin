@@ -41,7 +41,7 @@ fastify.get("*", (req, reply) => {
   reply.sendFile("index.html");
 });
 
-fastify.listen({ port: 3002, host: '0.0.0.0' }, (err, address) => {
+fastify.listen({ port: 3002, host: "0.0.0.0" }, (err, address) => {
   if (err) {
     throw err;
   }

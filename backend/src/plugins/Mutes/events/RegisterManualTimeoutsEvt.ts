@@ -47,6 +47,10 @@ export const RegisterManualTimeoutsEvt = mutesEvt({
           timeoutExpiresAt: expiresAtTimestamp,
         });
       }
+
+      // Let automod (and anything else listening) know about this mute, same as Zeppelin's own !mute command would.
+      // isAutomodAction is false here since this came from an external actor (another bot or a moderator directly).
+      pluginData.state.events.emit("mute", target.id, auditLogEntry.reason ?? undefined, false);
     }
   },
 });

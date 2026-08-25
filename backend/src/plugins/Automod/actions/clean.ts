@@ -58,9 +58,7 @@ export const CleanAction = automodAction({
     }
 
     for (const [channelId, messageIds] of messageIdsToDeleteByChannelId.entries()) {
-      const channel = pluginData.guild.channels.cache.get(channelId as Snowflake) as
-        | GuildTextBasedChannel
-        | undefined;
+      const channel = pluginData.guild.channels.cache.get(channelId as Snowflake) as GuildTextBasedChannel | undefined;
       if (!channel) {
         continue;
       }
