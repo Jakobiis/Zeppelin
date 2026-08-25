@@ -83,6 +83,24 @@ export const automodPluginDocs: ZeppelinPluginDocs = {
                 enabled: false
       ~~~
       
+      ### Delete recent messages on mute
+      This example deletes a user's last 5 messages (across all channels in the server) any time they're muted,
+      whether the mute was done manually by a moderator or automatically by another automod rule.
+
+      ~~~yml
+      automod:
+        config:
+          rules:
+            clean_on_mute:
+              triggers:
+              - mute:
+                  manual: true
+                  automatic: true
+              actions:
+                clean:
+                  recent_messages: 5
+      ~~~
+
       ### Custom status alerts
       This example sends an alert any time a user with a matching custom status sends a message.
       

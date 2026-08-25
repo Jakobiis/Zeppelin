@@ -179,6 +179,19 @@ export class GuildSavedMessages extends BaseGuildRepository<SavedMessage> {
     return this.processMultipleEntitiesFromDB(results);
   }
 
+  async getRecentMessagesByUserForGuild(userId: string, limit: number): Promise<SavedMessage[]> {
+    const results = await this.messages
+      .createQueryBuilder()
+      .where("guild_id = :guild_id", { guild_id: this.guildId })
+      .andWhere("user_id = :user_id", { user_id: userId })
+      .andWhere("deleted_at IS NULL")
+      .orderBy("posted_at", "DESC")
+      .limit(limit)
+      .getMany();
+
+    return this.processMultipleEntitiesFromDB(results);
+  }
+
   async getMultiple(messageIds: string[]): Promise<SavedMessage[]> {
     if (messageIds.length === 0) {
       return [];
