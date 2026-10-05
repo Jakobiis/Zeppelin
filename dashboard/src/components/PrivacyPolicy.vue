@@ -16,8 +16,8 @@
       </p>
       <p>
         The bot's source code is available at
-        <a href="https://github.com/ZeppelinBot/Zeppelin">
-          https://github.com/ZeppelinBot/Zeppelin
+        <a href="https://github.com/Jakobiis/Zeppelin">
+          https://github.com/Jakobiis/Zeppelin
         </a>
       </p>
 
@@ -81,7 +81,7 @@
       <p>
         To request access to personal data stored about you, or to request its
         deletion, to the extent permitted by GDPR, please send an email to <a
-        href="mailto:contact@mivir.fi">contact@mivir.fi</a>.
+        href="mailto:support@jailbreakchangelogs.com">support@jailbreakchangelogs.com</a>.
       </p>
     </div></div>
 </template>
