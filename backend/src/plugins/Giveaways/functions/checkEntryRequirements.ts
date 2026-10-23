@@ -20,15 +20,35 @@ function inRange(actual: number, range: GiveawayCountRange): boolean {
 export function checkEntryRequirements(
   giveaway: Pick<
     Giveaway,
-    "required_role_ids" | "bypass_role_ids" | "blacklisted_role_ids" | "message_requirement" | "counter_requirement" | "coins_requirement"
+    | "required_role_ids"
+    | "bypass_role_ids"
+    | "blacklisted_role_ids"
+    | "message_requirement"
+    | "counter_requirement"
+    | "coins_requirement"
+    | "required_supporter_level"
+    | "blacklisted_supporter_levels"
   >,
   memberRoleIds: string[],
   messageCounts: MessageCounts | null,
   counterValue: number | null,
   coinsValue: number | null,
+  // Only fetched when a supporter requirement is set; null there means the lookup failed.
+  supporterLevels: number[] | null = null,
 ): EntryRequirementResult {
   if (giveaway.blacklisted_role_ids.some((roleId) => memberRoleIds.includes(roleId))) {
     return { allowed: false, reason: "You are not allowed to enter this giveaway." };
+  }
+
+  const blacklistedLevels = giveaway.blacklisted_supporter_levels ?? [];
+  const hasSupporterRequirement = giveaway.required_supporter_level != null || blacklistedLevels.length > 0;
+  if (hasSupporterRequirement && supporterLevels == null) {
+    return { allowed: false, reason: "Couldn't verify your supporter status right now. Please try again in a moment." };
+  }
+
+  const blacklistedLevel = blacklistedLevels.find((level) => supporterLevels!.includes(level));
+  if (blacklistedLevel != null) {
+    return { allowed: false, reason: `Supporter level ${blacklistedLevel} members can't enter this giveaway.` };
   }
 
   const hasBypassRole = giveaway.bypass_role_ids.some((roleId) => memberRoleIds.includes(roleId));
@@ -68,6 +88,17 @@ export function checkEntryRequirements(
       return {
         allowed: false,
         reason: `You need ${formatRange(giveaway.coins_requirement)} coins to enter this giveaway. You currently have ${actual}.`,
+      };
+    }
+  }
+
+  if (giveaway.required_supporter_level != null) {
+    const maxLevel = giveaway.required_supporter_level;
+    const highest = supporterLevels!.length > 0 ? Math.max(...supporterLevels!) : 0;
+    if (highest < 1 || highest > maxLevel) {
+      return {
+        allowed: false,
+        reason: `You need supporter level ${maxLevel === 1 ? "1" : `1-${maxLevel}`} to enter this giveaway.`,
       };
     }
   }

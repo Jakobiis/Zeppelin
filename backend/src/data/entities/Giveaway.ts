@@ -80,6 +80,13 @@ export class Giveaway {
   // functions/counterRequirements.ts's getCoinsValueForUser), not a fixed counter name.
   @Column({ type: "simple-json", nullable: true }) coins_requirement: GiveawayCountRange | null;
 
+  // Supporter levels come from the JBCL API (see functions/supporterLevels.ts). required_supporter_level N lets in
+  // anyone whose highest level is 1..N (picking 2 keeps level 3 out). Blacklisted levels deny anyone who has that
+  // level in their history. Blacklist is nullable (not NOT NULL simple-json) so existing rows backfill to NULL.
+  @Column({ type: Number, nullable: true }) required_supporter_level: number | null;
+
+  @Column({ type: "simple-json", nullable: true }) blacklisted_supporter_levels: number[] | null;
+
   // winner_ids is append-only full history (initial roll + every manual/claim-expiry reroll) — never shrinks.
   // expired_winner_ids/claimed_winner_ids are subsets of it. A winner in winner_ids that's in neither, with an
   // entry in winner_claim_deadlines, still has a pending claim; one with no entry anywhere never had a claim

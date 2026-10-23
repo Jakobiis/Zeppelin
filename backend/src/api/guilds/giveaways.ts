@@ -401,6 +401,16 @@ export function initGuildGiveawaysAPI(router: express.Router) {
       coinsRequirement = range;
     }
 
+    const isLevel = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 100;
+    const requiredSupporterLevel = body.required_supporter_level ?? null;
+    if (requiredSupporterLevel !== null && !isLevel(requiredSupporterLevel)) {
+      return clientError(res, "Invalid required supporter level");
+    }
+    const blacklistedSupporterLevels = body.blacklisted_supporter_levels ?? [];
+    if (!Array.isArray(blacklistedSupporterLevels) || !blacklistedSupporterLevels.every(isLevel)) {
+      return clientError(res, "Invalid blacklisted supporter levels");
+    }
+
     try {
       const giveaway = await createGiveawayRecord(req.params.guildId, {
         channel_id: channelId,
@@ -419,6 +429,8 @@ export function initGuildGiveawaysAPI(router: express.Router) {
         message_requirement: messageRequirement,
         counter_requirement: counterRequirement,
         coins_requirement: coinsRequirement,
+        required_supporter_level: requiredSupporterLevel,
+        blacklisted_supporter_levels: [...new Set(blacklistedSupporterLevels)],
         claim_time_ms: (() => {
           if (typeof body.claim_time === "string" && body.claim_time) return convertDelayStringToMS(body.claim_time);
           if (template?.claim_time) return convertDelayStringToMS(template.claim_time);

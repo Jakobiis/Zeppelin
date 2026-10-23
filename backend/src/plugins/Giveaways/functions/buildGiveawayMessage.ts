@@ -24,7 +24,18 @@ export function currentWinnerIds(giveaway: Pick<Giveaway, "winner_ids" | "expire
 export function buildGiveawayEmbed(
   giveaway: Pick<
     Giveaway,
-    "prize" | "host_id" | "winner_count" | "ends_at" | "embed_color" | "required_role_ids" | "message_requirement" | "counter_requirement" | "coins_requirement" | "extra_entries"
+    | "prize"
+    | "host_id"
+    | "winner_count"
+    | "ends_at"
+    | "embed_color"
+    | "required_role_ids"
+    | "message_requirement"
+    | "counter_requirement"
+    | "coins_requirement"
+    | "required_supporter_level"
+    | "blacklisted_supporter_levels"
+    | "extra_entries"
   >,
 ): EmbedBuilder {
   const requirementLines: string[] = [];
@@ -42,6 +53,13 @@ export function buildGiveawayEmbed(
   }
   if (giveaway.coins_requirement) {
     requirementLines.push(`Requires: ${formatRangeLabel(giveaway.coins_requirement)} coins`);
+  }
+  if (giveaway.required_supporter_level != null) {
+    const max = giveaway.required_supporter_level;
+    requirementLines.push(`Requires: supporter level ${max === 1 ? "1" : `1-${max}`}`);
+  }
+  if (giveaway.blacklisted_supporter_levels?.length) {
+    requirementLines.push(`Excluded: supporter level ${giveaway.blacklisted_supporter_levels.join(", ")}`);
   }
 
   const extraEntryEntries = Object.entries(giveaway.extra_entries);

@@ -554,6 +554,43 @@
           </div>
         </div>
 
+        <div class="mt-4">
+          <label class="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" class="checkbox" v-model="form.hasRequiredSupporterLevel" />
+            Required supporter levels
+          </label>
+          <div v-if="form.hasRequiredSupporterLevel" class="mt-2 flex items-center gap-2">
+            <button
+              v-for="level in supporterLevelOptions"
+              :key="level"
+              type="button"
+              :class="form.requiredSupporterLevel != null && level <= form.requiredSupporterLevel ? 'btn-primary' : 'btn-secondary'"
+              @click="form.requiredSupporterLevel = level"
+            >
+              {{ level }}
+            </button>
+            <span class="text-sm text-muted-foreground">Higher levels than the one picked can't enter</span>
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <label class="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" class="checkbox" v-model="form.hasBlacklistedSupporterLevels" />
+            Blacklisted supporter levels
+          </label>
+          <div v-if="form.hasBlacklistedSupporterLevels" class="mt-2 flex items-center gap-2">
+            <button
+              v-for="level in supporterLevelOptions"
+              :key="level"
+              type="button"
+              :class="form.blacklistedSupporterLevels.includes(level) ? 'btn-primary' : 'btn-secondary'"
+              @click="toggleBlacklistedSupporterLevel(level)"
+            >
+              {{ level }}
+            </button>
+          </div>
+        </div>
+
       <div class="flex justify-end gap-2 mt-4">
         <button type="button" class="btn-secondary" @click="closeCreateModal">Cancel</button>
         <button class="btn-primary" :disabled="creating" @click="submit">
@@ -651,6 +688,10 @@ function defaultForm() {
     hasCoinsRequirement: false,
     coinsMin: null as number | null,
     coinsMax: null as number | null,
+    hasRequiredSupporterLevel: false,
+    requiredSupporterLevel: null as number | null,
+    hasBlacklistedSupporterLevels: false,
+    blacklistedSupporterLevels: [] as number[],
   };
 }
 
@@ -678,6 +719,7 @@ export default {
       creating: false,
       createError: null as string | null,
       periodOptions: PERIOD_OPTIONS,
+      supporterLevelOptions: [1, 2, 3],
       confirmState: null as ConfirmState | null,
       toastMessage: null as string | null,
       toastTimeout: null as ReturnType<typeof setTimeout> | null,
@@ -805,6 +847,13 @@ export default {
   },
 
   methods: {
+    toggleBlacklistedSupporterLevel(level: number) {
+      const levels = this.form.blacklistedSupporterLevels;
+      this.form.blacklistedSupporterLevels = levels.includes(level)
+        ? levels.filter((l: number) => l !== level)
+        : [...levels, level];
+    },
+
     formatDate(dateStr: string | null) {
       if (!dateStr) return "";
       return moment.utc(dateStr).local().format("YYYY-MM-DD HH:mm");
@@ -934,6 +983,10 @@ export default {
         this.createError = "Enter a minimum for the coins requirement, or untick it.";
         return;
       }
+      if (this.form.hasRequiredSupporterLevel && this.form.requiredSupporterLevel == null) {
+        this.createError = "Pick a supporter level, or untick required supporter levels.";
+        return;
+      }
       if (this.form.staff_held && !this.form.holder_id.trim()) {
         this.createError = "Enter the holder's user ID, or untick staff-held.";
         return;
@@ -981,6 +1034,10 @@ export default {
             coins_requirement: this.form.hasCoinsRequirement
               ? { min: this.form.coinsMin, max: this.form.coinsMax }
               : null,
+            required_supporter_level: this.form.hasRequiredSupporterLevel ? this.form.requiredSupporterLevel : null,
+            blacklisted_supporter_levels: this.form.hasBlacklistedSupporterLevels
+              ? this.form.blacklistedSupporterLevels
+              : [],
           },
         });
         this.form = defaultForm();

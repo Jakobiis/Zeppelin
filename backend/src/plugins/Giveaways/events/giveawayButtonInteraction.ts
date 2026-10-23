@@ -10,6 +10,7 @@ import { checkEntryRequirements } from "../functions/checkEntryRequirements.js";
 import { confirmWinnerClaimed, pauseClaimDeadline } from "../functions/claimGiveaway.js";
 import { computeEntryWeight } from "../functions/computeEntryWeight.js";
 import { getCoinsValueForUser, getNamedCounterValueForUser } from "../functions/counterRequirements.js";
+import { getSupporterLevels } from "../functions/supporterLevels.js";
 import { editChannelMessage } from "../functions/discordRest.js";
 import { isUserBannedFromGiveaways } from "../functions/giveawayBans.js";
 import { createGiveawayThread } from "../functions/giveawayThread.js";
@@ -238,7 +239,12 @@ export const onGiveawayButtonInteraction = guildPluginEventListener<GiveawaysPlu
 
     const coinsValue = giveaway.coins_requirement != null ? await getCoinsValueForUser(pluginData, member.id) : null;
 
-    const check = checkEntryRequirements(giveaway, memberRoleIds, messageCounts, counterValue, coinsValue);
+    const supporterLevels =
+      giveaway.required_supporter_level != null || (giveaway.blacklisted_supporter_levels ?? []).length > 0
+        ? await getSupporterLevels(member.id)
+        : null;
+
+    const check = checkEntryRequirements(giveaway, memberRoleIds, messageCounts, counterValue, coinsValue, supporterLevels);
     if (!check.allowed) {
       await args.interaction.reply({ ephemeral: true, content: check.reason }).catch(() => null);
       return;
