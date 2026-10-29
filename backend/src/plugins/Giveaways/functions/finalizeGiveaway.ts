@@ -19,6 +19,7 @@ const giveawayEntries = new GiveawayEntries();
 function buildEndedEmbed(giveaway: Giveaway, cancelled: boolean, participantCount: number) {
   const color = giveaway.embed_color ?? DEFAULT_EMBED_COLOR;
   const title = giveaway.prize;
+  const image = giveaway.image_url ? { url: giveaway.image_url } : undefined;
   const infoLines = [`Host: <@${giveaway.host_id}>`, `Participants: **${participantCount}**`];
 
   if (cancelled) {
@@ -26,6 +27,7 @@ function buildEndedEmbed(giveaway: Giveaway, cancelled: boolean, participantCoun
       title,
       description: [`🚫 This giveaway was cancelled.`, ...infoLines].join("\n"),
       color,
+      image,
     };
   }
 
@@ -38,6 +40,7 @@ function buildEndedEmbed(giveaway: Giveaway, cancelled: boolean, participantCoun
     title,
     description: [`🎉 Giveaway ended!`, `**Winner(s):** ${winnerLines}`, ...infoLines].join("\n"),
     color,
+    image,
   };
 }
 

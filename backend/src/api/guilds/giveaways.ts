@@ -5,6 +5,7 @@ import { GiveawayEntries } from "../../data/GiveawayEntries.js";
 import { Configs } from "../../data/Configs.js";
 import { GuildGiveawayBans } from "../../data/GuildGiveawayBans.js";
 import { GuildGiveaways } from "../../data/GuildGiveaways.js";
+import { GIVEAWAY_DESCRIPTION_MAX_LENGTH, isValidGiveawayImageUrl } from "../../plugins/Giveaways/functions/buildGiveawayMessage.js";
 import { createGiveawayRecord } from "../../plugins/Giveaways/functions/createGiveaway.js";
 import { finalizeGiveaway, rerollGiveaway } from "../../plugins/Giveaways/functions/finalizeGiveaway.js";
 import { banUserFromGiveaways, unbanUserFromGiveaways } from "../../plugins/Giveaways/functions/giveawayBans.js";
@@ -411,6 +412,15 @@ export function initGuildGiveawaysAPI(router: express.Router) {
       return clientError(res, "Invalid blacklisted supporter levels");
     }
 
+    const imageUrl = typeof body.image_url === "string" ? body.image_url.trim() || null : null;
+    if (imageUrl && !isValidGiveawayImageUrl(imageUrl)) {
+      return clientError(res, "Image must be an http(s) URL");
+    }
+    const description = typeof body.description === "string" ? body.description.trim() || null : null;
+    if (description && description.length > GIVEAWAY_DESCRIPTION_MAX_LENGTH) {
+      return clientError(res, `Description must be at most ${GIVEAWAY_DESCRIPTION_MAX_LENGTH} characters`);
+    }
+
     try {
       const giveaway = await createGiveawayRecord(req.params.guildId, {
         channel_id: channelId,
@@ -431,6 +441,8 @@ export function initGuildGiveawaysAPI(router: express.Router) {
         coins_requirement: coinsRequirement,
         required_supporter_level: requiredSupporterLevel,
         blacklisted_supporter_levels: [...new Set(blacklistedSupporterLevels)],
+        image_url: imageUrl,
+        description,
         claim_time_ms: (() => {
           if (typeof body.claim_time === "string" && body.claim_time) return convertDelayStringToMS(body.claim_time);
           if (template?.claim_time) return convertDelayStringToMS(template.claim_time);

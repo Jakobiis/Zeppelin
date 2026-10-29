@@ -4,6 +4,20 @@ import { Giveaway, GiveawayCountRange } from "../../../data/entities/Giveaway.js
 import { buildCustomId } from "../../../utils/buildCustomId.js";
 import { DEFAULT_EMBED_COLOR } from "../../../utils/getGuildEmbedColor.js";
 
+export const GIVEAWAY_DESCRIPTION_MAX_LENGTH = 1000;
+
+// Discord only renders http(s) image URLs in embeds, and rejects the whole embed if one is malformed — so this is
+// checked up front (command + dashboard API) rather than letting the giveaway message fail to post.
+export function isValidGiveawayImageUrl(value: string): boolean {
+  if (value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 function formatRangeLabel(range: GiveawayCountRange): string {
   return range.max != null ? `${range.min}-${range.max}` : `${range.min}+`;
 }
@@ -36,6 +50,8 @@ export function buildGiveawayEmbed(
     | "required_supporter_level"
     | "blacklisted_supporter_levels"
     | "extra_entries"
+    | "image_url"
+    | "description"
   >,
 ): EmbedBuilder {
   const requirementLines: string[] = [];
@@ -64,12 +80,13 @@ export function buildGiveawayEmbed(
 
   const extraEntryEntries = Object.entries(giveaway.extra_entries);
   if (extraEntryEntries.length > 0) {
-    requirementLines.push("Bonus entries:", ...extraEntryEntries.map(([roleId, bonus]) => `<@&${roleId}> +${bonus}`));
+    // Blank line first so the bonus list doesn't run straight on from the end date/requirements above it
+    requirementLines.push("", "**Bonus entries:**", ...extraEntryEntries.map(([roleId, bonus]) => `<@&${roleId}> +${bonus}`));
   }
 
   const endsAtUnix = moment.utc(giveaway.ends_at).unix();
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(giveaway.embed_color ?? DEFAULT_EMBED_COLOR)
     .setTitle(giveaway.prize)
     .setDescription(
@@ -78,8 +95,13 @@ export function buildGiveawayEmbed(
         `Host: <@${giveaway.host_id}>`,
         `Ends: <t:${endsAtUnix}:R> (<t:${endsAtUnix}:f>)`,
         ...requirementLines,
+        ...(giveaway.description ? ["", giveaway.description] : []),
       ].join("\n"),
     );
+  if (giveaway.image_url) {
+    embed.setImage(giveaway.image_url);
+  }
+  return embed;
 }
 
 export function buildGiveawayButtons(giveawayId: number, entryCount: number, disabled = false): ActionRowBuilder<ButtonBuilder> {

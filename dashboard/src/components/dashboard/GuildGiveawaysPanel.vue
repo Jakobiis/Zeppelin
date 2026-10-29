@@ -346,6 +346,29 @@
               placeholder="e.g. 1d, 12h — blank means no claim requirement"
             />
           </div>
+          <div class="sm:col-span-2">
+            <label class="font-medium text-sm"
+              >Description <span class="text-muted-foreground font-normal">(optional)</span></label
+            >
+            <textarea
+              class="field-input mt-1"
+              rows="3"
+              maxlength="1000"
+              v-model="form.description"
+              placeholder="Shown at the bottom of the giveaway embed, under bonus entries"
+            ></textarea>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="font-medium text-sm"
+              >Image URL <span class="text-muted-foreground font-normal">(optional)</span></label
+            >
+            <input
+              type="url"
+              class="field-input mt-1"
+              v-model="form.image_url"
+              placeholder="https://… shown as the giveaway embed's image"
+            />
+          </div>
           <div>
             <label class="font-medium text-sm">Channel</label>
             <RoleChannelPickerField
@@ -665,6 +688,8 @@ type ConfirmState = { type: "end" | "cancel" | "reroll" | "delete"; giveaway: Gi
 function defaultForm() {
   return {
     prize: "",
+    description: "",
+    image_url: "",
     duration: "",
     claim_time: "",
     winners: 1,
@@ -1008,6 +1033,8 @@ export default {
           guildId: this.guildId,
           giveaway: {
             prize: this.form.prize.trim(),
+            description: this.form.description.trim() || null,
+            image_url: this.form.image_url.trim() || null,
             duration: this.form.duration.trim(),
             claim_time: this.form.claim_time.trim() || undefined,
             winners: this.form.winners,

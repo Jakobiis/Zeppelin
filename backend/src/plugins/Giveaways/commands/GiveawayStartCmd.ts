@@ -2,6 +2,7 @@ import { Snowflake } from "discord.js";
 import { guildPluginMessageCommand } from "vety";
 import { commandTypeHelpers as ct } from "../../../commandTypes.js";
 import { convertDelayStringToMS } from "../../../utils.js";
+import { GIVEAWAY_DESCRIPTION_MAX_LENGTH, isValidGiveawayImageUrl } from "../functions/buildGiveawayMessage.js";
 import { createGiveawayRecord } from "../functions/createGiveaway.js";
 import { hasGiveawayManagerRole } from "../functions/requireGiveawayManager.js";
 import { resolveRoleList } from "../functions/resolveRoleList.js";
@@ -31,6 +32,8 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
     claim: ct.string({ option: true }),
     activity: ct.string({ option: true }),
     coins: ct.string({ option: true }),
+    image: ct.string({ option: true }),
+    description: ct.string({ option: true, shortcut: "d" }),
   },
 
   async run({ pluginData, message, args }) {
@@ -140,6 +143,18 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
       coinsRequirement = range;
     }
 
+    const imageUrl = args.image?.trim() || null;
+    if (imageUrl && !isValidGiveawayImageUrl(imageUrl)) {
+      void pluginData.state.common.sendErrorMessage(message, "`-image` must be an http(s) image URL.");
+      return;
+    }
+
+    const description = args.description?.trim() || null;
+    if (description && description.length > GIVEAWAY_DESCRIPTION_MAX_LENGTH) {
+      void pluginData.state.common.sendErrorMessage(message, `\`-description\` must be at most ${GIVEAWAY_DESCRIPTION_MAX_LENGTH} characters.`);
+      return;
+    }
+
     const giveaway = await createGiveawayRecord(pluginData.guild.id, {
       channel_id: channel.id,
       host_id: hostId,
@@ -155,6 +170,8 @@ export const GiveawayStartCmd = guildPluginMessageCommand<GiveawaysPluginType>()
       message_requirement: messageRequirement,
       counter_requirement: counterRequirement,
       coins_requirement: coinsRequirement,
+      image_url: imageUrl,
+      description,
       claim_time_ms: claimTimeMs,
     });
 

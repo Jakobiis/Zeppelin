@@ -25,6 +25,8 @@ export interface CreateGiveawayFields {
   coins_requirement: GiveawayCountRange | null;
   required_supporter_level?: number | null;
   blacklisted_supporter_levels?: number[];
+  image_url?: string | null;
+  description?: string | null;
   // Null means no claim requirement — winners aren't rerolled for failing to click Claim Prize.
   claim_time_ms: number | null;
 }
@@ -61,6 +63,8 @@ export async function createGiveawayRecord(guildId: string, fields: CreateGiveaw
     coins_requirement: fields.coins_requirement,
     required_supporter_level: fields.required_supporter_level ?? null,
     blacklisted_supporter_levels: fields.blacklisted_supporter_levels ?? [],
+    image_url: fields.image_url ?? null,
+    description: fields.description ?? null,
     winner_ids: [],
     claim_time_ms: fields.claim_time_ms,
     claimed_winner_ids: [],

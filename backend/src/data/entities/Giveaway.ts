@@ -87,6 +87,12 @@ export class Giveaway {
 
   @Column({ type: "simple-json", nullable: true }) blacklisted_supporter_levels: number[] | null;
 
+  // Optional extras shown on the giveaway embed: a big image (kept on the ended embed too) and a free-text blurb
+  // below the winners/host/requirements/bonus entries lines.
+  @Column({ type: String, nullable: true }) image_url: string | null;
+
+  @Column({ type: String, nullable: true }) description: string | null;
+
   // winner_ids is append-only full history (initial roll + every manual/claim-expiry reroll) — never shrinks.
   // expired_winner_ids/claimed_winner_ids are subsets of it. A winner in winner_ids that's in neither, with an
   // entry in winner_claim_deadlines, still has a pending claim; one with no entry anywhere never had a claim
