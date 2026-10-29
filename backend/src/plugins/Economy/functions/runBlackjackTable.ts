@@ -123,7 +123,7 @@ export async function runBlackjackTable(
   const buildLobbyEmbed = (extra?: string): EmbedBuilder =>
     new EmbedBuilder()
       .setColor(0x0159b2)
-      .setTitle(`${label}: Table`)
+      .setTitle(`${label}: ${mode === "vs" ? "Versus" : "Table"}`)
       .setDescription(
         `${modeText}\n\n**Players (${seats.length}/${MAX_PLAYERS})**\n` +
           seats.map((seat) => `<@${seat.userId}>: ${fmt(seat.bet)}`).join("\n") +
@@ -141,13 +141,13 @@ export async function runBlackjackTable(
         .setMaxValues(MAX_PLAYERS - 1),
     ),
     new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setStyle(ButtonStyle.Success).setLabel("Join").setCustomId(`${idBase}:join`),
-      new ButtonBuilder().setStyle(ButtonStyle.Secondary).setLabel("Leave").setCustomId(`${idBase}:leave`),
       new ButtonBuilder()
         .setStyle(ButtonStyle.Primary)
         .setLabel("Start")
         .setCustomId(`${idBase}:start`)
         .setDisabled(seats.length < minPlayers),
+      new ButtonBuilder().setStyle(ButtonStyle.Secondary).setLabel("Leave").setCustomId(`${idBase}:leave`),
+      new ButtonBuilder().setStyle(ButtonStyle.Success).setLabel("Join").setCustomId(`${idBase}:join`),
     ),
   ];
 
