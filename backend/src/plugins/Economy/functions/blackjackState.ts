@@ -47,7 +47,7 @@ export function checkInitialBlackjack(state: BlackjackState): InitialOutcome {
   return null;
 }
 
-function skipFinishedHands(state: BlackjackState): void {
+export function skipFinishedHands(state: BlackjackState): void {
   while (state.activeHandIndex < state.hands.length && state.hands[state.activeHandIndex].status !== "playing") {
     state.activeHandIndex++;
   }

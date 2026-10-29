@@ -8,6 +8,7 @@ import { isAllOrMaxKeyword, parseAmountInput } from "../functions/parseAmountInp
 import { getSpendableBalance } from "../functions/pendingBalance.js";
 import { playGame } from "../functions/playGame.js";
 import { runBlackjack } from "../functions/runBlackjack.js";
+import { runBlackjackTable } from "../functions/runBlackjackTable.js";
 import { runHigherOrLower } from "../functions/runHigherOrLower.js";
 import { runPvpGame } from "../functions/pvpChallenge.js";
 import { runPvpVsBot } from "../functions/pvpVsBot.js";
@@ -27,6 +28,13 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
       user: ct.resolvedUser(),
       amount: ct.string(),
     },
+    // Blackjack tables: `table`/`vs`. ponytail: a cached user literally named "table" would match the user
+    // signature above first; rename the keyword if that ever happens.
+    {
+      game: ct.string(),
+      mode: ct.string(),
+      amount: ct.string(),
+    },
   ],
 
   async run({ pluginData, message, args }) {
@@ -44,6 +52,16 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
         return;
       }
       await runPvpGame(pluginData, message, gameName, game, args.user, args.amount);
+      return;
+    }
+
+    if (args.mode) {
+      const mode = args.mode.toLowerCase();
+      if (game.type !== "blackjack" || (mode !== "table" && mode !== "vs")) {
+        void pluginData.state.common.sendErrorMessage(message, `Unknown option: ${args.mode}`);
+        return;
+      }
+      await runBlackjackTable(pluginData, message, gameName, game, mode, args.amount);
       return;
     }
 

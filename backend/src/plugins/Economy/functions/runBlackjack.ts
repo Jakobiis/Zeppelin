@@ -151,6 +151,17 @@ export async function runBlackjack(
     return `**Dealer**: ${dealerText}\n\n${handLines.join("\n")}`;
   };
 
+  // Shows held winnings next to the spendable balance — without it, a fully-held win leaves the spendable balance
+  // exactly where it was before the bet, which reads as a push and made the game look rigged.
+  const balanceLine = async (): Promise<string> => {
+    const { spendable, pending, pendingUnlocksAt } = await getSpendableBalance(pluginData, config.counter_name, userId);
+    const held =
+      pending > 0 && pendingUnlocksAt
+        ? ` (+${emojiPrefix}**${formatAmount(pending)}** on hold, unlocks <t:${Math.floor(pendingUnlocksAt / 1000)}:R>)`
+        : "";
+    return `New balance: ${emojiPrefix}**${formatAmount(spendable)}** ${config.currency_name}${held}`;
+  };
+
   const buildEmbed = (description: string): EmbedBuilder =>
     new EmbedBuilder()
       .setColor(0x0159b2)
@@ -217,10 +228,7 @@ export async function runBlackjack(
       balanceAfter: totalAfter,
     });
 
-    // Displayed balance excludes anything just put on hold, so the embed doesn't show coins the player can't
-    // actually spend yet.
-    const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
-    const description = `${buildDescription({ revealDealer: true })}\n\n${resultText}\nNew balance: ${emojiPrefix}**${formatAmount(newBalance)}** ${config.currency_name}`;
+    const description = `${buildDescription({ revealDealer: true })}\n\n${resultText}\n${await balanceLine()}`;
 
     await message.channel.send({ embeds: [buildEmbed(description)] });
     return;
@@ -232,6 +240,9 @@ export async function runBlackjack(
   });
 
   let finished = false;
+  // Clicks are handled one at a time: chargeBet awaits, and a second click landing mid-charge would otherwise pass
+  // the same canDouble/canSplit check and get charged for an action that then no-ops.
+  let busy = false;
 
   const finishRound = async (interaction: MessageComponentInteraction | null): Promise<void> => {
     if (finished) return;
@@ -293,10 +304,7 @@ export async function runBlackjack(
           ? `-${emojiPrefix}${formatAmount(Math.abs(net))}`
           : "no change";
 
-    // Displayed balance excludes anything just put on hold, so the embed doesn't show coins the player can't
-    // actually spend yet.
-    const { spendable: newBalance } = await getSpendableBalance(pluginData, config.counter_name, userId);
-    const description = `${buildDescription({ revealDealer: true, results })}\n\nNet: **${netText}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${formatAmount(newBalance)}** ${config.currency_name}`;
+    const description = `${buildDescription({ revealDealer: true, results })}\n\nNet: **${netText}** ${config.currency_name}\n${await balanceLine()}`;
     const embed = buildEmbed(description);
 
     if (interaction) {
@@ -317,6 +325,24 @@ export async function runBlackjack(
       return;
     }
 
+    if (busy || finished) {
+      await interaction.deferUpdate().catch(noop);
+      return;
+    }
+    busy = true;
+    try {
+      await handleAction(interaction);
+    } finally {
+      busy = false;
+    }
+  });
+
+  // The round can still time out while a double/split charge is in flight, so refund rather than keep a stake for
+  // an action that can no longer apply.
+  const refund = (amount: number) =>
+    pluginData.state.counters.changeCounterValue(config.counter_name, null, userId, amount);
+
+  const handleAction = async (interaction: MessageComponentInteraction): Promise<void> => {
     const action = interaction.customId.slice(idBase.length + 1);
 
     if (action === "hit") {
@@ -336,6 +362,10 @@ export async function runBlackjack(
           .catch(noop);
         return;
       }
+      if (finished) {
+        await refund(hand.bet);
+        return;
+      }
       doubleDown(state);
     } else if (action === "split") {
       if (!canSplit(state)) {
@@ -350,18 +380,22 @@ export async function runBlackjack(
           .catch(noop);
         return;
       }
+      if (finished) {
+        await refund(hand.bet);
+        return;
+      }
       split(state);
     }
 
     if (isRoundOver(state)) {
-      collector.stop();
+      collector.stop("stopped");
       await finishRound(interaction);
     } else {
       await interaction
         .update({ embeds: [buildEmbed(buildDescription({ revealDealer: false }))], components: [buildButtons()] })
         .catch(noop);
     }
-  });
+  };
 
   collector.on("end", async (_collected, reason) => {
     if (reason === "stopped") return;
