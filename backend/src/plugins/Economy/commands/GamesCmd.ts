@@ -46,8 +46,10 @@ export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
       }
 
       if (game.type === "blackjack") {
-        return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}play ${gameName} [table|vs] <amount>\`) — standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}\n` +
-          `↳ \`table\`: up to 10 players vs the dealer, each with their own bet · \`vs\`: 2-10 players vs each other, everyone bets at least half the host's bet and the best hand takes the pot`;
+        return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}play ${gameName} <amount>\`): standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}\n` +
+          `- \`${prefix}play ${gameName} table <amount>\`: up to 10 players vs the dealer, each with their own bet\n` +
+          `- \`${prefix}play ${gameName} vs <amount>\`: 2-10 players vs each other, everyone bets at least half the host's bet and the best hand takes the pot\n` +
+          `- \`${prefix}play ${gameName} @user <amount>\`: challenge someone directly`;
       }
 
       if (game.type === "pvp") {

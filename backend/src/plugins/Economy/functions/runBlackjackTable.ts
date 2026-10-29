@@ -10,9 +10,12 @@ import {
   OmitPartialGroupDMChannel,
   TextInputBuilder,
   TextInputStyle,
+  User,
+  UserSelectMenuBuilder,
 } from "discord.js";
 import { GuildPluginData } from "vety";
 import { z } from "zod";
+import { logger } from "../../../logger.js";
 import { MINUTES, noop } from "../../../utils.js";
 import { economyUserLock } from "../../../utils/lockNameHelpers.js";
 import { applyCoinsBoost } from "./applyCoinsBoost.js";
@@ -38,7 +41,7 @@ import { isPvpDisabled } from "./pvpToggle.js";
 import { EconomyPluginType, zEconomyBlackjackGame } from "../types.js";
 
 const MAX_PLAYERS = 10;
-const LOBBY_TIMEOUT = 1 * MINUTES;
+const LOBBY_TIMEOUT = 2 * MINUTES;
 const TURN_TIMEOUT = 1 * MINUTES;
 // In "vs" mode, joiners must bet at least this fraction of the host's bet so nobody can win a big pot off a token bet
 const VS_MIN_BET_FRACTION = 0.5;
@@ -62,6 +65,7 @@ export async function runBlackjackTable(
   game: z.infer<typeof zEconomyBlackjackGame>,
   mode: BlackjackTableMode,
   amountArg: string,
+  initialInvites: User[] = [],
 ): Promise<void> {
   const config = pluginData.config.get();
   const hostId = message.author.id;
@@ -113,20 +117,29 @@ export async function runBlackjackTable(
 
   const modeText =
     mode === "vs"
-      ? `Players vs each other — join with your own bet of at least ${fmt(minJoinBet)}, the best hand takes the pot.`
-      : "Everyone vs the dealer — each player picks their own bet when joining.";
+      ? `Players vs each other: join with your own bet of at least ${fmt(minJoinBet)}, and the best hand takes the pot.`
+      : "Everyone vs the dealer: each player picks their own bet when joining.";
 
   const buildLobbyEmbed = (extra?: string): EmbedBuilder =>
     new EmbedBuilder()
       .setColor(0x0159b2)
-      .setTitle(`${label} — Table`)
+      .setTitle(`${label}: Table`)
       .setDescription(
         `${modeText}\n\n**Players (${seats.length}/${MAX_PLAYERS})**\n` +
-          seats.map((seat) => `<@${seat.userId}> — ${fmt(seat.bet)}`).join("\n") +
-          `\n\n${extra ?? `<@${hostId}> can start once ${minPlayers} players have joined. Starts automatically in ${LOBBY_TIMEOUT / MINUTES} minute.`}`,
+          seats.map((seat) => `<@${seat.userId}>: ${fmt(seat.bet)}`).join("\n") +
+          `\n\n${extra ?? mode === "vs"
+            ? `<@${hostId}> can start once ${minPlayers} players have joined. In ${LOBBY_TIMEOUT / MINUTES} minutes it starts automatically if there are enough players, otherwise it closes and bets are refunded.`
+            : `<@${hostId}> can start any time. Starts automatically in ${LOBBY_TIMEOUT / MINUTES} minutes.`}`,
       );
 
-  const buildLobbyButtons = (): ActionRowBuilder<ButtonBuilder> =>
+  const buildLobbyComponents = () => [
+    new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(
+      new UserSelectMenuBuilder()
+        .setCustomId(`${idBase}:invite`)
+        .setPlaceholder("Host: invite players")
+        .setMinValues(1)
+        .setMaxValues(MAX_PLAYERS - 1),
+    ),
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setStyle(ButtonStyle.Success).setLabel("Join").setCustomId(`${idBase}:join`),
       new ButtonBuilder().setStyle(ButtonStyle.Secondary).setLabel("Leave").setCustomId(`${idBase}:leave`),
@@ -135,11 +148,32 @@ export async function runBlackjackTable(
         .setLabel("Start")
         .setCustomId(`${idBase}:start`)
         .setDisabled(seats.length < minPlayers),
-    );
+    ),
+  ];
 
-  const sentMessage = await message.channel.send({ embeds: [buildLobbyEmbed()], components: [buildLobbyButtons()] });
+  const sentMessage = await message.channel.send({ embeds: [buildLobbyEmbed()], components: buildLobbyComponents() });
   const refreshLobby = () =>
-    sentMessage.edit({ embeds: [buildLobbyEmbed()], components: [buildLobbyButtons()] }).catch(noop);
+    sentMessage.edit({ embeds: [buildLobbyEmbed()], components: buildLobbyComponents() }).catch(noop);
+
+  // Builds the ping for the host's invites, or null if none of them can be invited. Invitees join through the
+  // regular Join button, so an invite is just a ping — there's nothing to accept separately.
+  const buildInvitePing = async (users: User[]): Promise<string | null> => {
+    const invitable: User[] = [];
+    for (const user of users) {
+      if (user.bot || seats.some((seat) => seat.userId === user.id)) continue;
+      if (mode === "vs" && (await isPvpDisabled(pluginData, user.id))) continue;
+      invitable.push(user);
+    }
+    if (!invitable.length) return null;
+    return `${invitable.map((user) => `<@${user.id}>`).join(" ")}, <@${hostId}> invited you to **${label}** (${
+      mode === "vs" ? `vs each other, min bet ${fmt(minJoinBet)}` : "vs the dealer"
+    }). Click **Join** on the table above to play!`;
+  };
+
+  if (initialInvites.length) {
+    const ping = await buildInvitePing(initialInvites);
+    if (ping) await message.channel.send(ping);
+  }
 
   let lobbyClosed = false;
   const started = await new Promise<boolean>((resolve) => {
@@ -159,6 +193,23 @@ export async function runBlackjackTable(
       const userId = interaction.user.id;
       const action = interaction.customId.slice(idBase.length + 1);
       const isSeated = seats.some((seat) => seat.userId === userId);
+
+      if (interaction.isUserSelectMenu()) {
+        if (userId !== hostId) {
+          await interaction.reply({ content: "Only the host can invite players.", ephemeral: true }).catch(noop);
+          return;
+        }
+        const ping = await buildInvitePing([...interaction.users.values()]);
+        if (!ping) {
+          await interaction
+            .reply({ content: "None of them can be invited (bots, already seated, or PvP turned off).", ephemeral: true })
+            .catch(noop);
+          return;
+        }
+        await interaction.reply({ content: ping }).catch(noop);
+        await refreshLobby(); // Clears the menu's selection so the host can invite again
+        return;
+      }
 
       if (action === "start") {
         if (userId !== hostId) {
@@ -197,10 +248,10 @@ export async function runBlackjackTable(
         return;
       }
 
-      joining.add(userId);
-      try {
-        const modalId = `${idBase}:bet:${userId}`;
-        await interaction.showModal(
+      // Unique per click, so a stale bet form from an earlier click can't also pick up this one's submission
+      const modalId = `${idBase}:bet:${interaction.id}`;
+      await interaction
+        .showModal(
           new ModalBuilder()
             .setCustomId(modalId)
             .setTitle(`Join ${label}`)
@@ -213,34 +264,57 @@ export async function runBlackjackTable(
                   .setRequired(true),
               ),
             ),
-        );
-        const replyTarget: ModalSubmitInteraction | null = await interaction
-          .awaitModalSubmit({ time: LOBBY_TIMEOUT, filter: (s) => s.customId === modalId })
-          .catch(() => null);
-        if (!replyTarget) return;
-        const amountInput = replyTarget.fields.getTextInputValue("amount");
+        )
+        .catch(noop);
+      // The player isn't marked as joining while the form is open: a cancelled or closed form never submits, and
+      // would otherwise leave them stuck as "already at this table" (and unable to leave) until the lobby ends
+      const submit: ModalSubmitInteraction | null = await interaction
+        .awaitModalSubmit({ time: LOBBY_TIMEOUT, filter: (s) => s.customId === modalId })
+        .catch(() => null);
+      if (!submit) return;
 
-        if (lobbyClosed) {
-          await replyTarget.reply({ content: "This table has already started.", ephemeral: true }).catch(noop);
-          return;
-        }
+      // Acknowledge right away: the buy-in below hits the database and can outlast Discord's 3-second window,
+      // which shows the player "Something went wrong" on the form
+      await submit.deferReply({ ephemeral: true }).catch(noop);
+      const respond = (content: string) => submit.editReply({ content }).catch(noop);
 
+      if (lobbyClosed) {
+        await respond("This table has already started.");
+        return;
+      }
+      // Re-checked now that the form is in, since others may have joined (or this player, via another form) meanwhile
+      if (seats.some((seat) => seat.userId === userId) || joining.has(userId)) {
+        await respond("You're already at this table.");
+        return;
+      }
+      if (seats.length + joining.size >= MAX_PLAYERS) {
+        await respond("This table is full.");
+        return;
+      }
+
+      joining.add(userId);
+      try {
+        const amountInput = submit.fields.getTextInputValue("amount");
         const result = await buyIn(userId, amountInput, minJoinBet);
         if (typeof result === "string") {
-          await replyTarget.reply({ content: result, ephemeral: true }).catch(noop);
+          await respond(result);
           return;
         }
 
         // The host can start the table while a buy-in is still being charged
         if (lobbyClosed) {
           await refund({ userId, bet: result });
-          await replyTarget.reply({ content: "This table has already started.", ephemeral: true }).catch(noop);
+          await respond("This table has already started.");
           return;
         }
 
         seats.push({ userId, bet: result });
-        await replyTarget.reply({ content: `You joined with ${fmt(result)}.`, ephemeral: true }).catch(noop);
         await refreshLobby();
+        await respond(`You joined with ${fmt(result)}.`);
+      } catch (err) {
+        // Collector handlers have no one awaiting them, so an uncaught error here would just vanish
+        logger.error(err, "Blackjack table join failed");
+        await respond("Something went wrong joining the table. Please try again.");
       } finally {
         joining.delete(userId);
       }
@@ -252,7 +326,7 @@ export async function runBlackjackTable(
   if (!started) {
     for (const seat of seats) await refund(seat);
     await sentMessage
-      .edit({ embeds: [buildLobbyEmbed("Table closed — all bets refunded.")], components: [] })
+      .edit({ embeds: [buildLobbyEmbed("Table closed. All bets refunded.")], components: [] })
       .catch(noop);
     return;
   }
@@ -304,13 +378,13 @@ export async function runBlackjackTable(
 
     const handLines = state.hands.map((hand, i) => {
       const marker = !revealDealer && i === state.activeHandIndex ? "▶️ " : "";
-      const natural = isNaturalBlackjack(hand.cards) ? " — Blackjack!" : "";
+      const natural = isNaturalBlackjack(hand.cards) ? " (Blackjack!)" : "";
       const statusText = results
-        ? ` — ${results[i]}`
+        ? `: ${results[i]}`
         : hand.status === "bust"
-          ? " — Bust"
+          ? " (Bust)"
           : hand.status === "stood"
-            ? natural || " — Stand"
+            ? natural || " (Stand)"
             : "";
       return `${marker}<@${seats[i].userId}> (${formatAmount(hand.bet)}): ${formatCards(hand.cards)} (${handValue(hand.cards).total})${statusText}`;
     });

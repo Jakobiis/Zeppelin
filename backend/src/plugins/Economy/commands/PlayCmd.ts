@@ -12,6 +12,7 @@ import { runBlackjackTable } from "../functions/runBlackjackTable.js";
 import { runHigherOrLower } from "../functions/runHigherOrLower.js";
 import { runPvpGame } from "../functions/pvpChallenge.js";
 import { runPvpVsBot } from "../functions/pvpVsBot.js";
+import { isPvpDisabled } from "../functions/pvpToggle.js";
 import { EconomyPluginType } from "../types.js";
 
 export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
@@ -62,6 +63,19 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
         return;
       }
       await runBlackjackTable(pluginData, message, gameName, game, mode, args.amount);
+      return;
+    }
+
+    if (args.user && game.type === "blackjack") {
+      if (args.user.id === message.author.id || args.user.bot) {
+        void pluginData.state.common.sendErrorMessage(message, "You can't challenge yourself or a bot");
+        return;
+      }
+      if (await isPvpDisabled(pluginData, args.user.id)) {
+        void pluginData.state.common.sendErrorMessage(message, `${args.user.username} isn't accepting PvP challenges.`);
+        return;
+      }
+      await runBlackjackTable(pluginData, message, gameName, game, "vs", args.amount, [args.user]);
       return;
     }
 

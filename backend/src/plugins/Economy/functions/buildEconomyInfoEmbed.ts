@@ -51,10 +51,13 @@ export async function buildEconomyInfoEmbed(
     }
     if (hasBlackjackGames) {
         commandLines.push(
-            `\`${prefix}play <game> table <amount|all>\` — open a blackjack table (up to 10 players) against the dealer; everyone joins with their own bet`,
+            `\`${prefix}play <game> table <amount|all>\`: open a blackjack table (up to 10 players) against the dealer; everyone joins with their own bet`,
         );
         commandLines.push(
-            `\`${prefix}play <game> vs <amount|all>\` — open a blackjack table (2-10 players) against each other; others join with at least half your bet and the best hand takes the pot`,
+            `\`${prefix}play <game> vs <amount|all>\`: open a blackjack table (2-10 players) against each other; others join with at least half your bet and the best hand takes the pot`,
+        );
+        commandLines.push(
+            `\`${prefix}play <game> @user <amount|all>\`: challenge someone to blackjack (a \`vs\` table with them invited); hosts can also invite people from the table's menu`,
         );
     }
     if (hasRewardGames) {
@@ -95,7 +98,7 @@ export async function buildEconomyInfoEmbed(
             }
 
             if (game.type === "blackjack") {
-                return `${emoji}**${label}** (\`${prefix}play ${gameName} [table|vs] <amount>\`) — standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
+                return `${emoji}**${label}** (\`${prefix}play ${gameName} [table|vs] <amount>\`): standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
             }
 
             if (game.type === "pvp") {
