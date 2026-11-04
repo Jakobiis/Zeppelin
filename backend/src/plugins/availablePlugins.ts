@@ -79,6 +79,8 @@ import { StarboardPlugin } from "./Starboard/StarboardPlugin.js";
 import { starboardPluginDocs } from "./Starboard/docs.js";
 import { StickyMessagesPlugin } from "./StickyMessages/StickyMessagesPlugin.js";
 import { stickyMessagesPluginDocs } from "./StickyMessages/docs.js";
+import { ThreadWatcherPlugin } from "./ThreadWatcher/ThreadWatcherPlugin.js";
+import { threadWatcherPluginDocs } from "./ThreadWatcher/docs.js";
 import { TagsPlugin } from "./Tags/TagsPlugin.js";
 import { tagsPluginDocs } from "./Tags/docs.js";
 import { TimeAndDatePlugin } from "./TimeAndDate/TimeAndDatePlugin.js";
@@ -255,6 +257,10 @@ export const availableGuildPlugins: ZeppelinGuildPluginInfo[] = [
   {
     plugin: TagsPlugin,
     docs: tagsPluginDocs,
+  },
+  {
+    plugin: ThreadWatcherPlugin,
+    docs: threadWatcherPluginDocs,
   },
   {
     plugin: TimeAndDatePlugin,
