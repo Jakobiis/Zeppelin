@@ -47,17 +47,17 @@ export async function buildEconomyInfoEmbed(
         commandLines.push(`\`${prefix}games\` — list games and their odds`);
     }
     if (hasWagerGames || hasBlackjackGames) {
-        commandLines.push(`\`${prefix}play <game> <amount|all>\` — wager ${config.currency_name} on a game`);
+        commandLines.push(`\`${prefix}<game> <amount|all>\` — wager ${config.currency_name} on a game`);
     }
     if (hasBlackjackGames) {
         commandLines.push(
-            `\`${prefix}play <game> table <amount|all>\`: open a blackjack table (up to 10 players) against the dealer; everyone joins with their own bet`,
+            `\`${prefix}<game> table <amount|all>\`: open a blackjack table (up to 10 players) against the dealer; everyone joins with their own bet`,
         );
         commandLines.push(
-            `\`${prefix}play <game> vs <amount|all>\`: open a blackjack table (2-10 players) against each other; others join with at least half your bet and the best hand takes the pot`,
+            `\`${prefix}<game> vs <amount|all>\`: open a blackjack table (2-10 players) against each other; others join with at least half your bet and the best hand takes the pot`,
         );
         commandLines.push(
-            `\`${prefix}play <game> @user <amount|all>\`: challenge someone to blackjack (a \`vs\` table with them invited); hosts can also invite people from the table's menu`,
+            `\`${prefix}<game> @user <amount|all>\`: challenge someone to blackjack (a \`vs\` table with them invited); hosts can also invite people from the table's menu`,
         );
     }
     if (hasRewardGames) {
@@ -65,7 +65,7 @@ export async function buildEconomyInfoEmbed(
     }
     if (hasPvpGames) {
         commandLines.push(
-            `\`${prefix}play <game> [@user] <amount|all>\` — challenge another user for ${config.currency_name}, or the bot if you omit @user`,
+            `\`${prefix}<game> [@user] <amount|all>\` — challenge another user for ${config.currency_name}, or the bot if you omit @user`,
         );
         commandLines.push(`\`${prefix}pvp\` — toggle whether you can be challenged to PvP games`);
     }
@@ -98,20 +98,20 @@ export async function buildEconomyInfoEmbed(
             }
 
             if (game.type === "blackjack") {
-                return `${emoji}**${label}** (\`${prefix}play ${gameName} [table|vs] <amount>\`): standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
+                return `${emoji}**${label}** (\`${prefix}${gameName} [table|vs] <amount>\`): standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
             }
 
             if (game.type === "pvp") {
                 const variantName = PVP_VARIANT_NAMES[game.variant];
-                return `${emoji}**${label}** (\`${prefix}play ${gameName} [@user] <amount>\`) — ${variantName}, vs a player or the bot, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
+                return `${emoji}**${label}** (\`${prefix}${gameName} [@user] <amount>\`) — ${variantName}, vs a player or the bot, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
             }
 
             if (game.type === "hol") {
-                return `${emoji}**${label}** (\`${prefix}play ${gameName} <amount>\`) — guess higher/lower/same, chain multipliers **${game.min_multiplier}x**-**${game.max_multiplier}x**, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
+                return `${emoji}**${label}** (\`${prefix}${gameName} <amount>\`) — guess higher/lower/same, chain multipliers **${game.min_multiplier}x**-**${game.max_multiplier}x**, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
             }
 
             const winPercent = Math.round(game.win_chance * 100);
-            return `${emoji}**${label}** (\`${prefix}play ${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
+            return `${emoji}**${label}** (\`${prefix}${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)}${cooldownText}`;
         });
         sections.push(`**Games**\n${gameLines.join("\n")}`);
     }

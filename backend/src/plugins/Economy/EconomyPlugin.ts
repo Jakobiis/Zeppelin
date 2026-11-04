@@ -18,6 +18,7 @@ import { ShopStatusCmd } from "./commands/ShopStatusCmd.js";
 import { TradeBackCmd } from "./commands/TradeBackCmd.js";
 import { TradeCmd } from "./commands/TradeCmd.js";
 import { WorkCmd } from "./commands/WorkCmd.js";
+import { PlayByGameNameEvt } from "./events/PlayByGameNameEvt.js";
 import { getActiveBoostMultiplier } from "./functions/getActiveBoostMultiplier.js";
 import { getCounterName } from "./functions/getCounterName.js";
 import { EconomyPluginType, zEconomyConfig } from "./types.js";
@@ -63,6 +64,11 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
       getCounterName: makePublicFn(pluginData, getCounterName),
     };
   },
+
+  // prettier-ignore
+  events: [
+    PlayByGameNameEvt,
+  ],
 
   // prettier-ignore
   messageCommands: [

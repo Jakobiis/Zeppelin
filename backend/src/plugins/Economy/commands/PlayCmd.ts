@@ -13,6 +13,7 @@ import { runHigherOrLower } from "../functions/runHigherOrLower.js";
 import { runPvpGame } from "../functions/pvpChallenge.js";
 import { runPvpVsBot } from "../functions/pvpVsBot.js";
 import { isPvpDisabled } from "../functions/pvpToggle.js";
+import { sendPlayPanel } from "../functions/sendPlayPanel.js";
 import { EconomyPluginType } from "../types.js";
 
 export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
@@ -20,6 +21,8 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
   permission: "can_play",
 
   signature: [
+    // `!play` alone: game picker with buttons
+    {},
     {
       game: ct.string(),
       amount: ct.string(),
@@ -39,6 +42,11 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
   ],
 
   async run({ pluginData, message, args }) {
+    if (!args.game) {
+      await sendPlayPanel(pluginData, message);
+      return;
+    }
+
     const config = pluginData.config.get();
     const entry = findGameEntry(config.games, args.game);
     if (!entry) {

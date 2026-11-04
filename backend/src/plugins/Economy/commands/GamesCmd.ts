@@ -35,7 +35,7 @@ export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
       const emojiPrefix = game.emoji ? `${game.emoji} ` : "";
       const cooldownMs = game.cooldown ? convertDelayStringToMS(game.cooldown) : null;
       const cooldownText = cooldownMs ? `, cooldown ${humanizeDuration(cooldownMs)}` : "";
-      // Only games played via `!play <name>` can be reached through an alias — `!work` always claims from the
+      // Only games played via `!<name>` / `!play <name>` can be reached through an alias — `!work` always claims from the
       // fixed "work" key, so there's nothing to alias there.
       const aliasesText = game.aliases.length ? ` (aka ${game.aliases.map((a) => `\`${a}\``).join(", ")})` : "";
 
@@ -46,23 +46,23 @@ export const GamesCmd = guildPluginMessageCommand<EconomyPluginType>()({
       }
 
       if (game.type === "blackjack") {
-        return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}play ${gameName} <amount>\`): standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}\n` +
-          `- \`${prefix}play ${gameName} table <amount>\`: up to 10 players vs the dealer, each with their own bet\n` +
-          `- \`${prefix}play ${gameName} vs <amount>\`: 2-10 players vs each other, everyone bets at least half the host's bet and the best hand takes the pot\n` +
-          `- \`${prefix}play ${gameName} @user <amount>\`: challenge someone directly`;
+        return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}${gameName} <amount>\`): standard blackjack, pays **${game.blackjack_payout}x** on a natural, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}\n` +
+          `- \`${prefix}${gameName} table <amount>\`: up to 10 players vs the dealer, each with their own bet\n` +
+          `- \`${prefix}${gameName} vs <amount>\`: 2-10 players vs each other, everyone bets at least half the host's bet and the best hand takes the pot\n` +
+          `- \`${prefix}${gameName} @user <amount>\`: challenge someone directly`;
       }
 
       if (game.type === "pvp") {
         const variantName = PVP_VARIANT_NAMES[game.variant];
-        return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}play ${gameName} [@user] <amount>\`) — ${variantName} vs another player, or vs the bot if you omit @user, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
+        return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}${gameName} [@user] <amount>\`) — ${variantName} vs another player, or vs the bot if you omit @user, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
       }
 
       if (game.type === "hol") {
-        return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}play ${gameName} <amount>\`) — guess higher/lower/same on a 1-${game.range_max} draw, chain multipliers **${game.min_multiplier}x**-**${game.max_multiplier}x** per round, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
+        return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}${gameName} <amount>\`) — guess higher/lower/same on a 1-${game.range_max} draw, chain multipliers **${game.min_multiplier}x**-**${game.max_multiplier}x** per round, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
       }
 
       const winPercent = Math.round(game.win_chance * 100);
-      return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}play ${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
+      return `${emojiPrefix}**${label}**${aliasesText} (\`${prefix}${gameName} <amount>\`) — ${winPercent}% to win **${formatWinMultiplier(game.win_multiplier)}**, bet ${formatAmount(game.min_bet)}-${formatAmount(game.max_bet)} ${config.currency_name}${cooldownText}`;
     });
 
     const embed = new EmbedBuilder()
