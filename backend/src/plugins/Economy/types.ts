@@ -101,6 +101,12 @@ export const zEconomyPvpGame = z
     ...zGameCommon,
     min_bet: z.number().int().positive(),
     max_bet: z.number().int().positive(),
+    // tic_tac_toe vs bot only. The bot plays perfectly except for this per-move chance of a positional
+    // mistake, and a draw refunds bot_draw_refund of the bet. A perfect player never loses outright, so these
+    // two decide whether they profit: 0.15/0.75 simulates to ~break-even for perfect play (~20% win rate).
+    // Raising either makes perfect play +EV, i.e. farmable.
+    bot_mistake_chance: z.number().min(0).max(1).default(0.15),
+    bot_draw_refund: z.number().min(0).max(1).default(0.75),
   })
   .refine((game) => game.max_bet >= game.min_bet, {
     message: "max_bet must be greater than or equal to min_bet",

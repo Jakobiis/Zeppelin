@@ -1,6 +1,7 @@
 import { User } from "discord.js";
 import { GuildPluginData } from "vety";
-import { EconomyPluginType } from "../types.js";
+import { z } from "zod";
+import { EconomyPluginType, zEconomyPvpGame } from "../types.js";
 import { PvpChannel } from "./pvpMatch.js";
 
 /** Same idea as PvpMatchContext, but for a solo player facing the bot instead of a second human — no
@@ -15,6 +16,7 @@ export interface PvpBotMatchContext {
   label: string;
   emojiPrefix: string;
   currencyName: string;
+  game: z.infer<typeof zEconomyPvpGame>;
 }
 
 // "loss" (the bot won) is distinct from a real-PvP loss — there's no second player to credit, the player's

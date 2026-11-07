@@ -17,15 +17,7 @@ const WIN_LINES = [
 
 type Cell = "X" | "O" | null;
 
-// Chance the bot skips its win/block check on a given move and just plays positionally instead — without this,
-// the heuristic below never misses a win or a block, so a player could at best force a draw and never actually win.
-const MISTAKE_CHANCE = 0.15;
-
-// Share of the bet returned on a draw. A perfect player never loses to minimax, so with full refunds every
-// mistake above is pure profit for them (farmable). Paired with MISTAKE_CHANCE 0.15 (simulated): perfect play
-// wins ~20% of games at ~break-even EV (~40% chance of being up after a session), casual play loses ~45%/game.
-// Raising either knob makes perfect play +EV and farmable again. Timeouts still refund in full.
-const DRAW_REFUND = 0.75;
+// Mistake chance and draw refund come from the game config (bot_mistake_chance / bot_draw_refund, see types.ts).
 
 function checkWinner(board: Cell[]): "X" | "O" | null {
   for (const [a, b, c] of WIN_LINES) {
@@ -82,13 +74,13 @@ function minimax(
   return { score: bestScore, move: bestMove };
 }
 
-/** Plays perfectly (via minimax) unless it rolls a deliberate mistake (see MISTAKE_CHANCE), in which case it
+/** Plays perfectly (via minimax) unless it rolls a deliberate mistake (see bot_mistake_chance), in which case it
  * falls back to a simple, non-lookahead positional pick so the player gets a genuine, if infrequent, shot at
  * winning instead of the bot being flat-out unbeatable. */
-function pickBotMove(board: Cell[], botSymbol: "X" | "O", humanSymbol: "X" | "O"): number {
+function pickBotMove(board: Cell[], botSymbol: "X" | "O", humanSymbol: "X" | "O", mistakeChance: number): number {
   const empty = emptyCells(board);
 
-  if (Math.random() >= MISTAKE_CHANCE) {
+  if (Math.random() >= mistakeChance) {
     return minimax(board, botSymbol, botSymbol, humanSymbol, 0).move ?? empty[0];
   }
 
@@ -111,7 +103,7 @@ export async function playTicTacToeVsBot(ctx: PvpBotMatchContext): Promise<PvpBo
 
   // If the bot goes first, let it move before the board is ever shown
   if (!isHumanTurn) {
-    board[pickBotMove(board, botSymbol, humanSymbol)] = botSymbol;
+    board[pickBotMove(board, botSymbol, humanSymbol, ctx.game.bot_mistake_chance)] = botSymbol;
     isHumanTurn = true;
   }
 
@@ -149,8 +141,8 @@ export async function playTicTacToeVsBot(ctx: PvpBotMatchContext): Promise<PvpBo
     return rows;
   };
 
-  const drawOutcome: PvpBotMatchOutcome = { type: "push", refund: Math.floor(ctx.amount * DRAW_REFUND) };
-  const drawText = `It's a draw! ${Math.round(DRAW_REFUND * 100)}% of your bet was refunded.`;
+  const drawOutcome: PvpBotMatchOutcome = { type: "push", refund: Math.floor(ctx.amount * ctx.game.bot_draw_refund) };
+  const drawText = `It's a draw! ${Math.round(ctx.game.bot_draw_refund * 100)}% of your bet was refunded.`;
 
   const sentMessage = await ctx.channel.send({ embeds: [buildEmbed()], components: buildButtons() });
 
@@ -212,7 +204,7 @@ export async function playTicTacToeVsBot(ctx: PvpBotMatchContext): Promise<PvpBo
 
       // Bot's turn, resolved immediately (no separate interaction) so both moves land in one update
       isHumanTurn = false;
-      board[pickBotMove(board, botSymbol, humanSymbol)] = botSymbol;
+      board[pickBotMove(board, botSymbol, humanSymbol, ctx.game.bot_mistake_chance)] = botSymbol;
 
       if (checkWinner(board)) {
         await endWith({ type: "loss" }, "🤖 The Bot wins!", interaction);

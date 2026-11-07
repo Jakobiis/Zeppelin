@@ -83,6 +83,7 @@ export async function runPvpVsBot(
     label,
     emojiPrefix,
     currencyName: config.currency_name,
+    game,
   };
 
   const outcome = await VARIANT_HANDLERS[game.variant](ctx);
