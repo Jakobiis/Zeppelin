@@ -5,6 +5,7 @@ import { makePublicFn } from "../../pluginUtils.js";
 import { CommonPlugin } from "../Common/CommonPlugin.js";
 import { CountersPlugin } from "../Counters/CountersPlugin.js";
 import { BalanceCmd } from "./commands/BalanceCmd.js";
+import { CollectCmd } from "./commands/CollectCmd.js";
 import { EconomyHelpCmd } from "./commands/EconomyHelpCmd.js";
 import { GameHistoryCmd } from "./commands/GameHistoryCmd.js";
 import { GamesCmd } from "./commands/GamesCmd.js";
@@ -73,6 +74,7 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
   // prettier-ignore
   messageCommands: [
     BalanceCmd,
+    CollectCmd,
     EconomyHelpCmd,
     GameHistoryCmd,
     GamesCmd,

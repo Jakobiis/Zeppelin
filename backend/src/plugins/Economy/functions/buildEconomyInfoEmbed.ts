@@ -63,6 +63,9 @@ export async function buildEconomyInfoEmbed(
     if (hasRewardGames) {
         commandLines.push(`\`${prefix}work\` — claim a free, cooldown-gated payout`);
     }
+    if (Object.keys(config.collect_roles).length) {
+        commandLines.push(`\`${prefix}collect\` — collect ${config.currency_name} from your roles`);
+    }
     if (hasPvpGames) {
         commandLines.push(
             `\`${prefix}<game> [@user] <amount|all>\` — challenge another user for ${config.currency_name}, or the bot if you omit @user`,

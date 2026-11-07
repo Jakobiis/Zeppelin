@@ -88,6 +88,22 @@ export class GuildEconomyGameHistory extends BaseGuildRepository {
     return qb;
   }
 
+  /** Seconds since the user's most recent entry for each given game name (missing = never played). Computed by
+   * the DB against its own NOW(), since created_at is DB-generated — avoids app/DB timezone mismatches. */
+  async getSecondsSinceLastEntry(userId: string, gameNames: string[]): Promise<Map<string, number>> {
+    if (!gameNames.length) return new Map();
+    const rows: Array<{ game_name: string; elapsed: string | number }> = await this.history
+      .createQueryBuilder("h")
+      .select("h.game_name", "game_name")
+      .addSelect("TIMESTAMPDIFF(SECOND, MAX(h.created_at), NOW())", "elapsed")
+      .where("h.guild_id = :guildId", { guildId: this.guildId })
+      .andWhere("h.user_id = :userId", { userId })
+      .andWhere("h.game_name IN (:...gameNames)", { gameNames })
+      .groupBy("h.game_name")
+      .getRawMany();
+    return new Map(rows.map((r) => [r.game_name, Number(r.elapsed)]));
+  }
+
   async getEntries(filter: EconomyGameHistoryFilter, limit: number, offset: number): Promise<EconomyGameHistoryEntry[]> {
     return this.buildFilteredQuery(filter)
       .orderBy("h.created_at", "DESC")

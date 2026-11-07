@@ -215,6 +215,13 @@ export const zEconomyTrade = z.strictObject({
   coins_per_point_sell: z.number().positive().nullable().default(null),
 });
 
+const MAX_COLLECT_ROLES = 50;
+
+export const zCollectRole = z.strictObject({
+  amount: z.number().int().positive(),
+  cooldown: zDelayString,
+});
+
 export const zEconomyConfig = z.strictObject({
   // The whole permission model for the dashboard's Economy admin page (balance give/subtract/set, leaderboard,
   // game history, analytics) — same idea as Giveaways' manager_roles (see Giveaways/types.ts): a member with any
@@ -244,6 +251,9 @@ export const zEconomyConfig = z.strictObject({
       { message: "Game aliases must be unique and can't reuse another game's name or alias" },
     ),
   shop: zEconomyShop.default({ boosts: {} }),
+  // Role ID -> payout for `!collect`. A member collects from every role they have whose cooldown has passed.
+  // Cooldowns are read from game history (game_name `collect:<roleId>`), so they survive restarts.
+  collect_roles: zBoundedRecord(z.record(zSnowflake, zCollectRole), 0, MAX_COLLECT_ROLES).default({}),
   can_view: z.boolean().default(false),
   can_play: z.boolean().default(false),
   can_trade: z.boolean().default(false),
