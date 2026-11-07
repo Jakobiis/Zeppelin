@@ -19,12 +19,13 @@ type Cell = "X" | "O" | null;
 
 // Chance the bot skips its win/block check on a given move and just plays positionally instead — without this,
 // the heuristic below never misses a win or a block, so a player could at best force a draw and never actually win.
-const MISTAKE_CHANCE = 0.08;
+const MISTAKE_CHANCE = 0.15;
 
 // Share of the bet returned on a draw. A perfect player never loses to minimax, so with full refunds every
-// mistake above is pure profit for them (+11% EV/game, simulated). An 80% refund flips that to about -6.6% EV for
-// perfect play while wins stay possible. Timeouts still refund in full.
-const DRAW_REFUND = 0.8;
+// mistake above is pure profit for them (farmable). Paired with MISTAKE_CHANCE 0.15 (simulated): perfect play
+// wins ~20% of games at ~break-even EV (~40% chance of being up after a session), casual play loses ~45%/game.
+// Raising either knob makes perfect play +EV and farmable again. Timeouts still refund in full.
+const DRAW_REFUND = 0.75;
 
 function checkWinner(board: Cell[]): "X" | "O" | null {
   for (const [a, b, c] of WIN_LINES) {
