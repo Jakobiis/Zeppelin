@@ -97,14 +97,15 @@ export async function runPvpVsBot(
       settleLock.unlock();
     }
   } else if (outcome.type === "push") {
-    await pluginData.state.counters.changeCounterValue(config.counter_name, null, playerId, amount);
+    await pluginData.state.counters.changeCounterValue(config.counter_name, null, playerId, outcome.refund ?? amount);
   }
   // "loss" — the bet was already deducted up front and isn't returned; nothing left to settle
 
   const totalAfter = await pluginData.state.counters.getCounterValue(config.counter_name, null, playerId);
   const resultTag = outcome.type === "win" ? "🏆 Won" : outcome.type === "push" ? "🤝 Push" : "💀 Lost";
 
-  const net = outcome.type === "win" ? amount : outcome.type === "loss" ? -amount : 0;
+  const net =
+    outcome.type === "win" ? amount : outcome.type === "loss" ? -amount : (outcome.refund ?? amount) - amount;
 
   await logGameHistory(pluginData, {
     userId: playerId,

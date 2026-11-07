@@ -21,6 +21,11 @@ type Cell = "X" | "O" | null;
 // the heuristic below never misses a win or a block, so a player could at best force a draw and never actually win.
 const MISTAKE_CHANCE = 0.08;
 
+// Share of the bet returned on a draw. A perfect player never loses to minimax, so with full refunds every
+// mistake above is pure profit for them (+11% EV/game, simulated). An 80% refund flips that to about -6.6% EV for
+// perfect play while wins stay possible. Timeouts still refund in full.
+const DRAW_REFUND = 0.8;
+
 function checkWinner(board: Cell[]): "X" | "O" | null {
   for (const [a, b, c] of WIN_LINES) {
     if (board[a] && board[a] === board[b] && board[a] === board[c]) {
@@ -143,6 +148,9 @@ export async function playTicTacToeVsBot(ctx: PvpBotMatchContext): Promise<PvpBo
     return rows;
   };
 
+  const drawOutcome: PvpBotMatchOutcome = { type: "push", refund: Math.floor(ctx.amount * DRAW_REFUND) };
+  const drawText = `It's a draw! ${Math.round(DRAW_REFUND * 100)}% of your bet was refunded.`;
+
   const sentMessage = await ctx.channel.send({ embeds: [buildEmbed()], components: buildButtons() });
 
   return new Promise<PvpBotMatchOutcome>((resolve) => {
@@ -197,7 +205,7 @@ export async function playTicTacToeVsBot(ctx: PvpBotMatchContext): Promise<PvpBo
         return;
       }
       if (board.every((cell) => cell !== null)) {
-        await endWith({ type: "push" }, "It's a draw! Bet refunded.", interaction);
+        await endWith(drawOutcome, drawText, interaction);
         return;
       }
 
@@ -210,7 +218,7 @@ export async function playTicTacToeVsBot(ctx: PvpBotMatchContext): Promise<PvpBo
         return;
       }
       if (board.every((cell) => cell !== null)) {
-        await endWith({ type: "push" }, "It's a draw! Bet refunded.", interaction);
+        await endWith(drawOutcome, drawText, interaction);
         return;
       }
 

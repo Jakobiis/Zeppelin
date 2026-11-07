@@ -19,6 +19,7 @@ export interface PvpBotMatchContext {
 
 // "loss" (the bot won) is distinct from a real-PvP loss — there's no second player to credit, the player's
 // already-escrowed bet is simply not returned.
-export type PvpBotMatchOutcome = { type: "win" } | { type: "push" } | { type: "loss" };
+// `refund` on a push overrides how much of the bet comes back (defaults to the full bet).
+export type PvpBotMatchOutcome = { type: "win" } | { type: "push"; refund?: number } | { type: "loss" };
 
 export type PlayPvpBotMatchFn = (ctx: PvpBotMatchContext) => Promise<PvpBotMatchOutcome>;
