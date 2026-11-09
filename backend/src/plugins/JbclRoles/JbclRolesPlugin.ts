@@ -6,8 +6,9 @@ import {
   ChatInputCommandInteraction,
   GuildMember,
 } from "discord.js";
-import { GuildPluginData, guildPlugin, slashOptions } from "vety";
-import { HOURS } from "../../utils.js";
+import { GuildPluginData, guildPlugin } from "vety";
+import { commandTypeHelpers as ct } from "../../commandTypes.js";
+import { HOURS, resolveUser } from "../../utils.js";
 import {
   JbclRoles,
   VERIFY_URL,
@@ -15,10 +16,9 @@ import {
   diffJbclRoles,
   fetchJbclAlts,
   fetchJbclRoles,
-  formatAltLines,
   formatVerifyLog,
 } from "./functions/jbclRoles.js";
-import { JbclRolesPluginType, jbclRolesEvt, jbclRolesSlashCmd, zJbclRolesConfig } from "./types.js";
+import { JbclRolesPluginType, jbclRolesEvt, jbclRolesMsgCmd, jbclRolesSlashCmd, zJbclRolesConfig } from "./types.js";
 
 type PluginData = GuildPluginData<JbclRolesPluginType>;
 
@@ -49,14 +49,23 @@ async function reconcile(pluginData: PluginData) {
 
 /** Gives the verified role straight away if the user logged in on the website within 24h. */
 async function quickVerify(pluginData: PluginData, member: GuildMember): Promise<"already" | "verified" | "website"> {
-  const { verified_role, alt_log_channel } = pluginData.config.get();
+  const { verified_role, unverified_role, alt_log_channel } = pluginData.config.get();
   if (!verified_role) return "website";
-  if (member.roles.cache.has(verified_role)) return "already";
+  const dropUnverified = async () => {
+    if (unverified_role && member.roles.cache.has(unverified_role)) {
+      await member.roles.remove(unverified_role, "JBCL verification");
+    }
+  };
+  if (member.roles.cache.has(verified_role)) {
+    await dropUnverified();
+    return "already";
+  }
 
   const alts = await checkQuickVerify(member.id);
   if (!alts) return "website";
 
   await member.roles.add(verified_role, "JBCL verification (recent website login)");
+  await dropUnverified();
   const logChannel = alt_log_channel ? pluginData.guild.channels.cache.get(alt_log_channel) : null;
   if (logChannel?.isTextBased()) {
     await logChannel
@@ -203,25 +212,28 @@ const VerifySlashCmd = jbclRolesSlashCmd({
   },
 });
 
-const AltsSlashCmd = jbclRolesSlashCmd({
-  name: "alts",
-  configPermission: "can_view_alts",
+async function altsReply(userId: string): Promise<string> {
+  try {
+    const alts = await fetchJbclAlts(userId);
+    const content = alts.length
+      ? `**Possible alts of <@${userId}>** (\`${userId}\`):\n${alts.map((alt) => `- <@${alt.user_id}> (\`${alt.user_id}\`)`).join("\n")}`
+      : `No linked accounts found for <@${userId}>.`;
+    return content.slice(0, 2000);
+  } catch (err) {
+    logErr("Alts lookup failed")(err);
+    return "Couldn't look up alts right now, try again later.";
+  }
+}
+
+const AltsMsgCmd = jbclRolesMsgCmd({
+  trigger: "alts",
+  permission: "can_view_alts",
   description: "Show accounts the website links to a user",
-  allowDms: false,
-  signature: [slashOptions.user({ name: "user", description: "The user to look up", required: true })],
-  async run({ interaction, options }) {
-    await interaction.deferReply({ ephemeral: true });
-    const user = options.user;
-    try {
-      const alts = await fetchJbclAlts(user.id);
-      const content = alts.length
-        ? `**Possible alts of <@${user.id}>** (\`${user.id}\`):\n${formatAltLines(alts)}`
-        : `No linked accounts found for <@${user.id}>.`;
-      await interaction.editReply({ content: content.slice(0, 2000), allowedMentions: { parse: [] } });
-    } catch (err) {
-      logErr("Alts lookup failed")(err);
-      await interaction.editReply("Couldn't look up alts right now, try again later.");
-    }
+  signature: { user: ct.string() },
+  async run({ pluginData, message, args }) {
+    const user = await resolveUser(pluginData.client, args.user, "JbclRoles:AltsMsgCmd");
+    const content = user.id ? await altsReply(user.id) : "User not found.";
+    await message.channel.send({ content, allowedMentions: { parse: [] } });
   },
 });
 
@@ -231,7 +243,8 @@ export const JbclRolesPlugin = guildPlugin<JbclRolesPluginType>()({
   configSchema: zJbclRolesConfig,
 
   events: [OnJoinEvt, ButtonEvt, PanelStickyEvt],
-  slashCommands: [SyncRolesSlashCmd, VerifySlashCmd, AltsSlashCmd],
+  slashCommands: [SyncRolesSlashCmd, VerifySlashCmd],
+  messageCommands: [AltsMsgCmd],
 
   defaultOverrides: [
     {

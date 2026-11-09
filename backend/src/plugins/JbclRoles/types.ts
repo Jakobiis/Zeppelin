@@ -1,4 +1,4 @@
-import { BasePluginType, guildPluginEventListener, guildPluginSlashCommand } from "vety";
+import { BasePluginType, guildPluginEventListener, guildPluginMessageCommand, guildPluginSlashCommand } from "vety";
 import { z } from "zod";
 import { zSnowflake } from "../../utils.js";
 
@@ -16,6 +16,8 @@ export const zJbclRolesConfig = z.strictObject({
     })
     .default({}),
   verified_role: zSnowflake.nullable().default(null),
+  // Removed when a member verifies
+  unverified_role: zSnowflake.nullable().default(null),
   alt_log_channel: zSnowflake.nullable().default(null),
   // Channel kept with a sticky "Verify" button panel at the bottom
   verify_channel: zSnowflake.nullable().default(null),
@@ -34,3 +36,4 @@ export interface JbclRolesPluginType extends BasePluginType {
 
 export const jbclRolesEvt = guildPluginEventListener<JbclRolesPluginType>();
 export const jbclRolesSlashCmd = guildPluginSlashCommand<JbclRolesPluginType>();
+export const jbclRolesMsgCmd = guildPluginMessageCommand<JbclRolesPluginType>();

@@ -86,6 +86,7 @@ export function initJbclVerified(router: express.Router) {
 
     try {
       await setGuildMemberRole(guild_id, user_id, cfg.verified_role, true);
+      if (cfg.unverified_role) await setGuildMemberRole(guild_id, user_id, cfg.unverified_role, false);
     } catch (err) {
       logErr(err);
       return serverError(res, "Failed to give verified role");
