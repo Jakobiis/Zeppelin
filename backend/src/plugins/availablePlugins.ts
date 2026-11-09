@@ -35,6 +35,8 @@ import { GuildInfoSaverPlugin } from "./GuildInfoSaver/GuildInfoSaverPlugin.js";
 import { guildInfoSaverPluginDocs } from "./GuildInfoSaver/docs.js";
 import { InternalPosterPlugin } from "./InternalPoster/InternalPosterPlugin.js";
 import { internalPosterPluginDocs } from "./InternalPoster/docs.js";
+import { JbclRolesPlugin } from "./JbclRoles/JbclRolesPlugin.js";
+import { jbclRolesPluginDocs } from "./JbclRoles/docs.js";
 import { LocateUserPlugin } from "./LocateUser/LocateUserPlugin.js";
 import { locateUserPluginDocs } from "./LocateUser/docs.js";
 import { LogsPlugin } from "./Logs/LogsPlugin.js";
@@ -162,6 +164,10 @@ export const availableGuildPlugins: ZeppelinGuildPluginInfo[] = [
   {
     plugin: InternalPosterPlugin,
     docs: internalPosterPluginDocs,
+  },
+  {
+    plugin: JbclRolesPlugin,
+    docs: jbclRolesPluginDocs,
   },
   {
     plugin: LocateUserPlugin,

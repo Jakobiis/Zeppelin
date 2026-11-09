@@ -7,6 +7,7 @@ import { initArchives } from "./archives.js";
 import { initAuth } from "./auth.js";
 import { initDocs } from "./docs.js";
 import { initGuildsAPI } from "./guilds/index.js";
+import { initJbclRoles, initJbclVerified } from "./jbclRoles.js";
 import { clientError, error, notFound } from "./responses.js";
 import { startBackgroundTasks } from "./tasks.js";
 
@@ -32,6 +33,8 @@ initAuth(rootRouter);
 initGuildsAPI(rootRouter);
 initArchives(rootRouter);
 initDocs(rootRouter);
+initJbclRoles(rootRouter);
+initJbclVerified(rootRouter);
 
 // Default route
 rootRouter.get("/", (req, res) => {
