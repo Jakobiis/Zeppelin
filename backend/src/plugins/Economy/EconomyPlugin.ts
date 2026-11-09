@@ -92,6 +92,7 @@ export const EconomyPlugin = guildPlugin<EconomyPluginType>()({
 
   beforeLoad(pluginData) {
     pluginData.state.lastPlayedAt = new Map();
+    pluginData.state.activeGamePlayers = new Set();
     pluginData.state.shop = GuildEconomyShop.getGuildInstance(pluginData.guild.id);
   },
 

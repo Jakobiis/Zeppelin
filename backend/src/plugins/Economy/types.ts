@@ -101,8 +101,9 @@ export const zEconomyPvpGame = z
     ...zGameCommon,
     min_bet: z.number().int().positive(),
     max_bet: z.number().int().positive(),
-    // tic_tac_toe vs bot only. The bot plays perfectly except for this per-move chance of a positional
-    // mistake, and a draw refunds bot_draw_refund of the bet. A perfect player never loses outright, so these
+    // vs bot only. bot_draw_refund is the share of the bet returned on any vs-bot tie (all variants).
+    // tic_tac_toe: the bot plays perfectly except for this per-move chance of a positional
+    // mistake. A perfect player never loses outright, so these
     // two decide whether they profit: 0.15/0.75 simulates to ~break-even for perfect play (~20% win rate).
     // Raising either makes perfect play +EV, i.e. farmable.
     bot_mistake_chance: z.number().min(0).max(1).default(0.15),
@@ -280,5 +281,7 @@ export interface EconomyPluginType extends BasePluginType {
     // Per (gameName, userId) last-played timestamp (ms) for game cooldowns. In-memory only — resets on restart,
     // which is fine for an anti-spam cooldown rather than something the economy's integrity depends on.
     lastPlayedAt: Map<string, number>;
+    // User IDs currently inside a !play game (see PlayCmd)
+    activeGamePlayers: Set<string>;
   };
 }

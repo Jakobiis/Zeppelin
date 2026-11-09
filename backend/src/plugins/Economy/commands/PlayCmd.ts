@@ -55,98 +55,110 @@ export const PlayCmd = guildPluginMessageCommand<EconomyPluginType>()({
     }
     const [gameName, game] = entry;
 
-    if (game.type === "pvp") {
-      if (!args.user) {
-        await runPvpVsBot(pluginData, message, gameName, game, args.amount);
+    // One game per user at a time — otherwise a losing tic-tac-toe can be left to time out while they start the
+    // next. ponytail: in-memory, covers only the invoker (not PvP opponents/table joiners), resets on restart.
+    const active = pluginData.state.activeGamePlayers;
+    if (active.has(message.author.id)) {
+      void pluginData.state.common.sendErrorMessage(message, "You are already in a game — finish it first.");
+      return;
+    }
+    active.add(message.author.id);
+    try {
+      if (game.type === "pvp") {
+        if (!args.user) {
+          await runPvpVsBot(pluginData, message, gameName, game, args.amount);
+          return;
+        }
+        await runPvpGame(pluginData, message, gameName, game, args.user, args.amount);
         return;
       }
-      await runPvpGame(pluginData, message, gameName, game, args.user, args.amount);
-      return;
-    }
 
-    if (args.mode) {
-      const mode = args.mode.toLowerCase();
-      if (game.type !== "blackjack" || (mode !== "table" && mode !== "vs")) {
-        void pluginData.state.common.sendErrorMessage(message, `Unknown option: ${args.mode}`);
+      if (args.mode) {
+        const mode = args.mode.toLowerCase();
+        if (game.type !== "blackjack" || (mode !== "table" && mode !== "vs")) {
+          void pluginData.state.common.sendErrorMessage(message, `Unknown option: ${args.mode}`);
+          return;
+        }
+        await runBlackjackTable(pluginData, message, gameName, game, mode, args.amount);
         return;
       }
-      await runBlackjackTable(pluginData, message, gameName, game, mode, args.amount);
-      return;
-    }
 
-    if (args.user && game.type === "blackjack") {
-      if (args.user.id === message.author.id || args.user.bot) {
-        void pluginData.state.common.sendErrorMessage(message, "You can't challenge yourself or a bot");
+      if (args.user && game.type === "blackjack") {
+        if (args.user.id === message.author.id || args.user.bot) {
+          void pluginData.state.common.sendErrorMessage(message, "You can't challenge yourself or a bot");
+          return;
+        }
+        if (await isPvpDisabled(pluginData, args.user.id)) {
+          void pluginData.state.common.sendErrorMessage(message, `${args.user.username} isn't accepting PvP challenges.`);
+          return;
+        }
+        await runBlackjackTable(pluginData, message, gameName, game, "vs", args.amount, [args.user]);
         return;
       }
-      if (await isPvpDisabled(pluginData, args.user.id)) {
-        void pluginData.state.common.sendErrorMessage(message, `${args.user.username} isn't accepting PvP challenges.`);
+
+      if (args.user) {
+        void pluginData.state.common.sendErrorMessage(message, `**${gameName}** isn't a PvP game.`);
         return;
       }
-      await runBlackjackTable(pluginData, message, gameName, game, "vs", args.amount, [args.user]);
-      return;
+
+      if (game.type === "blackjack") {
+        await runBlackjack(pluginData, message, gameName, game, args.amount);
+        return;
+      }
+
+      if (game.type === "hol") {
+        await runHigherOrLower(pluginData, message, gameName, game, args.amount);
+        return;
+      }
+
+      if (game.type !== "wager") {
+        void pluginData.state.common.sendErrorMessage(
+          message,
+          `**${gameName}** doesn't take bets — use \`${getGuildPrefix(pluginData)}work\` instead.`,
+        );
+        return;
+      }
+
+      const { spendable: currentBalance } = await getSpendableBalance(pluginData, config.counter_name, message.author.id);
+
+      let bet = parseAmountInput(args.amount, currentBalance);
+      if (bet === null) {
+        void pluginData.state.common.sendErrorMessage(message, `Amount must be a positive whole number, or "all"`);
+        return;
+      }
+
+      if (isAllOrMaxKeyword(args.amount)) {
+        bet = Math.min(bet, game.max_bet);
+      }
+
+      const result = await playGame(pluginData, gameName, game, message.author.id, bet);
+
+      if (result.type === "error") {
+        void pluginData.state.common.sendErrorMessage(message, result.message);
+        return;
+      }
+
+      const emojiPrefix = config.currency_emoji ? `${config.currency_emoji} ` : "";
+      const label = game.label ?? gameName;
+
+      const multiplierText = result.multiplier != null ? ` (**${result.multiplier.toFixed(2)}x**)` : "";
+
+      const betEmbed = new EmbedBuilder()
+        .setColor(0x0159b2)
+        .setDescription(`Playing **${label}** for ${emojiPrefix}**${formatAmount(bet)}** ${config.currency_name}`);
+
+      const gameEmbed = new EmbedBuilder()
+        .setColor(result.win ? 0x4caf50 : 0xe53935)
+        .setTitle(label)
+        .setDescription(
+          result.win
+            ? `🎉 You won${multiplierText}! +${emojiPrefix}**${formatAmount(result.amountChanged)}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`
+            : `💸 You lost. -${emojiPrefix}**${formatAmount(Math.abs(result.amountChanged))}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`,
+        );
+
+      await message.channel.send({ embeds: [betEmbed, gameEmbed] });
+    } finally {
+      active.delete(message.author.id);
     }
-
-    if (args.user) {
-      void pluginData.state.common.sendErrorMessage(message, `**${gameName}** isn't a PvP game.`);
-      return;
-    }
-
-    if (game.type === "blackjack") {
-      await runBlackjack(pluginData, message, gameName, game, args.amount);
-      return;
-    }
-
-    if (game.type === "hol") {
-      await runHigherOrLower(pluginData, message, gameName, game, args.amount);
-      return;
-    }
-
-    if (game.type !== "wager") {
-      void pluginData.state.common.sendErrorMessage(
-        message,
-        `**${gameName}** doesn't take bets — use \`${getGuildPrefix(pluginData)}work\` instead.`,
-      );
-      return;
-    }
-
-    const { spendable: currentBalance } = await getSpendableBalance(pluginData, config.counter_name, message.author.id);
-
-    let bet = parseAmountInput(args.amount, currentBalance);
-    if (bet === null) {
-      void pluginData.state.common.sendErrorMessage(message, `Amount must be a positive whole number, or "all"`);
-      return;
-    }
-
-    if (isAllOrMaxKeyword(args.amount)) {
-      bet = Math.min(bet, game.max_bet);
-    }
-
-    const result = await playGame(pluginData, gameName, game, message.author.id, bet);
-
-    if (result.type === "error") {
-      void pluginData.state.common.sendErrorMessage(message, result.message);
-      return;
-    }
-
-    const emojiPrefix = config.currency_emoji ? `${config.currency_emoji} ` : "";
-    const label = game.label ?? gameName;
-
-    const multiplierText = result.multiplier != null ? ` (**${result.multiplier.toFixed(2)}x**)` : "";
-
-    const betEmbed = new EmbedBuilder()
-      .setColor(0x0159b2)
-      .setDescription(`Playing **${label}** for ${emojiPrefix}**${formatAmount(bet)}** ${config.currency_name}`);
-
-    const gameEmbed = new EmbedBuilder()
-      .setColor(result.win ? 0x4caf50 : 0xe53935)
-      .setTitle(label)
-      .setDescription(
-        result.win
-          ? `🎉 You won${multiplierText}! +${emojiPrefix}**${formatAmount(result.amountChanged)}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`
-          : `💸 You lost. -${emojiPrefix}**${formatAmount(Math.abs(result.amountChanged))}** ${config.currency_name}\nNew balance: ${emojiPrefix}**${formatAmount(result.newBalance)}** ${config.currency_name}`,
-      );
-
-    await message.channel.send({ embeds: [betEmbed, gameEmbed] });
   },
 });

@@ -13,8 +13,8 @@ export async function playDiceDuelVsBot(ctx: PvpBotMatchContext): Promise<PvpBot
   let outcome: PvpBotMatchOutcome;
 
   if (playerRoll === botRoll) {
-    resultText = "It's a tie! Bet refunded.";
-    outcome = { type: "push" };
+    resultText = `It's a tie! ${Math.round(ctx.game.bot_draw_refund * 100)}% of your bet was refunded.`;
+    outcome = { type: "push", refund: Math.floor(ctx.amount * ctx.game.bot_draw_refund) };
   } else if (playerRoll > botRoll) {
     resultText = `<@${ctx.playerId}> wins!`;
     outcome = { type: "win" };

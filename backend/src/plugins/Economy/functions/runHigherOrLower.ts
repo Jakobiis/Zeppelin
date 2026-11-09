@@ -135,26 +135,17 @@ export async function runHigherOrLower(
   };
 
   const buildDescription = (extra?: string): string => {
-    const multipliers = roundMultipliers(currentNumber, game.range_max, roundIndex, game.ramp_rounds, game.min_multiplier, game.max_multiplier);
-    const buttonLines = (Object.keys(CHOICE_LABEL) as Choice[])
-      .map((choice) => {
-        const mult = multipliers[choice];
-        return mult == null ? null : `${CHOICE_EMOJI[choice]} **${CHOICE_LABEL[choice]}**: ${mult.toFixed(2)}x`;
-      })
-      .filter((line): line is string => line !== null)
-      .join("  ·  ");
-
     const progressLine =
       roundIndex > 0
-        ? `Current multiplier: **${currentMultiplier.toFixed(3)}x** (cash out for ${emojiPrefix}**${formatAmount(potentialPayout(currentMultiplier))}**)\n`
+        ? `\nCurrent multiplier: **${currentMultiplier.toFixed(3)}x** (cash out for ${emojiPrefix}**${formatAmount(potentialPayout(currentMultiplier))}**)`
         : "";
 
     // Deliberately doesn't say what the range is — combined with a specific number, that makes it obvious how
     // close to an edge you are (e.g. "23 (1-25)" all but announces Lower is the safe bet). The multipliers
     // already communicate the odds; spelling out the range on top of that is redundant and too easy to read.
     return (
-      `Round ${roundIndex + 1} — the number is **${currentNumber}**\n` +
-      `${progressLine}${buttonLines}` +
+      `Round ${roundIndex + 1} — the number is **${currentNumber}**` +
+      progressLine +
       (extra ? `\n\n${extra}` : "")
     );
   };
@@ -178,7 +169,11 @@ export async function runHigherOrLower(
       new ButtonBuilder()
         .setStyle(ButtonStyle.Primary)
         .setEmoji(CHOICE_EMOJI[choice])
-        .setLabel(CHOICE_LABEL[choice])
+        .setLabel(
+          multipliers[choice] == null
+            ? CHOICE_LABEL[choice]
+            : `${CHOICE_LABEL[choice]} (${multipliers[choice]!.toFixed(2)}x)`,
+        )
         .setCustomId(`${idBase}:${choice}`)
         .setDisabled(disabled || multipliers[choice] == null),
     );

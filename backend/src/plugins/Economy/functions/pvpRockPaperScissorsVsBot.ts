@@ -66,8 +66,8 @@ export async function playRockPaperScissorsVsBot(ctx: PvpBotMatchContext): Promi
       let outcome: PvpBotMatchOutcome;
       let resultText: string;
       if (playerChoice === botChoice) {
-        outcome = { type: "push" };
-        resultText = "It's a tie! Bet refunded.";
+        outcome = { type: "push", refund: Math.floor(ctx.amount * ctx.game.bot_draw_refund) };
+        resultText = `It's a tie! ${Math.round(ctx.game.bot_draw_refund * 100)}% of your bet was refunded.`;
       } else if (BEATS[playerChoice] === botChoice) {
         outcome = { type: "win" };
         resultText = `<@${ctx.playerId}> wins!`;

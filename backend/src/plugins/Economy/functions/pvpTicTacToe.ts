@@ -126,10 +126,15 @@ export async function playTicTacToe(ctx: PvpMatchContext): Promise<PvpMatchOutco
     collector.on("end", async () => {
       if (settled) return;
       settled = true;
+      // Whoever stalled forfeits — otherwise stalling a lost board dodges the loss
+      const winnerId = currentPlayerId === xPlayerId ? oPlayerId : xPlayerId;
       await sentMessage
-        .edit({ embeds: [buildEmbed("Match timed out. Bets refunded.")], components: buildButtons(true) })
+        .edit({
+          embeds: [buildEmbed(`Match timed out — <@${currentPlayerId}> forfeits, <@${winnerId}> wins!`)],
+          components: buildButtons(true),
+        })
         .catch(noop);
-      resolve({ type: "push" });
+      resolve({ type: "win", winnerId });
     });
   });
 }

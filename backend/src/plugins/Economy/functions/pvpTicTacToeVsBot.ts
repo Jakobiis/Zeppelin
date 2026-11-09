@@ -223,9 +223,10 @@ export async function playTicTacToeVsBot(ctx: PvpBotMatchContext): Promise<PvpBo
       if (settled) return;
       settled = true;
       await sentMessage
-        .edit({ embeds: [buildEmbed("Match timed out. Bet refunded.")], components: buildButtons(true) })
+        .edit({ embeds: [buildEmbed("Match timed out — you forfeit.")], components: buildButtons(true) })
         .catch(noop);
-      resolve({ type: "push" });
+      // Forfeit, not refund — otherwise stalling a lost board dodges the loss
+      resolve({ type: "loss" });
     });
   });
 }
