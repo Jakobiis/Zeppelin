@@ -5,6 +5,7 @@ import { AttachmentSpamTrigger } from "./attachmentSpam.js";
 import { BanTrigger } from "./ban.js";
 import { CharacterSpamTrigger } from "./characterSpam.js";
 import { CounterTrigger } from "./counterTrigger.js";
+import { DuplicateSpamTrigger } from "./duplicateSpam.js";
 import { EmojiSpamTrigger } from "./emojiSpam.js";
 import { HasAttachmentsTrigger } from "./hasAttachments.js";
 import { KickTrigger } from "./kick.js";
@@ -16,6 +17,7 @@ import { MatchLinksTrigger } from "./matchLinks.js";
 import { MatchMimeTypeTrigger } from "./matchMimeType.js";
 import { MatchRegexTrigger } from "./matchRegex.js";
 import { MatchWordsTrigger } from "./matchWords.js";
+import { OpenAIModerationTrigger } from "./openaiModeration.js";
 import { MemberJoinTrigger } from "./memberJoin.js";
 import { MemberJoinSpamTrigger } from "./memberJoinSpam.js";
 import { MemberLeaveTrigger } from "./memberLeave.js";
@@ -45,12 +47,14 @@ export const availableTriggers: Record<string, AutomodTriggerBlueprint<any, any>
   has_attachments: HasAttachmentsTrigger,
   match_attachment_type: MatchAttachmentTypeTrigger,
   match_mime_type: MatchMimeTypeTrigger,
+  openai_moderation: OpenAIModerationTrigger,
   member_join: MemberJoinTrigger,
   member_leave: MemberLeaveTrigger,
   role_added: RoleAddedTrigger,
   role_removed: RoleRemovedTrigger,
 
   message_spam: MessageSpamTrigger,
+  duplicate_spam: DuplicateSpamTrigger,
   mention_spam: MentionSpamTrigger,
   link_spam: LinkSpamTrigger,
   attachment_spam: AttachmentSpamTrigger,

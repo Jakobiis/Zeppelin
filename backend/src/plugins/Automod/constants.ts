@@ -18,6 +18,7 @@ export enum RecentActionType {
   Sticker,
   MemberLeave,
   ThreadCreate,
+  DuplicateMessage,
 }
 
 export const zNotify = z.union([z.literal("dm"), z.literal("channel")]);

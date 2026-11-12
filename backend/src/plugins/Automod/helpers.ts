@@ -10,6 +10,8 @@ interface BaseAutomodTriggerMatchResult {
 
   summary?: string;
   fullSummary?: string;
+
+  files?: { name: string; data: Buffer }[]; // Attached (spoilered) to alert messages
 }
 
 export type AutomodTriggerMatchResult<TExtra = unknown> = unknown extends TExtra

@@ -96,10 +96,12 @@ export const AlertAction = automodAction({
       try {
         const poster = pluginData.getPlugin(InternalPosterPlugin);
         const chunks = chunkMessageLines(rendered);
-        for (const chunk of chunks) {
+        for (const [i, chunk] of chunks.entries()) {
           await poster.sendMessage(channel, {
             content: chunk,
             allowedMentions: erisAllowedMentionsToDjsMentionOptions(actionConfig.allowed_mentions),
+            files:
+              i === 0 ? matchResult.files?.map((f) => ({ attachment: f.data, name: `SPOILER_${f.name}` })) : undefined,
           });
         }
       } catch (err) {
