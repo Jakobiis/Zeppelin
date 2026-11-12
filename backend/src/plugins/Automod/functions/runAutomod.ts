@@ -159,8 +159,11 @@ export async function runAutomod(
 
           contexts = [context, ...(matchResult.extraContexts || [])];
 
-          for (const _context of contexts) {
-            _context.actioned = true;
+          // Pass-through rules (counters, activity tracking) shouldn't hide messages from later spam triggers
+          if (!rule.allow_further_rules) {
+            for (const _context of contexts) {
+              _context.actioned = true;
+            }
           }
 
           if (matchResult.silentClean) {
