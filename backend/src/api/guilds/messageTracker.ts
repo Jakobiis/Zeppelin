@@ -37,7 +37,7 @@ async function getMessageTrackerManagerRoles(guildId: string): Promise<string[]>
 
 // Same rationale as Giveaways'/Economy's isXManager: swallows errors and denies access rather than propagating,
 // since an unhandled rejection here would kill the whole API process.
-async function isMessageTrackerManager(guildId: string, userId: string): Promise<boolean> {
+export async function isMessageTrackerManager(guildId: string, userId: string): Promise<boolean> {
   try {
     const managerRoles = await getMessageTrackerManagerRoles(guildId);
     if (managerRoles.length === 0) return false;
@@ -49,7 +49,7 @@ async function isMessageTrackerManager(guildId: string, userId: string): Promise
   }
 }
 
-function requireMessageTrackerManager() {
+export function requireMessageTrackerManager() {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (!(await isMessageTrackerManager(req.params.guildId, req.user!.userId))) {
       return unauthorized(res);

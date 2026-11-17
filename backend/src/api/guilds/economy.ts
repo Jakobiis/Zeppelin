@@ -67,7 +67,7 @@ function requireEconomyManager() {
 // directly. Returns null if the coins counter isn't configured under Counters' own `counters:` key yet (Economy
 // only *names* a counter, per-counter settings like max_value live in Counters' config — see Economy/types.ts's
 // counter_name comment).
-async function getCoinsCounterSettings(guildId: string, counterName: string): Promise<{ maxValue: number } | null> {
+export async function getCoinsCounterSettings(guildId: string, counterName: string): Promise<{ maxValue: number } | null> {
   const countersConfig = await getPluginConfig(guildId, "counters");
   const counter = countersConfig?.counters?.[counterName];
   if (!counter) return null;

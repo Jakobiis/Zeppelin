@@ -151,6 +151,8 @@ export function forceStandAll(state: BlackjackState): void {
 
 /** Dealer stands on all 17s (hard or soft). */
 export function playDealer(state: BlackjackState): void {
+  // Busted hands lose regardless, so the dealer doesn't draw — drawing anyway produced "22 vs 22" boards that read as a tie.
+  if (state.hands.every((hand) => hand.status === "bust")) return;
   while (handValue(state.dealerHand).total < 17) {
     state.dealerHand.push(state.deck.pop()!);
   }

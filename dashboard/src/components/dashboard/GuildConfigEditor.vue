@@ -18,6 +18,7 @@
         <a v-if="isGiveawayManager" href="javascript:void(0)" class="sidebar-link" :class="mode === 'giveaways' ? 'sidebar-link-active' : ''" v-on:click="setMode('giveaways')">Giveaways</a>
         <a v-if="isEconomyManager" href="javascript:void(0)" class="sidebar-link" :class="mode === 'economy' ? 'sidebar-link-active' : ''" v-on:click="setMode('economy')">Economy</a>
         <a v-if="isMessageTrackerManager" href="javascript:void(0)" class="sidebar-link" :class="mode === 'messages' ? 'sidebar-link-active' : ''" v-on:click="setMode('messages')">Messages</a>
+        <a v-if="isMessageTrackerManager" href="javascript:void(0)" class="sidebar-link" :class="mode === 'activity' ? 'sidebar-link-active' : ''" v-on:click="setMode('activity')">Activity</a>
         <!-- Always last in the tab order (not second, right after YAML) — kept below every other tab regardless
              of which of them happen to be available for this guild, so its own plugin sub-nav (right below) has
              a stable position instead of jumping around depending on isGiveawayManager/isEconomyManager/etc. -->
@@ -108,6 +109,7 @@
     />
     <GuildEconomyPanel v-if="mode === 'economy' && isEconomyManager" class="mt-4" :guild-id="String($route.params.guildId)" />
     <GuildMessagesPanel v-if="mode === 'messages' && isMessageTrackerManager" class="mt-4" :guild-id="String($route.params.guildId)" />
+    <GuildActivityPanel v-if="mode === 'activity' && isMessageTrackerManager" class="mt-4" :guild-id="String($route.params.guildId)" />
   </div>
 </template>
 
@@ -127,6 +129,7 @@
   import "ace-builds/src-noconflict/theme-tomorrow_night";
 
   import GeneralConfigForm from "./GeneralConfigForm.vue";
+  import GuildActivityPanel from "./GuildActivityPanel.vue";
   import GuildEconomyPanel from "./GuildEconomyPanel.vue";
   import GuildGiveawaysPanel from "./GuildGiveawaysPanel.vue";
   import GuildMessagesPanel from "./GuildMessagesPanel.vue";
@@ -147,6 +150,7 @@
       GuildGiveawaysPanel,
       GuildEconomyPanel,
       GuildMessagesPanel,
+      GuildActivityPanel,
     },
     // Reactive provide (Options API needs an explicit computed() to keep it reactive for injecting descendants)
     // so the search bar above the Interface tab can reach every PluginConfigField in the tree without threading
@@ -220,6 +224,8 @@
             ? "economy"
             : queryMode === "messages" && this.isMessageTrackerManager
               ? "messages"
+              : queryMode === "activity" && this.isMessageTrackerManager
+                ? "activity"
               : this.canReadConfig && queryMode === "interface"
                 ? "interface"
                 : this.canReadConfig
@@ -346,8 +352,8 @@
         } else if (this.mode === "economy") {
           query.mode = "economy";
           delete query.plugin;
-        } else if (this.mode === "messages") {
-          query.mode = "messages";
+        } else if (this.mode === "messages" || this.mode === "activity") {
+          query.mode = this.mode;
           delete query.plugin;
         } else {
           delete query.mode;
