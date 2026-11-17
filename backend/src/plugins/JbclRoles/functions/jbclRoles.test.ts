@@ -1,5 +1,5 @@
 import test from "ava";
-import { diffJbclRoles } from "./jbclRoles.js";
+import { accountTooNewReason, diffJbclRoles } from "./jbclRoles.js";
 
 const none = { owner: false, valueteam: false, websitemoderator: false, premium: 0, earlyadopter: false };
 const map = { owner: "o", premium_1: "p1", premium_2: "p2", premium_3: "p3" };
@@ -9,4 +9,12 @@ test("Premium gets exactly its tier role, others removed; unmapped and foreign r
   t.deepEqual(diffJbclRoles({ ...none, earlyadopter: true }, map, ["x"]), { add: [], remove: [] });
   t.deepEqual(diffJbclRoles(none, map, ["o", "p3"]), { add: [], remove: ["o", "p3"] });
   t.deepEqual(diffJbclRoles({ ...none, owner: true }, map, ["o"]), { add: [], remove: [] });
+});
+
+test("accountTooNewReason blocks accounts younger than min_account_age", (t) => {
+  const idAt = (ms: number) => ((BigInt(ms) - 1_420_070_400_000n) << 22n).toString();
+  const day = 24 * 60 * 60 * 1000;
+  t.truthy(accountTooNewReason(idAt(Date.now() - day), "7d"));
+  t.is(accountTooNewReason(idAt(Date.now() - 8 * day), "7d"), null);
+  t.is(accountTooNewReason(idAt(Date.now() - day), null), null);
 });

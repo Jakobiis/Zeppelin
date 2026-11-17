@@ -1,6 +1,6 @@
 import { BasePluginType, guildPluginEventListener, guildPluginMessageCommand, guildPluginSlashCommand } from "vety";
 import { z } from "zod";
-import { zSnowflake } from "../../utils.js";
+import { zDelayString, zSnowflake } from "../../utils.js";
 
 // Read raw from YAML by the API's /jbcl/roles webhook too (api/jbclRoles.ts), so overrides don't apply to `roles`.
 export const zJbclRolesConfig = z.strictObject({
@@ -18,6 +18,8 @@ export const zJbclRolesConfig = z.strictObject({
   verified_role: zSnowflake.nullable().default(null),
   // Removed when a member verifies
   unverified_role: zSnowflake.nullable().default(null),
+  // Accounts younger than this (e.g. "7d") can't verify. Also read raw by api/jbclRoles.ts.
+  min_account_age: zDelayString.nullable().default(null),
   alt_log_channel: zSnowflake.nullable().default(null),
   // Channel kept with a sticky "Verify" button panel at the bottom
   verify_channel: zSnowflake.nullable().default(null),

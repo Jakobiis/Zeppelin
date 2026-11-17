@@ -1,4 +1,14 @@
 import { env } from "../../../env.js";
+import { humanizeDuration } from "../../../humanizeDuration.js";
+import { convertDelayStringToMS } from "../../../utils.js";
+import { snowflakeToTimestamp } from "../../../utils/snowflakeToTimestamp.js";
+
+/** Returns a user-facing reason if the account is younger than `minAge` (e.g. "7d"), otherwise null. */
+export function accountTooNewReason(userId: string, minAge: string | null | undefined): string | null {
+  const minMs = minAge ? convertDelayStringToMS(minAge) : null;
+  if (!minMs || Date.now() - snowflakeToTimestamp(userId) >= minMs) return null;
+  return `Your Discord account must be at least ${humanizeDuration(minMs, { largest: 2 })} old to verify.`;
+}
 
 // Shared by the bot process (plugin: join, /sync-roles, reconcile) and the API process (POST /jbcl/roles webhook).
 

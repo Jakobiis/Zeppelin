@@ -3,7 +3,7 @@ import express, { Request, Response } from "express";
 import { z } from "zod";
 import { Configs } from "../data/Configs.js";
 import { env } from "../env.js";
-import { JbclRoleMap, diffJbclRoles, formatVerifyLog } from "../plugins/JbclRoles/functions/jbclRoles.js";
+import { JbclRoleMap, accountTooNewReason, diffJbclRoles, formatVerifyLog } from "../plugins/JbclRoles/functions/jbclRoles.js";
 import { loadYamlSafely } from "../utils/loadYamlSafely.js";
 import { sendChannelMessage } from "../plugins/Giveaways/functions/discordRest.js";
 import { setGuildMemberRole } from "./guilds/discordData.js";
@@ -83,6 +83,8 @@ export function initJbclVerified(router: express.Router) {
 
     const cfg = await getJbclRolesConfig(guild_id);
     if (!cfg?.verified_role) return clientError(res, "Verification not configured for this guild");
+    const tooNew = accountTooNewReason(user_id, cfg.min_account_age);
+    if (tooNew) return clientError(res, tooNew);
 
     try {
       await setGuildMemberRole(guild_id, user_id, cfg.verified_role, true);

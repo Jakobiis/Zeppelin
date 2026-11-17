@@ -12,6 +12,7 @@ import { HOURS, resolveUser } from "../../utils.js";
 import {
   JbclRoles,
   VERIFY_URL,
+  accountTooNewReason,
   checkQuickVerify,
   diffJbclRoles,
   fetchJbclAlts,
@@ -48,9 +49,14 @@ async function reconcile(pluginData: PluginData) {
 }
 
 /** Gives the verified role straight away if the user logged in on the website within 24h. */
-async function quickVerify(pluginData: PluginData, member: GuildMember): Promise<"already" | "verified" | "website"> {
-  const { verified_role, unverified_role, alt_log_channel } = pluginData.config.get();
+async function quickVerify(
+  pluginData: PluginData,
+  member: GuildMember,
+): Promise<"already" | "verified" | "website" | { tooNew: string }> {
+  const { verified_role, unverified_role, alt_log_channel, min_account_age } = pluginData.config.get();
   if (!verified_role) return "website";
+  const tooNew = accountTooNewReason(member.id, min_account_age);
+  if (tooNew && !member.roles.cache.has(verified_role)) return { tooNew };
   const dropUnverified = async () => {
     if (unverified_role && member.roles.cache.has(unverified_role)) {
       await member.roles.remove(unverified_role, "JBCL verification");
@@ -83,7 +89,9 @@ async function handleVerifyInteraction(
   try {
     const member = await pluginData.guild.members.fetch(interaction.user.id);
     const result = await quickVerify(pluginData, member);
-    if (result === "already") {
+    if (typeof result === "object") {
+      await interaction.editReply(result.tooNew);
+    } else if (result === "already") {
       await interaction.editReply("You're already verified.");
     } else if (result === "verified") {
       await interaction.editReply("You're verified!");

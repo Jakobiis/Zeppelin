@@ -36,12 +36,25 @@ export const DuplicateSpamTrigger = automodTrigger<{ archiveId: string }>()({
     within: zDelayString,
     per_channel: z.boolean().nullable().default(false),
     similarity: z.number().min(0).max(1).default(0.8),
+    // Only users newer than these count (both must hold when both are set)
+    max_account_age: zDelayString.nullable().default(null),
+    max_member_age: zDelayString.nullable().default(null),
   }),
 
   async match({ pluginData, context, triggerConfig }) {
     const content = context.message?.data.content;
     if (!context.message || !content) {
       return;
+    }
+
+    const now = Date.now();
+    if (triggerConfig.max_account_age) {
+      const createdAt = context.user?.createdTimestamp;
+      if (!createdAt || now - createdAt > convertDelayStringToMS(triggerConfig.max_account_age)!) return;
+    }
+    if (triggerConfig.max_member_age) {
+      const joinedAt = context.member?.joinedTimestamp;
+      if (!joinedAt || now - joinedAt > convertDelayStringToMS(triggerConfig.max_member_age)!) return;
     }
 
     const spamIdentifier = getMessageSpamIdentifier(context.message, Boolean(triggerConfig.per_channel));
