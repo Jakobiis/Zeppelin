@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SavedMessage } from "../../../data/entities/SavedMessage.js";
+import { GuildVerifiedMembers } from "../../../data/GuildVerifiedMembers.js";
 import { humanizeDurationShort } from "../../../humanizeDuration.js";
 import { getBaseUrl } from "../../../pluginUtils.js";
 import { convertDelayStringToMS, sorter, zDelayString } from "../../../utils.js";
@@ -36,25 +37,16 @@ export const DuplicateSpamTrigger = automodTrigger<{ archiveId: string }>()({
     within: zDelayString,
     per_channel: z.boolean().nullable().default(false),
     similarity: z.number().min(0).max(1).default(0.8),
-    // Only users newer than these count (both must hold when both are set)
+    // If any are set, only users that are "new" by at least one of them count
     max_account_age: zDelayString.nullable().default(null),
     max_member_age: zDelayString.nullable().default(null),
+    max_verified_age: zDelayString.nullable().default(null), // time since receiving the JBCL verified role
   }),
 
   async match({ pluginData, context, triggerConfig }) {
     const content = context.message?.data.content;
     if (!context.message || !content) {
       return;
-    }
-
-    const now = Date.now();
-    if (triggerConfig.max_account_age) {
-      const createdAt = context.user?.createdTimestamp;
-      if (!createdAt || now - createdAt > convertDelayStringToMS(triggerConfig.max_account_age)!) return;
-    }
-    if (triggerConfig.max_member_age) {
-      const joinedAt = context.member?.joinedTimestamp;
-      if (!joinedAt || now - joinedAt > convertDelayStringToMS(triggerConfig.max_member_age)!) return;
     }
 
     const spamIdentifier = getMessageSpamIdentifier(context.message, Boolean(triggerConfig.per_channel));
@@ -87,6 +79,22 @@ export const DuplicateSpamTrigger = automodTrigger<{ archiveId: string }>()({
 
     if (similarActions.length < triggerConfig.amount) {
       return;
+    }
+
+    // Checked last so the DB lookup only happens for users who actually repeated themselves
+    const { max_account_age, max_member_age, max_verified_age } = triggerConfig;
+    if (max_account_age || max_member_age || max_verified_age) {
+      const isWithin = (timestamp: number | null | undefined, maxAge: string | null) =>
+        Boolean(maxAge && timestamp && Date.now() - timestamp <= convertDelayStringToMS(maxAge)!);
+      const isNew =
+        isWithin(context.user?.createdTimestamp, max_account_age) ||
+        isWithin(context.member?.joinedTimestamp, max_member_age) ||
+        (max_verified_age != null &&
+          isWithin(
+            await GuildVerifiedMembers.getGuildInstance(pluginData.guild.id).getVerifiedAt(context.message.user_id),
+            max_verified_age,
+          ));
+      if (!isNew) return;
     }
 
     const messages = similarActions

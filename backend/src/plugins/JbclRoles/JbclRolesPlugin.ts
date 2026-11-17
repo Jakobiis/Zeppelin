@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 import { GuildPluginData, guildPlugin } from "vety";
 import { commandTypeHelpers as ct } from "../../commandTypes.js";
+import { GuildVerifiedMembers } from "../../data/GuildVerifiedMembers.js";
 import { HOURS, resolveUser } from "../../utils.js";
 import {
   JbclRoles,
@@ -175,6 +176,21 @@ const OnJoinEvt = jbclRolesEvt({
   },
 });
 
+// Every route to the verified role (button, /verify, website push, manual) ends in a gateway member update
+// ponytail: role adds while the bot is offline aren't recorded; those members just read as "verified long ago"
+const RecordVerifiedEvt = jbclRolesEvt({
+  event: "guildMemberUpdate",
+  listener({ pluginData, args: { oldMember, newMember } }) {
+    const { verified_role } = pluginData.config.get();
+    if (!verified_role || oldMember.partial) return;
+    if (!oldMember.roles.cache.has(verified_role) && newMember.roles.cache.has(verified_role)) {
+      GuildVerifiedMembers.getGuildInstance(pluginData.guild.id)
+        .markVerified(newMember.id)
+        .catch(logErr(`Failed to record verification for ${newMember.id}`));
+    }
+  },
+});
+
 const ButtonEvt = jbclRolesEvt({
   event: "interactionCreate",
   async listener({ pluginData, args: { interaction } }) {
@@ -250,7 +266,7 @@ export const JbclRolesPlugin = guildPlugin<JbclRolesPluginType>()({
 
   configSchema: zJbclRolesConfig,
 
-  events: [OnJoinEvt, ButtonEvt, PanelStickyEvt],
+  events: [OnJoinEvt, ButtonEvt, PanelStickyEvt, RecordVerifiedEvt],
   slashCommands: [SyncRolesSlashCmd, VerifySlashCmd],
   messageCommands: [AltsMsgCmd],
 
