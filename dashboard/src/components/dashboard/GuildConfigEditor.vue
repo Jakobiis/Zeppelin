@@ -61,7 +61,32 @@
       />
     </Teleport>
 
-    <v-ace-editor v-if="canReadConfig" v-show="mode === 'yaml'" class="rounded-lg shadow-lg border border-border"
+    <div v-if="canReadConfig" v-show="mode === 'yaml'">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        <div class="flex-1 min-w-0 truncate text-sm font-mono text-muted-foreground" :title="breadcrumb">{{ breadcrumb || " " }}</div>
+        <button type="button" class="btn-secondary btn-sm" v-on:click="runEditorCommand('foldall')">Collapse all</button>
+        <button type="button" class="btn-secondary btn-sm" v-on:click="runEditorCommand('unfoldall')">Expand all</button>
+        <button type="button" class="btn-primary btn-sm" v-on:click="openInsert">Insert YAML</button>
+      </div>
+      <div class="flex gap-3">
+        <aside class="hidden md:flex flex-col w-64 shrink-0 bg-card border border-border rounded-lg shadow-lg overflow-hidden" :style="{ height: editorHeight + 'px' }">
+          <input type="text" class="field-input m-2 !w-auto" placeholder="Jump to… (e.g. automod)" v-model="outlineQuery" />
+          <div class="flex-1 overflow-y-auto pb-2 text-sm font-mono">
+            <div v-for="row in outlineRows"
+                 :key="row.node.path"
+                 class="flex items-center gap-1 pr-2 py-0.5 cursor-pointer hover:bg-muted"
+                 :class="row.node === activeNode ? 'bg-muted text-foreground' : 'text-muted-foreground'"
+                 :style="{ paddingLeft: row.node.depth * 12 + 4 + 'px' }"
+                 :title="row.node.path.split('/').join(' › ')"
+                 v-on:click="jumpToNode(row.node)">
+              <span class="w-4 shrink-0 text-center" v-on:click.stop="toggleOutlineNode(row.node)">{{ row.node.children.length ? (row.expanded ? "▾" : "▸") : "" }}</span>
+              <span class="truncate">{{ row.node.label }}</span>
+            </div>
+            <p v-if="outlineQuery && !outlineRows.length" class="px-3 py-1.5 italic text-muted-foreground">No matches.</p>
+          </div>
+        </aside>
+        <div class="flex-1 min-w-0">
+    <v-ace-editor class="rounded-lg shadow-lg border border-border"
                v-model:value="editableConfig"
                @init="editorInit"
                lang="yaml"
@@ -76,6 +101,35 @@
                   width: editorWidth + 'px',
                   height: editorHeight + 'px',
                 }" />
+        </div>
+      </div>
+    </div>
+
+    <div v-if="insertOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" v-on:click.self="insertOpen = false">
+      <div class="bg-card border border-border rounded-3xl shadow-lg max-w-2xl w-full p-5">
+        <h3 class="font-semibold mb-1">Insert YAML</h3>
+        <p class="text-sm text-muted-foreground mb-3">
+          Paste a snippet, either from the top (<code>plugins:</code>) or starting at a plugin name (<code>automod:</code>).
+          New keys are added, existing values are replaced, and overrides with the same role/channel/level are combined.
+        </p>
+        <textarea ref="insertTextarea" v-model="insertText" class="field-input font-mono text-sm h-64" spellcheck="false" placeholder="plugins:&#10;  automod:&#10;    config:&#10;      rules: …"></textarea>
+        <div class="mt-3 text-sm max-h-40 overflow-y-auto">
+          <p v-if="insertPreview.error" class="text-destructive whitespace-pre-wrap">{{ insertPreview.error }}</p>
+          <ul v-else-if="insertPreview.changes.length" class="space-y-0.5 font-mono">
+            <li v-for="change in insertPreview.changes" :key="change.path">
+              <span :class="change.kind === 'added' ? 'text-primary' : 'text-destructive'">{{ change.kind === "added" ? "+ add" : "~ replace" }}</span>
+              {{ change.path.split("/").join(" › ") }}
+            </li>
+          </ul>
+          <p v-else-if="insertText.trim()" class="text-muted-foreground">Nothing would change.</p>
+        </div>
+        <p v-if="configHasComments" class="text-sm text-muted-foreground mt-2">Inserting re-formats the YAML, which removes its comments.</p>
+        <div class="flex justify-end gap-2 mt-5">
+          <button type="button" class="btn-secondary" v-on:click="insertOpen = false">Cancel</button>
+          <button type="button" class="btn-primary" :disabled="!insertPreview.changes.length" v-on:click="applyInsert">Insert</button>
+        </div>
+      </div>
+    </div>
 
     <div v-if="canReadConfig && mode === 'interface'" class="mt-4 min-w-0">
       <div v-if="pluginLoading" class="bg-card border border-border rounded-3xl shadow-md p-6 text-muted-foreground text-sm">
@@ -135,6 +189,7 @@
   import GuildMessagesPanel from "./GuildMessagesPanel.vue";
   import PluginConfigForm from "./PluginConfigForm.vue";
   import { dereferenceSchema, fillDefaults } from "./pluginConfigSchema";
+  import { buildOutline, findNodeByPath, mergeSnippet, nodeAtLine } from "./yamlTools";
 
   let editorKeybindListener;
   let windowResizeListener;
@@ -289,6 +344,13 @@
         // and { prefix, embed_color, levels } derived live from editableConfig the same way pluginValue is.
         generalSchema: null,
         generalValue: null,
+        // YAML tab outline + insert dialog
+        cursorLine: 1,
+        outlineQuery: "",
+        // Paths whose expanded state was flipped from the default (top level expanded, everything else collapsed)
+        outlineToggled: new Set<string>(),
+        insertOpen: false,
+        insertText: "",
       };
     },
     computed: {
@@ -329,6 +391,70 @@
         const q = this.interfaceSearchQuery.trim().toLowerCase();
         return !q || "general".includes(q);
       },
+      outline() {
+        return buildOutline(this.editableConfig || "");
+      },
+      activeNode() {
+        return nodeAtLine(this.outline, this.cursorLine);
+      },
+      breadcrumb() {
+        const parts = [];
+        for (let n = this.activeNode; n; n = n.parent) parts.unshift(n.label);
+        return parts.join(" › ");
+      },
+      outlineRows() {
+        const rows = [];
+        const q = this.outlineQuery.trim().toLowerCase();
+        if (q) {
+          // Matches plus their ancestors, everything shown expanded
+          const keep = new Set();
+          const visit = (nodes) => {
+            for (const n of nodes) {
+              if (n.label.toLowerCase().includes(q)) {
+                for (let a = n; a && !keep.has(a); a = a.parent) keep.add(a);
+              }
+              visit(n.children);
+            }
+          };
+          visit(this.outline);
+          const walk = (nodes) => {
+            for (const n of nodes) {
+              if (!keep.has(n)) continue;
+              rows.push({ node: n, expanded: true });
+              walk(n.children);
+            }
+          };
+          walk(this.outline);
+          return rows;
+        }
+        const walk = (nodes) => {
+          for (const n of nodes) {
+            const expanded = (n.depth === 0) !== this.outlineToggled.has(n.path);
+            rows.push({ node: n, expanded });
+            if (expanded) walk(n.children);
+          }
+        };
+        walk(this.outline);
+        return rows;
+      },
+      configHasComments() {
+        return /(^|\s)#/m.test(this.editableConfig || "");
+      },
+      insertPreview() {
+        if (!this.insertText.trim()) return { changes: [], result: null, error: null };
+        let config;
+        try {
+          config = yaml.load(this.editableConfig || "") || {};
+        } catch {
+          return { changes: [], result: null, error: "The config in the editor has YAML errors. Fix those first." };
+        }
+        try {
+          const snippet = yaml.load(this.insertText);
+          return { ...mergeSnippet(config, snippet, this.formPlugins.map((p) => p.name)), error: null };
+        } catch (e) {
+          return { changes: [], result: null, error: e.message };
+        }
+      },
       searchedFormPlugins() {
         const q = this.interfaceSearchQuery.trim().toLowerCase();
         if (!q) return this.formPlugins;
@@ -336,6 +462,36 @@
       },
     },
     methods: {
+      toggleOutlineNode(node) {
+        const toggled = new Set(this.outlineToggled);
+        if (toggled.has(node.path)) toggled.delete(node.path);
+        else toggled.add(node.path);
+        this.outlineToggled = toggled;
+      },
+      jumpToNode(node) {
+        const editor = this.$refs.aceEditor.getAceInstance();
+        editor.session.unfold(node.line - 1);
+        editor.gotoLine(node.line, node.column, false);
+        editor.scrollToLine(node.line - 1, true, true, () => {});
+        editor.focus();
+      },
+      runEditorCommand(command) {
+        this.$refs.aceEditor.getAceInstance().execCommand(command);
+      },
+      openInsert() {
+        this.insertText = "";
+        this.insertOpen = true;
+        this.$nextTick(() => (this.$refs.insertTextarea as HTMLTextAreaElement | undefined)?.focus());
+      },
+      async applyInsert() {
+        const { result, changes } = this.insertPreview;
+        if (!result || !changes.length) return;
+        this.editableConfig = yaml.dump(result);
+        this.insertOpen = false;
+        await this.$nextTick();
+        const target = findNodeByPath(this.outline, changes[0].path);
+        if (target) this.jumpToNode(target);
+      },
       // Keeps the URL in sync with what's currently open (mode + selected plugin) so the page is shareable/
       // bookmarkable at any point — called explicitly from selectPlugin/setMode (and once after mounted's own
       // restore, as a no-op confirming it matches) rather than via a reactive watcher, since mode and
@@ -508,7 +664,11 @@
         }
         this.updateUrlQuery();
       },
-      editorInit() {
+      editorInit(editor) {
+        editor.selection.on("changeCursor", () => {
+          this.cursorLine = editor.getCursorPosition().row + 1;
+        });
+
         // Add Ctrl+S/Cmd+S save shortcut
         const isMac = /mac/i.test(navigator.platform);
         const modKeyPressed = (ev: KeyboardEvent) => (isMac ? ev.metaKey : ev.ctrlKey);
