@@ -18,10 +18,24 @@ export interface JbclRoles {
   websitemoderator: boolean;
   premium: number; // supporter tier 0-3
   earlyadopter: boolean;
+  // Newer fields: optional so an API that doesn't send them leaves the mapped role alone instead of removing it
+  websitecontributor?: boolean;
+  developer?: boolean;
 }
 
 export type JbclRoleMap = Partial<
-  Record<"owner" | "valueteam" | "websitemoderator" | "earlyadopter" | "premium_1" | "premium_2" | "premium_3", string>
+  Record<
+    | "owner"
+    | "valueteam"
+    | "websitemoderator"
+    | "websitecontributor"
+    | "developer"
+    | "earlyadopter"
+    | "premium_1"
+    | "premium_2"
+    | "premium_3",
+    string
+  >
 >;
 
 const NO_ROLES: JbclRoles = { owner: false, valueteam: false, websitemoderator: false, premium: 0, earlyadopter: false };
@@ -54,10 +68,12 @@ export async function fetchJbclRoles(ids: string[]): Promise<Map<string, JbclRol
 
 /** Which mapped roles to add/remove so the member's roles match `roles`. Unmapped roles are never touched. */
 export function diffJbclRoles(roles: JbclRoles, map: JbclRoleMap, currentRoleIds: Iterable<string>) {
-  const want: Record<keyof JbclRoleMap, boolean> = {
+  const want: Record<keyof JbclRoleMap, boolean | undefined> = {
     owner: roles.owner,
     valueteam: roles.valueteam,
     websitemoderator: roles.websitemoderator,
+    websitecontributor: roles.websitecontributor,
+    developer: roles.developer,
     earlyadopter: roles.earlyadopter,
     premium_1: roles.premium === 1,
     premium_2: roles.premium === 2,
@@ -69,6 +85,7 @@ export function diffJbclRoles(roles: JbclRoles, map: JbclRoleMap, currentRoleIds
   for (const [key, roleId] of Object.entries(map)) {
     if (!roleId) continue;
     const wanted = want[key as keyof JbclRoleMap];
+    if (wanted === undefined) continue; // API didn't send this field
     if (wanted && !current.has(roleId)) add.push(roleId);
     if (!wanted && current.has(roleId)) remove.push(roleId);
   }

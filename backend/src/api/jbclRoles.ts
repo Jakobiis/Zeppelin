@@ -19,6 +19,8 @@ const zBody = z.object({
     owner: z.boolean(),
     valueteam: z.boolean(),
     websitemoderator: z.boolean(),
+    websitecontributor: z.boolean().optional(),
+    developer: z.boolean().optional(),
     premium: z.number().int().min(0).max(3),
     earlyadopter: z.boolean(),
   }),

@@ -9,6 +9,8 @@ export const zJbclRolesConfig = z.strictObject({
       owner: zSnowflake.optional(),
       valueteam: zSnowflake.optional(),
       websitemoderator: zSnowflake.optional(),
+      websitecontributor: zSnowflake.optional(),
+      developer: zSnowflake.optional(),
       earlyadopter: zSnowflake.optional(),
       premium_1: zSnowflake.optional(),
       premium_2: zSnowflake.optional(),
